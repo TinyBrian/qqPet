@@ -65,18 +65,30 @@ export function createPetWindow(): BrowserWindow {
 }
 
 // Prints 1 while another window is full screen, 0 otherwise, twice a second.
-// SHQueryUserNotificationState: 2 full-screen app, 3 Direct3D full screen, 4 presentation mode.
+// SHQueryUserNotificationState: 2 busy, 3 Direct3D full screen, 4 presentation mode.
+// Windows reports 2 for some ordinary windows too, so 2 only counts when the foreground window covers its monitor.
 // The focused pet counts as full screen when it covers the monitor (auto-hidden taskbar), hence the PET handle.
 // A write to the closed pipe stops the script once the app is gone.
 const FULLSCREEN_PS = `
 $ErrorActionPreference = 'Stop'
 Add-Type -Namespace Q -Name W -MemberDefinition '
+public struct R { public int L, T, Rt, B; }
+public struct M { public int Size; public R Mon, Work; public int Flags; }
 [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
-[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();'
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out R r);
+[DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h, int flags);
+[DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref M info);
+public static bool Covers(IntPtr h) {
+  R r; M m = new M(); m.Size = Marshal.SizeOf(m);
+  if (!GetWindowRect(h, out r) || !GetMonitorInfo(MonitorFromWindow(h, 2), ref m)) return false;
+  return r.L <= m.Mon.L && r.T <= m.Mon.T && r.Rt >= m.Mon.Rt && r.B >= m.Mon.B;
+}'
 while ($true) {
   $s = 0
   [void][Q.W]::SHQueryUserNotificationState([ref]$s)
-  [Console]::WriteLine([int]($s -ge 2 -and $s -le 4 -and [Q.W]::GetForegroundWindow() -ne [IntPtr]PET))
+  $f = [Q.W]::GetForegroundWindow()
+  [Console]::WriteLine([int]($f -ne [IntPtr]PET -and ($s -eq 3 -or $s -eq 4 -or ($s -eq 2 -and [Q.W]::Covers($f)))))
   Start-Sleep -Milliseconds 500
 }`
 
