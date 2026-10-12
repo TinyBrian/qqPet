@@ -112,7 +112,7 @@ export function openPetInfo(): void {
     small('strong', '武力：', info.strong),
     small('charm', '魅力：', info.charm),
     div('rightRow educationValue', div('label', '学历获得')),
-    div('educationInfo smallRow', ...diplomas.map((d) => div('smallValue', `  ${d}  `))),
+    div('educationInfo smallRow', ...diplomas.map((d) => div('smallValue', d))),
     div('rightRow statusValue', div('label', '宠物状态')),
     stats,
   )
