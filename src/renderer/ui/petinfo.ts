@@ -114,18 +114,14 @@ export function openPetInfo(): void {
     div('rightRow statusValue', div('label', '宠物状态')),
     stats,
   )
-  const remove = openBox(
-    div('ui-petinfo', main),
-    {
-      onClose: () => {
-        clearInterval(timer)
-        window.qqpet.setFocusable(false)
-        close = () => {}
-      },
+  close = openBox(div('ui-petinfo', main), {
+    onClose: () => {
+      clearInterval(timer)
+      window.qqpet.setFocusable(false)
+      close = () => {}
     },
-  )
+  })
   // While the panel is open the window must be a key target, or the IME stays on the previous app
   // and Chinese input lands elsewhere ("goes to both sides").
   window.qqpet.setFocusable(true)
-  close = (): void => remove()
 }
