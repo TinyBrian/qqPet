@@ -42,9 +42,16 @@ interface Pond {
 
 type Reply = Record<string, unknown>
 
+/** The SWF reads fish ids as AS3 `int`; a larger id comes back truncated and matches no fish. */
+const INT_MAX = 0x7fffffff
+
 function load(): Pond {
   const p: Partial<Pond> = JSON.parse(save.saveJsonData.fishs || '{}')
-  return { PD: p.PD ?? { allvipcnt: 0, canusecnt: 0 }, fishs: (p.fishs ?? []).filter((f) => f.id) }
+  const fishs = (p.fishs ?? []).filter((f) => f.id)
+  // 0.5.0–0.6.4 saved millisecond ids.
+  let next = Math.max(0, ...fishs.map((f) => (f.id > INT_MAX ? 0 : f.id)))
+  for (const f of fishs) if (f.id > INT_MAX) f.id = ++next
+  return { PD: p.PD ?? { allvipcnt: 0, canusecnt: 0 }, fishs }
 }
 
 const pond = load()
@@ -128,7 +135,7 @@ function buy(paytype: number, fryid: number, n = 1): Reply {
   if (info.yb < cost) return { result: 1 }
   setInfo('yb', info.yb - cost)
   const t = now()
-  const base = Date.now()
+  const base = Math.max(t, ...pond.fishs.map((f) => f.id + 1))
   for (let i = 0; i < n; i++) {
     pond.fishs.push({
       id: base + i,
