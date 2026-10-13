@@ -1,7 +1,7 @@
 import { clipAsk, IDLE, note } from './pet/ai'
 import { resumeTask } from './pet/jobs'
 import { machine, speak, startPet } from './pet/pet'
-import { applyEdge, info, onInfoChange, petSize, save, setInfo } from './pet/store'
+import { applyEdge, info, onInfoChange, petSize, save, setInfo, stage } from './pet/store'
 import { adopt } from './ui/adopt'
 import { catchDiudiule, releaseDiudiule } from './ui/diudiule'
 import { scheduleHide, showControl } from './ui/control'
@@ -101,8 +101,8 @@ petEl.addEventListener('pointerdown', (e) => {
   if (save.settings.petBar) showControl()
   dragging = true
   catchDiudiule()
-  const dx = pageX(e) - info.lastX
-  const dy = pageY(e) - info.lastY
+  let dx = pageX(e) - info.lastX
+  let dy = pageY(e) - info.lastY
   let px = pageX(e)
   let py = pageY(e)
   let pt = performance.now()
@@ -127,12 +127,18 @@ petEl.addEventListener('pointerdown', (e) => {
       clearTimeout(hold)
       if (!lifted) {
         lifted = true
-        machine.play({ a: 'drag' })
+        // Only the adult has a lifted-by-the-scruff clip, and drag.swf draws that scruff in the
+        // upper-right; anchor it under the cursor. Younger pets stand and keep the grab point.
+        if (stage() === 'Adult') {
+          machine.play({ a: 'drag', opt: { url: 'pet/Action/drag.swf', opt: {} } })
+          dx = size * 0.73
+          dy = size * 0.14
+        } else machine.play({ a: 'drag' })
       }
     }
     setInfo('lastX', x - dx)
     setInfo('lastY', y - dy)
-    // Keep the original grab point under the cursor, even when part of the box goes off-screen.
+    // Once lifted the grab point is the cursor; clamping the box would pull it off.
     if (!lifted) clampOnScreen()
   }
   petEl.setPointerCapture(e.pointerId)
