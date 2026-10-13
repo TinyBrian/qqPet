@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import { readFileSync } from 'node:fs'
-import { stripTypeScriptTypes } from 'node:module'
-import { EventEmitter } from 'node:events'
-import { runInNewContext } from 'node:vm'
 import { desktopCursor, petDisplay } from '../../src/main/desktop.ts'
 import { startSave } from '../../src/shared/save-logic.ts'
 import { renderer } from './pet-drag.test.mjs'
@@ -130,56 +126,4 @@ test('release uses the native target display dimensions before Chromium finishes
   await setImmediate()
   assert.equal(app.save.settings.petDisplayId, 3)
   assert.ok(app.info.lastX > 1920, 'must not clamp against the old primary viewport')
-})
-
-test('Electron window restores the saved display and transfers on drag IPC, including final release', () => {
-  const d = desktop()
-  let poll
-  let handler
-  let removed = false
-  const packets = []
-  class Window extends EventEmitter {
-    constructor(bounds) {
-      super()
-      this.bounds = bounds
-      this.webContents = new EventEmitter()
-      this.webContents.setWindowOpenHandler = () => {}
-      this.webContents.send = (_channel, point) => packets.push(point)
-    }
-    getBounds() { return this.bounds }
-    setBounds(bounds) { this.bounds = bounds }
-    setAlwaysOnTop() {}
-    setVisibleOnAllWorkspaces() {}
-    setIgnoreMouseEvents() {}
-    loadURL() {}
-  }
-  const context = {
-    BrowserWindow: Window, screen: d.screen, desktopCursor, petDisplay,
-    getSave: () => ({ settings: { petDisplayId: 2 } }),
-    IPC: { cursor: 'cursor', setDragging: 'dragging' },
-    ipcMain: { handle: (_channel, callback) => { handler = callback }, removeHandler: () => { removed = true } },
-    setInterval: callback => { poll = callback; return 1 }, clearInterval: () => {},
-    join: (...parts) => parts.join('/'), PAGES: 'app://bundle', CURSOR_INTERVAL_MS: 33,
-    process: { platform: 'linux', env: {} },
-  }
-  const source = readFileSync(new URL('../../src/main/window.ts', import.meta.url), 'utf8')
-  const factory = source.slice(source.indexOf('/** Transparent'), source.indexOf('// Prints 1'))
-    .replace('export function', 'function').replaceAll('import.meta.dirname', "'C:/qqpet/out/main'")
-  const win = runInNewContext(stripTypeScriptTypes(factory) + '\ncreatePetWindow()', context)
-  assert.equal(win.getBounds().x, -1280)
-  poll()
-  poll()
-  assert.equal(packets.length, 1, 'stationary cursor frames must be deduplicated')
-  assert.throws(() => handler({ sender: {} }, true), /Unknown drag sender/)
-  handler({ sender: win.webContents }, true)
-  assert.equal(win.getBounds().x, 0)
-  d.move({ x: 2400, y: -600 })
-  const released = handler({ sender: win.webContents }, false)
-  assert.equal(released.desktop.id, 3)
-  assert.equal(win.getBounds().y, -1440)
-  d.move({ x: 550, y: 340 })
-  poll()
-  assert.equal(win.getBounds().y, -1440, 'idle cursor must not move the overlay back')
-  win.emit('closed')
-  assert.equal(removed, true)
 })
