@@ -1,4 +1,5 @@
-import { description, version } from '../../../package.json'
+import { description } from '../../../package.json'
+import { APP_VERSION } from '../../shared/version'
 import { allGoods, type GoodType } from '../pet/data/goods'
 import { give } from '../pet/items'
 import { applyPetSound, speak } from '../pet/pet'
@@ -45,10 +46,23 @@ function homing(): void {
 }
 
 function toggleAutoStart(): void {
+  if (window.qqpet.capabilities?.autoStart === false) {
+    windowView({ title: '开机自启', msg: window.qqpet.capabilities.autoStartReason || '此平台不支持开机自启，请从应用图标启动宠物。' })
+    return
+  }
   const on = !save.settings.autoStart
   window.qqpet.setAutoStart(on)
   update('settings', { autoStart: on })
   speak({ c: 'startupSelf', s: on ? 'startupSelfOn' : 'startupSelfOff', now: true }, 'appear')
+}
+
+function toggleWatch(kind: 'clipboardWatch' | 'frontWatch', setting: 'clip' | 'watchApp'): void {
+  const capabilities = window.qqpet.capabilities
+  if (capabilities?.[kind] === false) {
+    windowView({ title: setting === 'clip' ? '剪贴板播报' : '前台应用观察', msg: capabilities[kind === 'clipboardWatch' ? 'clipboardWatchReason' : 'frontWatchReason'] || '此宿主尚不提供该能力。' })
+    return
+  }
+  update('settings', { [setting]: !save.settings[setting] })
 }
 
 async function exportSave(): Promise<void> {
@@ -217,8 +231,8 @@ const TABS: { label: string; options: Option[] }[] = [
   {
     label: '工具',
     options: [
-      { type: 'radio', label: '实时监听播报剪切板', title: '复制文字后，宠物会把它念出来', on: () => s.clip, run: () => update('settings', { clip: !s.clip }) },
-      { type: 'radio', label: '留意前台在用的软件（仅电脑，默认关）', title: '同一软件开太久，闲聊时可能会提起。不读窗口内容。', on: () => s.watchApp, run: () => update('settings', { watchApp: !s.watchApp }) },
+      { type: 'radio', label: '实时监听播报剪切板', title: '复制文字后，宠物会把它念出来', on: () => s.clip, run: () => toggleWatch('clipboardWatch', 'clip') },
+      { type: 'radio', label: '留意前台在用的软件（仅电脑，默认关）', title: '同一软件开太久，闲聊时可能会提起。不读窗口内容。', on: () => s.watchApp, run: () => toggleWatch('frontWatch', 'watchApp') },
     ],
   },
   {
@@ -283,7 +297,7 @@ const TABS: { label: string; options: Option[] }[] = [
   {
     label: '关于',
     options: [
-      { type: 'see', label: '软件', value: `QQPet v${version}` },
+      { type: 'see', label: '软件', value: `QQPet v${APP_VERSION}` },
       { type: 'button', label: '检查更新', title: '有新版本时打开 GitHub 下载页', run: () => void checkUpdate(true) },
       { type: 'radio', label: '每天自动检查更新', on: () => s.autoUpdate, run: () => update('settings', { autoUpdate: !s.autoUpdate }) },
       { type: 'see', label: '简介', value: description },
@@ -304,7 +318,7 @@ function option(o: Option, redraw: () => void): HTMLElement {
   if (o.type === 'radio') {
     inner = div('childrenIn fcc radio', button(o.on() ? 'choose focusPress active' : 'choose focusPress', act(o.run)), div('label', o.label))
   } else if (o.type === 'slider') {
-    const knob = div('sl_center_z', div('slc_z'))
+    const knob = div('sl_center_z')
     knob.style.left = `${o.value() * 100}%`
     const line = div(
       'sliderLine f1 w100 fcc mt8',
@@ -312,7 +326,7 @@ function option(o: Option, redraw: () => void): HTMLElement {
         'sl_down focusPress',
         act(() => o.step(-0.1)),
       ),
-      div('sl_center f1 por', knob),
+      div('sl_center f1 por', div('sl_thumb_track', knob)),
       button(
         'sl_up focusPress',
         act(() => o.step(0.1)),

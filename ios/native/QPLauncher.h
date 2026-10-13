@@ -1,0 +1,5 @@
+#import "QPState.h"
+NS_ASSUME_NONNULL_BEGIN
+FOUNDATION_EXPORT BOOL QPStartHUD(QPState *state, NSError **error);
+FOUNDATION_EXPORT BOOL QPStopHUD(QPState *state, NSError **error);
+NS_ASSUME_NONNULL_END

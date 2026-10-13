@@ -27,7 +27,7 @@
 .ui-petinfo .strong {top:125px;left:300px}
 .ui-petinfo .charm {top:145px}
 .ui-petinfo .educationValue {position:absolute;top:175px}
-.ui-petinfo .educationInfo {top:195px;font-size:11px;gap:2px 8px}
+.ui-petinfo .educationInfo {top:195px;font-size:11px;margin:-1px -4px}
 .ui-petinfo .cjList {position:absolute;left:0;top:0;width:100%;height:100%}
 .ui-petinfo .cjbox {width:30px;height:40px;position:relative}
 .ui-petinfo .cjImg {width:100%;height:100%;position:relative}
@@ -38,3 +38,4 @@
 .ui-petinfo .statCell {height:16px;white-space:nowrap}
 .ui-petinfo .statCell:first-child {grid-column:span 2}
 .ui-petinfo .statBar {height:14px;margin-left:4px}
+.ui-petinfo .educationInfo > * {margin:1px 4px}

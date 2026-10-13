@@ -20,7 +20,7 @@ body {
 
 #pet > ruffle-player {
   position: absolute;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   /* Ruffle :host { all: initial } resets cursor to auto and hides the custom pointer. */
   cursor: inherit !important;
 }
@@ -39,7 +39,7 @@ body {
   /* Frames are fixed and fill the screen (box.ts): dim what they cover. */
   .modal {
     position: fixed;
-    inset: 0;
+    top:0;right:0;bottom:0;left:0;
     z-index: 700;
     background: #0008;
   }
@@ -63,7 +63,7 @@ body {
   .ui-state .close::before {
     content: '';
     position: absolute;
-    inset: -12px;
+    top:-12px;right:-12px;bottom:-12px;left:-12px;
   }
 }
 
@@ -79,7 +79,7 @@ body {
 
 .face {
   position: absolute;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   z-index: 500;
   pointer-events: none;
 }

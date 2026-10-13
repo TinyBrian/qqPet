@@ -120,8 +120,13 @@ jobs:
           path: dist/*.hap
           if-no-files-found: error
 
+  ios:
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      version: ${{ github.ref_name }}
+
   release:
-    needs: [build, android, harmony]
+    needs: [build, android, harmony, ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write

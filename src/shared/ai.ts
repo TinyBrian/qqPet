@@ -1,3 +1,4 @@
+import { withTimeoutSignal } from './compat'
 import type { AiConfig, AiMessage, Fetch } from './ipc'
 
 /** The fields used from an OpenAI-compatible reply. */
@@ -10,14 +11,16 @@ interface Completion {
 
 /** One request to an OpenAI-compatible API; a non-2xx status throws with the server's message. */
 async function call<T>(fetch: Fetch, c: Omit<AiConfig, 'model'>, path: string, body?: object): Promise<T> {
-  const r = await fetch(c.url.replace(/\/+$/, '') + path, {
-    method: body ? 'POST' : 'GET',
-    headers: { 'Content-Type': 'application/json', ...(c.key && { Authorization: `Bearer ${c.key}` }) },
-    body: body && JSON.stringify(body),
-    signal: AbortSignal.timeout(60_000),
+  return withTimeoutSignal(60_000, async (signal) => {
+    const r = await fetch(c.url.replace(/\/+$/, '') + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', ...(c.key && { Authorization: `Bearer ${c.key}` }) },
+      body: body && JSON.stringify(body),
+      signal,
+    })
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`)
+    return (await r.json()) as T
   })
-  if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`)
-  return (await r.json()) as T
 }
 
 export async function aiModels(fetch: Fetch, c: Omit<AiConfig, 'model'>): Promise<string[]> {

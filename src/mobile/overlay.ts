@@ -1,6 +1,7 @@
 // The overlay window of the mobile bridges covers what the page draws, and takes
 // every touch inside it. The pet's SWF box is mostly transparent, so only the
 // part of the animation that has pixels counts.
+import { visibleContent } from './visibility'
 
 // Ruffle's WebGL canvases are cleared once composited; reading them back needs the drawing buffer kept.
 const getContext = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, type: string, attrs?: object) => RenderingContext | null
@@ -33,7 +34,12 @@ const pen = probe.getContext('2d')!
  */
 const movies = new Map<string, { part: Box | null; known: boolean }>()
 /** Per player: the movie it shows, since when without a break, and the last look. */
-const shows = new WeakMap<Element, { url: string; since: number; seen: number; at: number; part: Box | null }>()
+let shows = new WeakMap<Element, { url: string; since: number; seen: number; at: number; part: Box | null }>()
+
+/** A host pause interrupts observation; keep learned movie bounds but restart each player's elapsed clock. */
+export function resetCoverage(): void {
+  shows = new WeakMap()
+}
 
 function union(a: Box | null, b: Box | null): Box | null {
   if (!a || !b) return a ?? b
@@ -72,7 +78,9 @@ function drawn(player: RufflePlayerElement, box: DOMRect): Box | null {
   let s = shows.get(player)
   if (!s || s.url !== url || now - s.seen > GAP_MS) shows.set(player, (s = { url, since: now, seen: now, at: 0, part: null }))
   s.seen = now
-  if (now - s.at > LOOK_MS) [s.at, s.part] = [now, look(canvas)]
+  if (now - s.at > LOOK_MS) {
+    try { [s.at, s.part] = [now, look(canvas)] } catch { return box }
+  }
   // A one-frame movie is drawn by its script (the mood "+5"): what it drew before says nothing about what comes next.
   const p = meta.numFrames > 1 ? learn(url, s.part, now - s.since >= (meta.numFrames / meta.frameRate) * 1000) : s.part
   if (p === undefined) return box
@@ -85,7 +93,7 @@ function drawn(player: RufflePlayerElement, box: DOMRect): Box | null {
 export function cover(el: Element): Box | null {
   const box = el.getBoundingClientRect()
   // A hidden pet (opacity 0) or speech bubble (visibility hidden) must not keep a window that swallows touches.
-  if (!box.width || !box.height || !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return null
+  if (!visibleContent(el)) return null
   if (!el.closest('#pet') || el.matches('.point')) return box
   return el.tagName === 'RUFFLE-PLAYER' ? drawn(el as RufflePlayerElement, box) : null
 }

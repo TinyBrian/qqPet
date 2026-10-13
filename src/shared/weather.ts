@@ -1,3 +1,4 @@
+import { withTimeoutSignal } from './compat'
 import type { Fetch, Weather } from './ipc'
 
 /** Redirects to wttr.in's JSON; an empty city locates by the caller's IP. */
@@ -11,18 +12,20 @@ interface Reply {
 
 /** Today's weather; rejects with the server's error, e.g. for an unknown city. */
 export async function weather(fetch: Fetch, city: string): Promise<Weather> {
-  const r = await fetch(API + encodeURIComponent(city), { signal: AbortSignal.timeout(20_000) })
-  if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 100)}`)
-  const {
-    current_condition: [now],
-    weather: [today, tomorrow],
-  } = (await r.json()) as Reply
-  const hour = new Date().getHours()
-  return {
-    code: +now.weatherCode,
-    max: +today.maxtempC,
-    min: +today.mintempC,
-    tomorrowMax: +tomorrow.maxtempC,
-    hours: today.hourly.map((h) => ({ hour: +h.time / 100, code: +h.weatherCode, wind: +h.windspeedKmph })).filter((h) => h.hour + 3 > hour),
-  }
+  return withTimeoutSignal(20_000, async (signal) => {
+    const r = await fetch(API + encodeURIComponent(city), { signal })
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 100)}`)
+    const {
+      current_condition: [now],
+      weather: [today, tomorrow],
+    } = (await r.json()) as Reply
+    const hour = new Date().getHours()
+    return {
+      code: +now.weatherCode,
+      max: +today.maxtempC,
+      min: +today.mintempC,
+      tomorrowMax: +tomorrow.maxtempC,
+      hours: today.hourly.map((h) => ({ hour: +h.time / 100, code: +h.weatherCode, wind: +h.windspeedKmph })).filter((h) => h.hour + 3 > hour),
+    }
+  })
 }

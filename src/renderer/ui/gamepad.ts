@@ -52,7 +52,10 @@ function onPress(el: HTMLElement, run: () => void): void {
  *
  * The pad is fixed to `host`'s screen, or to a transformed ancestor of it (a frame, turned and all).
  */
-export function gamepad(player: HTMLElement, game: string, host: HTMLElement = document.body, quit = (): void => window.close()): void {
+export function gamepad(player: HTMLElement, game: string, host: HTMLElement = document.body, quit = (): void => {
+  if (window.qqpet?.closeGame) window.qqpet.closeGame()
+  else window.close()
+}): void {
   const stored = `gamepad:${game}`
   const settings: Settings = { hidden: false, ...JSON.parse(localStorage.getItem(stored) ?? '{}') }
   settings.keys = { ...DEFAULTS, ...settings.keys }

@@ -1,16 +1,41 @@
 import type { TrayState } from '../../shared/ipc'
 import type { PetInfo, SaveData, SavePatch } from '../../shared/save'
+import { petSizeFor } from '../../shared/layout'
 import { goodOf, type TimedType } from './data/goods'
 import { levelOf, stageOf, type Stage } from './level'
 import type { Mood } from './router'
 import { touch } from '../ui/dom'
 import { viewportSize } from '../ui/viewport'
 
-export const save: SaveData = await window.qqpet.load()
+if (!window.__qqpetInitialSave) throw new Error('QQPet store must be loaded through bootstrap.ts')
+export const save: SaveData = window.__qqpetInitialSave
 export const info: PetInfo = save.petInfo
 
 let patch: Record<string, unknown> = {}
 let flushTimer = 0
+const settlers = new Set<() => void>()
+
+/** Farm and other embedded state can settle immediately before the renderer/file barrier. */
+export function onSaveFlush(settle: () => void): () => void {
+  settlers.add(settle)
+  return () => settlers.delete(settle)
+}
+
+function flushPatch(): void {
+  if (flushTimer) window.clearTimeout(flushTimer)
+  flushTimer = 0
+  if (!Object.keys(patch).length) return
+  window.qqpet.save(patch as SavePatch)
+  patch = {}
+}
+
+export async function flushSave(): Promise<void> {
+  for (const settle of settlers) settle()
+  flushPatch()
+  await window.qqpet.flush?.()
+}
+window.__qqpetFlush = flushSave
+addEventListener('pagehide', () => { void flushSave().catch((error: unknown) => console.error('Save flush failed:', error)) })
 
 /** Applies a change to `save` and writes it to disk, batched like the original (200 ms). */
 export function update<K extends keyof SaveData>(key: K, value: SavePatch[K]): void {
@@ -23,11 +48,7 @@ export function update<K extends keyof SaveData>(key: K, value: SavePatch[K]): v
     target[key] = value
     patch[key] = value
   }
-  flushTimer ||= window.setTimeout(() => {
-    window.qqpet.save(patch as SavePatch)
-    patch = {}
-    flushTimer = 0
-  }, 200)
+  flushTimer ||= window.setTimeout(flushPatch, 200)
 }
 
 type NumKey = { [K in keyof PetInfo]: PetInfo[K] extends number ? K : never }[keyof PetInfo]
@@ -61,11 +82,11 @@ export const stage = (): Stage => stageOf(save.petComputedlInfo.level)
 export const avatar = (): string => `pet/avatar/${info.sex}${stage()}.png`
 
 /**
- * Base size grows from 144 (level 1) to 164 (level 10+) at 1920 px screen width.
- * Touch screens are small and fingers big: there it is 40% of the short side at level 1.
+ * Native iPad hosts keep the asset's 146–164 px size from level 1 onward.
+ * Other touch hosts use the short side; desktop hosts use the active display width.
  */
 export const petSize = (): number =>
-  (144 + 2 * Math.min(save.petComputedlInfo.level, 10)) * (touch ? Math.min(innerWidth, innerHeight) / 360 : viewportSize().width / 1920)
+  petSizeFor(save.petComputedlInfo.level, touch ? { width: innerWidth, height: innerHeight } : viewportSize(), touch, window.qqpet.deviceKind)
 
 /** How close to a side counts as peeking. Hide_left/right SWFs assume the box sits on that edge. */
 export const EDGE_NEAR = 36

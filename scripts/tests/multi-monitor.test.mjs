@@ -127,3 +127,26 @@ test('release uses the native target display dimensions before Chromium finishes
   assert.equal(app.save.settings.petDisplayId, 3)
   assert.ok(app.info.lastX > 1920, 'must not clamp against the old primary viewport')
 })
+
+test('release outside the pet still uses the final native display and retains recent fling velocity', async () => {
+  const d = desktop()
+  const position = desktopCursor(d.win, d.screen, 1)
+  let following = false
+  const app = renderer(144, { x: 0, y: 0 }, async on => {
+    const p = position(following || on)
+    following = on
+    return p
+  })
+  await setImmediate()
+  app.pointer('pointerdown', 550, 340)
+  await setImmediate()
+  d.move({ x: -100, y: 100 })
+  const p = position(true)
+  app.cursor(p)
+  app.windowPointer('pointerup', p.x, p.y)
+  await setImmediate()
+  assert.equal(following, false)
+  assert.equal(app.save.settings.petDisplayId, 2)
+  assert.notEqual(app.releases.at(-1)[1], 0)
+  assert.equal(app.poses.at(-1).a, 'normal')
+})

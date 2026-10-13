@@ -7,6 +7,7 @@
 .album .albumItem {padding:6px;border-radius:6px;background:#fff;box-shadow:1px 2px 4px #0002;cursor:pointer;transform:rotate(-1deg)}
 .album .albumItem:nth-child(even) {transform:rotate(1deg)}
 .album .albumItem:hover {transform:scale(1.04)}
-.album .albumImg {width:100%;aspect-ratio:10/7;border-radius:3px;display:block}
+.album .albumImg {position:absolute;top:0;left:0;width:100%;height:100%;border-radius:3px;display:block}
 .album .albumCap {padding-top:4px;font-size:11px;color:#8a5a2b;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .album .albumEmpty {color:#c9a27a;font-size:16px}
+.album .albumRatio {position:relative;width:100%;padding-top:70%}

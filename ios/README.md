@@ -1,0 +1,51 @@
+# iOS host
+
+QQPet's shared renderer runs in one independent global HUD. The UIKit manager starts it with root persona APIs, sends commands to that renderer, and presents file pickers and foreground games. Open QQPet, tap **开始桌宠**, then return to the Home Screen. Opening the manager pauses and hides the HUD; **宠物菜单** or **宠物状态** reveals the corresponding panel while leaving **返回管理** reachable.
+
+The native host is Objective-C and does not directly link libc++. The minimum deployment target is iOS 14.0. Installation requires TrollStore or an active jailbreak that preserves the supplied entitlements. Ordinary developer signing does not grant the private permissions needed for global window hosting. TrollStore's supported system versions are described in its [upstream README](https://github.com/opa334/TrollStore#readme). Private window-hosting and event interfaces vary between iOS releases; the host checks their availability at runtime.
+
+## Build
+
+Prepare the project web output and resource bytes, then run `ios/build.sh`. The script uses an installed public iPhoneOS SDK, compiles one source at a time and reuses unchanged objects. It builds `out/ios-native/Payload/QQPet.app` and packages `out/ios-native/QQPetIOS.ipa`. Dependency installation and resource preparation are separate steps; the native build does not download dependencies or contact Apple signing services.
+
+Inputs can be selected with `QQPET_SDK`, `QQPET_CC`, `QQPET_ARCH`, `QQPET_WEB_ROOT`, `QQPET_RESOURCES_ROOT`, `QQPET_IOS_BUILD_DIR` and `QQPET_LDID`. Defaults use the selected Xcode public iPhoneOS SDK, `out/ios` web output and `out/ios-assets` resources. The `resources` fallback rejects Git LFS pointer files. Private exports are resolved dynamically from the supplied declarations, so linking does not require a private SDK. Signing uses `ldid` when available, otherwise ad-hoc `codesign`. `ios/build.sh --compile-only` compiles native source without packaging web output or resources.
+
+Linux builds use an installed iPhoneOS SDK and external Apple LLVM/ld64 tools. Set `QQPET_SDK` and `QQPET_TOOLCHAIN_DIR` to the SDK and toolchain bin directories, or select `QQPET_CC`, `QQPET_LD` and `QQPET_LDID` individually. Linux requires `ldid`; compilation is serial, and packaging checks the Mach-O deployment target and embedded entitlements. The shared `ios-build.yml` workflow downloads pinned, hash-checked tools on Ubuntu and provides IPA artifacts for pull requests and tagged releases.
+
+The app icon reuses `build/icon.png`. Checked-in PNG sizes are copied directly into the bundle without an asset catalog or `actool`. If the shared source icon changes, `python3 scripts/prepare-ios-icons.py` regenerates them using open-source Pillow; routine builds do not require Pillow.
+
+Web and native versions use `scripts/version.mjs`: an explicit `QQPET_VERSION`, a CI release tag, the checkout's Git release tag with a development suffix, then the package version as a fallback. `QQPET_BUILD_NUMBER` overrides the numeric bundle build number. The web output includes `version.json`, and packaging rejects a mismatched Web/native identity. Release tags determine the displayed version, bundle metadata and IPA filename together.
+
+## Storage and lifecycle
+
+The manager derives `Library/Application Support/QQPet` from its data container and passes that path to the root HUD. The HUD preserves the manager UID's file ownership. `save-record.json` atomically commits save text and generation in one replacement; `save.json` is a plain JSON mirror for recovery. Replacing a save rotates its generation and optionally retains `save.json.bak`; stale writes are rejected. The HTTP port is stored in `origin.json` to preserve Ruffle's resource origin across launches. A conflicting port produces an error instead of silently changing the storage origin.
+
+Only the pet page writes canonical state. Games have a read-only bootstrap and their own RPC host; rewards return to the originating HUD instance and save generation. Native responses and cancellation are scoped by a per-document nonce. NSURLSession requests can be canceled, and page cancellation releases outstanding manager actions and dismisses their matching editor or picker. Import, export and game entry wait for the renderer's save barrier. Failures are surfaced, and cooperative shutdown has a bounded flush wait.
+
+The HUD lock and recent runtime status identify the running instance. Stop requests address that instance and do not kill a stored PID. Normal startup has no duration limit. The command-line options `--hud --duration N --state-dir PATH`, `--status --state-dir PATH` and `--quit --state-dir PATH` provide bounded execution and cooperative control. SpringBoard relaunch re-registers the existing window context without starting another renderer. No launch daemon or automatic startup is installed; after a full reboot, start the HUD from the manager.
+
+Game-page WebKit storage belongs to the manager UID, while the pet renderer belongs to the root UID. Canonical QQPet saves are shared explicitly through the native store rather than relying on cross-UID WebKit storage.
+
+## Input and platform behavior
+
+Touch delivery uses the iOS 14 UIKit dispatcher path and guarded AX interfaces on newer releases. A native touch plane covers pet-body drag regions; interactive regions go to WKWebView. The plane sends full-page coordinates to `__qqpetInput`, and shared code owns drag state and position. The virtual page keeps its origin while an internal clipping view changes; the hosted window retains its full-screen display context. Transparent regions do not accept touches. Lock, orientation changes and shutdown cancel captured touches.
+
+GraphicsServices owns the HUD's event loop, including the tracking modes used by scroll views. Native orientation updates resize the full page; stale geometry from the previous viewport cannot shrink the new one. The toolbar's overflowing controls retain their own interactive regions. On iPad, the pet uses its original 146–164 CSS pixel size and the toolbar stays at its original scale, shrinking only when needed to fit. iPhone keeps the shared touch scaling. Touch panels remain centered and shrink or turn to fit, as on the other mobile hosts. Mobile viewport changes preserve the pet’s relative position in its movement area and keep peeking pets attached to the same side, including after rotation.
+
+A non-filtering IOHID subscription supplies outside-touch notifications while the HUD is visible. It does not intercept, re-dispatch or record input. HUD text fields, including Ruffle's hidden keyboard field, use an asynchronous CFUserNotification system input alert, following [Procursus uialert](https://github.com/ProcursusTeam/uikittools-ng/blob/6b84d79261186d070b54efa9a39850f108b52239/uialert.m). The supplied `com.apple.springboard.CFUserNotification` entitlement allows editing while the manager remains in the background. Committed text returns to the originating field while it remains connected; page teardown or HUD shutdown cancels the matching alert. JSON import and export use UIDocumentPicker.
+
+Clipboard text is sent explicitly from the manager. Background clipboard monitoring, foreground-application observation and automatic hiding for other apps' fullscreen windows are unavailable. Locking the device or opening the manager hides and pauses the HUD without changing the user's growth-pause setting.
+
+Upstream games use a normal resizable Electron window, Android `GameActivity` or Harmony `GameAbility` main window. An Electron game can be a child of an open pet panel, but it does not use the pet's transparent, click-through overlay configuration. The iOS manager presents games in a foreground controller. The shared game page focuses Ruffle after loading; keyboard input follows the normal UIKit → WKWebView → Ruffle path. Touch controls produce paired DOM `keydown` and `keyup` events. Games do not install global keyboard capture.
+
+Audio uses Ruffle's WebAudio output rather than a native player. The [iOS 14-era WebKit audio session implementation](https://github.com/WebKit/WebKit/blob/Safari-610.1.28/Source/WebCore/platform/audio/cocoa/MediaSessionManagerCocoa.mm) selects Ambient with the default route policy for pure WebAudio; [Ambient](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/ambient?language=objc) respects silent mode and mixes with other audio. WebKit manages this session in WebContent, independently of the manager's native session. The host leaves output routes to the system and does not add HTML media playback, Now Playing metadata or remote-command handlers.
+
+## Safari 14.0 compatibility
+
+Ruffle 0.6's fallback Wasm uses sign-extension instructions introduced by WebKit in iOS 14.5 / Safari 14.1. Production web builds run `scripts/lower-ruffle.mjs` through the shared Vite plugin. Binaryen 123.0.0 lowers these instructions to equivalent baseline shifts. Input validation, output validation with SignExt disabled and source/output SHA-256 checks protect the recipe. Game assets are unchanged, the fallback retains its loader filename and the SIMD module remains intact. A changed fallback fails the build until the compatibility recipe is updated.
+
+The compiler runs in a serial Node child with a 512 MiB JavaScript heap limit. Its cache is stored under `out/ruffle-safari14`. Shared Web API and style fallbacks target Safari 14.0; Electron retains its existing deployment requirements.
+
+References: [WebKit Safari 14.1 release notes](https://webkit.org/blog/11648/new-webkit-features-in-safari-14-1/), [Binaryen SignExtLowering](https://github.com/WebAssembly/binaryen/blob/version_123/src/passes/SignExtLowering.cpp).
+
+Private declarations and touch helpers are vendored under `vendor/TrollSpeed`, with [source revisions and adaptation notes](vendor/TrollSpeed/ORIGIN.md) and their original licenses.

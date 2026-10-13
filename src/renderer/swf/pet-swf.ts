@@ -1,8 +1,6 @@
 import { save } from '../pet/store'
 import { SwfPlayer } from './player'
 
-const nextPaint = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
-
 /** Ruffle's :host { all: initial } and SWF cursor commands both beat document CSS. */
 function pinCursor(el: HTMLElement): void {
   el.style.setProperty('cursor', 'inherit', 'important')
@@ -23,13 +21,23 @@ function pinCursor(el: HTMLElement): void {
 export class PetSwf {
   front: SwfPlayer
   private back: SwfPlayer
+  private readonly parent: HTMLElement
 
   constructor(parent: HTMLElement) {
+    this.parent = parent
     this.front = new SwfPlayer(parent)
-    this.back = new SwfPlayer(parent)
-    this.back.el.style.visibility = 'hidden'
+    this.back = this.createBack()
     pinCursor(this.front.el)
-    pinCursor(this.back.el)
+  }
+
+  private createBack(): SwfPlayer {
+    const back = new SwfPlayer(this.parent)
+    // Keep the upcoming canvas paintable on older WebKit, without accepting its input.
+    back.el.style.opacity = '0'
+    back.el.style.pointerEvents = 'none'
+    back.setMuted(!save.settings.sound)
+    pinCursor(back.el)
+    return back
   }
 
   /** Both stacked players, so a toggle also cuts off a laugh that is already playing. */
@@ -42,11 +50,20 @@ export class PetSwf {
   async load(url: string): Promise<void> {
     this.applySound()
     const next = this.back
-    await next.load(url)
-    pinCursor(next.el)
-    await nextPaint()
-    next.el.style.visibility = 'visible'
-    this.front.el.style.visibility = 'hidden'
+    try {
+      await next.load(url)
+      pinCursor(next.el)
+      await next.nextPaint()
+    } catch (error) {
+      next.destroy()
+      // Leave the last good front visible. Machine's existing recovery retries in a fresh element.
+      if (this.back === next && this.parent.isConnected) this.back = this.createBack()
+      throw error
+    }
+    next.el.style.opacity = '1'
+    next.el.style.pointerEvents = 'auto'
+    this.front.el.style.opacity = '0'
+    this.front.el.style.pointerEvents = 'none'
     this.front.stop()
     this.back = this.front
     this.front = next

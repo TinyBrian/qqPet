@@ -1,6 +1,6 @@
 # QQPet
 
-QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS），基于 Arctic Penguin T800 逆向重建。Flash 内容由 [Ruffle](https://ruffle.rs) 播放。
+QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS / iOS），基于 Arctic Penguin T800 逆向重建。Flash 内容由 [Ruffle](https://ruffle.rs) 播放。
 
 > **版权声明**：QQ 宠物的美术资源与 SWF 版权归腾讯所有；旅行照片素材版权归《旅行青蛙·中国之旅》所有。本项目仅供学习交流，请勿用于商业用途。
 
@@ -39,6 +39,22 @@ QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS），�
 
 桌面版支持将宠物拖到其他显示器（包括主屏左侧或上方、不同缩放比例的屏幕），重启后回到上次所在的显示器；该显示器断开时回到主屏幕。
 
+### iOS
+
+最低目标为 iOS 14.0。安装需使用保留所需权限的越狱 App 安装器或 TrollStore，后者的系统兼容范围以其上游说明为准。全局 HUD 依赖系统私有接口和所需权限，普通开发者签名不能替代这些权限。打开管理 App，点击「开始桌宠」，返回主屏幕后桌宠继续显示在其他应用上方。打开管理界面会暂时隐藏桌宠；「宠物菜单」「宠物状态」可显示相应界面，「返回管理」用于回到管理操作。
+
+复用完整养成、界面和 SWF 内容，增加原生触摸分区、游戏展示和系统文件选择器导入导出。HUD 输入框通过前台管理器的原生编辑框提交文字。剪贴板文本由用户主动发送；后台剪贴板监听及前台应用观察暂不提供，因而也不提供其他 App 全屏时自动隐藏，设置会说明平台能力限制。此版本不安装 daemon，也不提供开机自启；完整重启后需手动开始。
+
+本地使用 Node 22.12 或以上版本、公开 iPhoneOS SDK 和本地 `ldid`（也支持 ad-hoc `codesign`）。资源准备是独立步骤，普通构建使用本地文件：
+
+```sh
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts
+npm run prepare:ios-assets
+npm run ios
+```
+
+产物为 `out/ios-native/QQPetIOS.ipa`。安装器需保留 IPA 内的 entitlement。共用渲染代码以 Safari 14.0 能力为底线，构建会降级 Ruffle 回退 WASM 的符号扩展指令，并验证结果只依赖基础特性；Electron 外壳保留原有最低 macOS 版本要求。构建选项、存档路径、后台生命周期和平台限制见 [iOS 使用说明](ios/README.md)。
+
 ### Android
 
 宠物以悬浮窗形式显示在桌面和其他应用上方，功能与桌面版一致，另有以下适配：
@@ -50,7 +66,7 @@ QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS），�
 
 ### HarmonyOS
 
-纯血鸿蒙（HarmonyOS NEXT / 5 及以上，在 7 模拟器上验证过）不能装 Android APK。宠物同样以悬浮窗显示，JS 桥和 Android 是同一份 `QQPetNative` 契约，原生壳在 `harmony/`，渲染层不改。
+纯血鸿蒙（HarmonyOS NEXT / 5 及以上）不能装 Android APK。宠物同样以悬浮窗显示，JS 桥和 Android 是同一份 `QQPetNative` 契约，原生壳在 `harmony/`，渲染层不改。
 
 - 首次打开需允许「显示在其他应用的上层」和通知；通知栏通知代替桌面版的托盘图标。
 - 小游戏和密室探险全屏横屏运行（`GameAbility`）。
@@ -74,8 +90,9 @@ GitHub Actions 打 `v*` 标签时产出未签名 HAP 并放进 Release。和桌�
 | Linux | `QQPet-<版本>.AppImage` 或 `qqpet_<版本>_amd64.deb` |
 | Android（11 及以上） | `QQPet-<版本>.apk` |
 | HarmonyOS（5 及以上） | `QQPet-<版本>.hap` |
+| iOS（需 TrollStore 或越狱） | `QQPet-<版本>-ios.ipa` |
 
-安装包**没有代码签名**，系统会拦截首次运行：
+桌面安装包**没有代码签名**，系统会拦截首次运行。各平台安装方式：
 
 - **Windows**：SmartScreen 提示「Windows 已保护你的电脑」时，点「更多信息」→「仍要运行」。
 - **macOS**：把 QQPet 拖进「应用程序」后，若提示「已损坏，无法打开」或「无法验证开发者」，在终端执行一次：
@@ -88,6 +105,7 @@ GitHub Actions 打 `v*` 标签时产出未签名 HAP 并放进 Release。和桌�
 - **Linux**：AppImage 需要可执行权限，`chmod +x QQPet-*.AppImage` 后运行；Ubuntu 22.04 起若报缺少 FUSE，安装 `libfuse2`（24.04 为 `libfuse2t64`）。deb 包用 `sudo apt install ./qqpet_*_amd64.deb` 安装。
 - **Android**：在浏览器或文件管理器中打开 APK，按提示允许「安装未知应用」。
 - **HarmonyOS**：下载 HAP 后用 hdc 安装（需开发者模式）：`hdc install QQPet-*.hap`。未签名，不能走应用市场那套安装。
+- **iOS**：通过 TrollStore 或保留所需权限的越狱 App 安装器安装 IPA；安装器需保留 IPA 内的 entitlement。权限与使用方式见 [iOS 使用说明](ios/README.md)。
 
 ## 征集素材
 
@@ -113,9 +131,10 @@ npm run dev
 npm run dist      # 类型检查 + 构建 + 打包当前平台安装包到 dist/
 npm run android   # Android debug APK
 npm run harmony   # HarmonyOS debug HAP（需要本机 DevEco Studio）
+npm run ios       # iOS IPA（资源、SDK 和签名工具见 iOS 说明）
 ```
 
-推送 `v*` 标签时由 GitHub Actions 打出三平台安装包、Android APK 和 Harmony HAP 并发布 Release。其他推送不触发构建。
+推送 `v*` 标签时由 GitHub Actions 打出三平台安装包、Android APK、Harmony HAP 和 iOS IPA 并发布 Release。iOS 及共用代码的 pull request 还会生成可下载的 IPA。iOS CI 在 Ubuntu 上使用固定版本的 LLVM、SDK 和 `ldid`，并打包完整资源。
 
 Android 版本地调试用 `npm run android`（debug 包，输出到 `android/app/build/outputs/apk/debug/`），需要 Android SDK 和 JDK 17（Gradle 8 不支持更新的 JDK，可用 `JAVA_HOME` 指定）。CI 打的 release 包需要在仓库 Secrets 中配置签名密钥：
 

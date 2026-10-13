@@ -1,4 +1,5 @@
 import { describe, type Good, type GoodType } from '../pet/data/goods'
+import { toolbarScaleFor } from '../../shared/layout'
 import { listGoods, onGoodsChange, pageOf, type Page } from '../pet/goods'
 import { doctor, useItem } from '../pet/items'
 import { describeStudy, describeWork, study, studyGoods, work, workGoods } from '../pet/jobs'
@@ -24,8 +25,6 @@ const ICONS = 'pet/control/icons/'
 const BAR_HEIGHT = 180
 /** The goods panel, the bar's widest part. */
 const BAR_WIDTH = 314
-/** Pet size the bar was drawn for (level 1 on a 1920 px screen). */
-const DESKTOP_PET = 150
 const EDGE = 10
 /** Where the penguin's head and feet sit in the pet box; the swf leaves the rest transparent. */
 const HEAD = 0.4
@@ -141,11 +140,11 @@ let open: (Panel & { page: number }) | null = null
 
 /**
  * Centered under the pet's feet; when there is no room below, mirrored above its head. Kept on screen.
- * On touch screens it grows with the pet, as far as the screen is wide.
+ * Native iPads use the original toolbar size; other touch hosts grow it with the pet.
  */
 function place(): void {
   const size = petSize()
-  const scale = touch ? Math.min(size / DESKTOP_PET, (innerWidth - 2 * EDGE) / BAR_WIDTH) : 1
+  const scale = toolbarScaleFor(size, (innerWidth - 2 * EDGE) / BAR_WIDTH, touch, window.qqpet.deviceKind)
   const height = BAR_HEIGHT * scale
   const half = (BAR_WIDTH * scale) / 2 + EDGE
   const feet = info.lastY + size * FEET

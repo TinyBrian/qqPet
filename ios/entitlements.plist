@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>application-identifier</key><string>net.ankio.qqpet.ios</string>
+  <key>com.apple.QuartzCore.displayable-context</key><true/>
+  <key>com.apple.backboard.client</key><true/>
+  <key>com.apple.springboard.accessibility-window-hosting</key><true/>
+  <key>com.apple.springboard.launchapplications</key><true/>
+  <key>com.apple.springboard.CFUserNotification</key><true/>
+  <key>com.apple.private.hid.client.event-dispatch</key><true/>
+  <key>com.apple.private.hid.client.event-filter</key><true/>
+  <key>com.apple.private.hid.client.event-monitor</key><true/>
+  <key>com.apple.private.hid.client.service-protected</key><true/>
+  <key>com.apple.private.hid.manager.client</key><true/>
+  <key>com.apple.private.persona-mgmt</key><true/>
+  <key>com.apple.private.security.no-sandbox</key><true/>
+  <key>com.apple.private.security.storage.AppDataContainers</key><true/>
+  <key>platform-application</key><true/>
+  <key>file-read-data</key><true/>
+  <key>user-preference-read</key><true/>
+  <key>user-preference-write</key><true/>
+</dict></plist>

@@ -1,0 +1,122 @@
+name: iOS IPA
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version or tag; empty resolves the checkout version
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NODE_OPTIONS: --max-old-space-size=1024
+      QQPET_ARCH: arm64
+      QQPET_ASSET_REPOSITORY: ${{ github.repository }}
+      QQPET_ASSET_REVISION: ${{ github.sha }}
+      QQPET_SDK_URL: https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS14.5.sdk.tar.xz
+      QQPET_SDK_SHA256: 1c998a5ee7eb8c29e39f0d8c83add9cad1a954342ca0d86204d1b4fe08a921b9
+      QQPET_TOOLCHAIN_URL: https://github.com/L1ghtmann/llvm-project/releases/download/main-update_3-eabca92/iOSToolchain-x86_64.tar.xz
+      QQPET_TOOLCHAIN_SHA256: cc9fbc7f8a3f9336f926cd4fb7cc2233a17b2ba40504cc8c0ff3211bd9df27e3
+      QQPET_CLANG_VERSION: '19.0.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install cross-build host tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ca-certificates curl xz-utils zip rsync python3 libtinfo6
+      - uses: actions/cache@v4
+        id: cross-tools
+        with:
+          path: ${{ runner.temp }}/qqpet-ios-cross
+          key: ios-linux-x86_64-${{ env.QQPET_SDK_SHA256 }}-${{ env.QQPET_TOOLCHAIN_SHA256 }}
+      - name: Fetch pinned SDK and LLVM toolchain
+        if: steps.cross-tools.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          cross_root="$RUNNER_TEMP/qqpet-ios-cross"
+          sdk_archive="$RUNNER_TEMP/qqpet-sdk.tar.xz"
+          toolchain_archive="$RUNNER_TEMP/qqpet-toolchain.tar.xz"
+          mkdir -p "$cross_root/sdks" "$cross_root/toolchain"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 3 "$QQPET_SDK_URL" --output "$sdk_archive"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 3 "$QQPET_TOOLCHAIN_URL" --output "$toolchain_archive"
+          printf '%s  %s\n' "$QQPET_SDK_SHA256" "$sdk_archive" | sha256sum --check --strict
+          printf '%s  %s\n' "$QQPET_TOOLCHAIN_SHA256" "$toolchain_archive" | sha256sum --check --strict
+          for archive in "$sdk_archive" "$toolchain_archive"; do
+            tar --list --xz --file "$archive" > "$archive.list"
+            awk '$0 ~ /^\// || $0 ~ /(^|\/)\.\.($|\/)/ { bad = 1 } END { exit bad }' "$archive.list"
+          done
+          tar --extract --xz --no-same-owner --file "$sdk_archive" --directory "$cross_root/sdks"
+          tar --extract --xz --no-same-owner --file "$toolchain_archive" --directory "$cross_root/toolchain"
+          rm -f "$sdk_archive" "$toolchain_archive" "$sdk_archive.list" "$toolchain_archive.list"
+      - name: Select cross-build tools
+        run: |
+          set -euo pipefail
+          cross_root="$RUNNER_TEMP/qqpet-ios-cross"
+          bin="$cross_root/toolchain/linux/iphone/bin"
+          sdk="$cross_root/sdks/iPhoneOS14.5.sdk"
+          test -d "$sdk"
+          test -x "$bin/clang"
+          test -x "$bin/ldid"
+          linker=''
+          for candidate in "$bin/ld" "$bin/aarch64-apple-darwin14-ld" "$bin/ld64"; do
+            if [[ -x "$candidate" ]]; then linker="$candidate"; break; fi
+          done
+          test -n "$linker"
+          printf '%s\n' "$bin" >> "$GITHUB_PATH"
+          {
+            printf 'QQPET_SDK=%s\n' "$sdk"
+            printf 'QQPET_TOOLCHAIN_DIR=%s\n' "$bin"
+            printf 'QQPET_CC=%s/clang\n' "$bin"
+            printf 'QQPET_LD=%s\n' "$linker"
+            printf 'QQPET_LDID=%s/ldid\n' "$bin"
+            printf 'LD_LIBRARY_PATH=%s/lib:%s\n' "${bin%/bin}" "${LD_LIBRARY_PATH:-}"
+          } >> "$GITHUB_ENV"
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Set release version
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_VERSION#v}"
+          npm version "$version" --no-git-tag-version --allow-same-version --ignore-scripts
+          printf 'QQPET_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+      - run: npm run typecheck
+      - name: Prepare and verify bundled resources
+        run: |
+          git lfs fsck
+          npm run prepare:ios-assets
+          npm run check:ios-assets
+      - run: npm run build:ios-web
+      - name: Build and name IPA
+        run: |
+          set -euo pipefail
+          bash ios/build.sh
+          version=$(node scripts/version.mjs --field version)
+          mkdir -p dist
+          mv out/ios-native/QQPetIOS.ipa "dist/QQPet-$version-ios.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qqpet-ios
+          path: dist/*-ios.ipa
+          if-no-files-found: error
+          compression-level: 0

@@ -1,4 +1,4 @@
-import { avatar, info, save, setInfo, update } from '../pet/store'
+import { avatar, info, onSaveFlush, save, setInfo, update } from '../pet/store'
 import { SwfPlayer } from '../swf/player'
 import { readSol, writeSol, type Sol } from '../swf/sol'
 import { openBox } from './box'
@@ -73,6 +73,13 @@ export function openFarm(): void {
     update('saveJsonData', { farm: JSON.stringify(user) })
   }
   const timer = setInterval(settle, 500)
+  const flushFarm = (): void => {
+    settle()
+    // Keep exported/live snapshots from applying the same elapsed pest interval twice after import.
+    const user = readSol(KEY)!.user as Sol
+    update('saveJsonData', { farm: JSON.stringify({ ...user, checked: Math.floor(Date.now() / 1000) }) })
+  }
+  const stopFlush = onSaveFlush(flushFarm)
 
   const host = div('farm', div('avatar', img('penguin_breathe', avatar())))
   const player = new SwfPlayer(host)
@@ -89,10 +96,8 @@ export function openFarm(): void {
   openBox(div('ui-farm', host, actions), {
     onClose: () => {
       clearInterval(timer)
-      settle()
-      // The SWF rolls disasters up to its last tick but only saves when one strikes.
-      const checked = Math.floor(Date.now() / 1000)
-      update('saveJsonData', { farm: JSON.stringify({ ...(readSol(KEY)!.user as Sol), checked }) })
+      flushFarm()
+      stopFlush()
       window.qqpet.setFocusable(false)
       open = false
     },

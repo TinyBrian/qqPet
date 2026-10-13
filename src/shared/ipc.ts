@@ -105,11 +105,20 @@ export interface AiMessage {
   content: string
 }
 
+/** Supplied by native device APIs, independently from viewport dimensions. */
+export type DeviceKind = 'phone' | 'tablet' | 'other'
+
 /** Exposed to the renderer as `window.qqpet` by the preload script. */
 export interface QQPetApi {
+  /** Optional native device idiom; absent preserves the existing platform layout. */
+  deviceKind?: DeviceKind
+  /** Optional platform constraints; omitted means the established platform behavior is available. */
+  capabilities?: { autoStart?: boolean; autoStartReason?: string; clipboardWatch?: boolean; clipboardWatchReason?: string; frontWatch?: boolean; frontWatchReason?: string }
   load(): Promise<SaveData>
   /** Merges object groups field by field, replaces other keys, then persists. */
   save(patch: SavePatch): void
+  /** Resolves after previously submitted saves reach persistent storage. */
+  flush?(): Promise<void>
   /** Buries the pet and relaunches into egg selection, or straight into a newborn of `sex`. */
   resetPet(sex?: Sex): void
   /** Asks where to write the save; false when cancelled. */
@@ -118,6 +127,8 @@ export interface QQPetApi {
   importSave(): Promise<void>
   /** Plays pet/game/<swf> in its own resizable window. */
   openGame(swf: string): void
+  /** Native game-page exit; ordinary browser/Electron pages can keep window.close(). */
+  closeGame?(): void
   /** Today and the next 30 days from the calendar API; empty while offline. */
   calendar(): Promise<CalendarDay[]>
   /** Rejects with the server's error. */

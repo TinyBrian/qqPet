@@ -2,6 +2,8 @@ import { join, normalize, resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import { normalizePath } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { ruffleSafari14 } from './scripts/ruffle-vite'
+import { appVersion } from './scripts/app-version'
 import { hidpiSvg } from './src/main/hidpi'
 import { petsocPath } from './src/main/nocase'
 
@@ -24,10 +26,14 @@ export default defineConfig({
     // extraResources in production, never copied into the renderer bundle.
     publicDir: resolve('resources'),
     build: {
+      target: 'safari14',
+      cssTarget: 'safari14',
       copyPublicDir: false,
       rollupOptions: { input: { index: resolve('src/renderer/index.html'), game: resolve('src/renderer/game.html'), swf: resolve('src/renderer/swf.html') } },
     },
     plugins: [
+      appVersion(),
+      ruffleSafari14(),
       // Dev counterpart of the @2x handling in src/main/protocol.ts.
       {
         name: 'hidpi',

@@ -1,3 +1,4 @@
+import { createPetInput, type PetPointerInput } from './pet/input'
 import { clipAsk, IDLE, note } from './pet/ai'
 import { resumeTask } from './pet/jobs'
 import { machine, speak, startPet } from './pet/pet'
@@ -12,6 +13,23 @@ import './ui/face'
 import { closeMenu, openMenu } from './ui/menu'
 import { openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
+import { windowView } from './ui/window-view'
+import { resizePetPosition } from '../shared/layout'
+
+let lastPlatformError = ''
+let lastPlatformErrorAt = -Infinity
+// The native adapter reports errors before and after bootstrap; only the initialized UI opens dialogs.
+window.addEventListener('qqpet-platform-error', (event) => {
+  const detail = (event as CustomEvent<{ operation?: unknown; message?: unknown }>).detail
+  if (!detail || typeof detail.message !== 'string') return
+  const message = typeof detail.operation === 'string' ? `${detail.operation}：${detail.message}` : detail.message
+  const now = performance.now()
+  // A failed periodic save should leave one readable alert instead of replacing it on every tick.
+  if (message === lastPlatformError && now - lastPlatformErrorAt < 10_000) return
+  lastPlatformError = message
+  lastPlatformErrorAt = now
+  windowView({ title: '平台操作失败', msg: message })
+})
 
 const petEl = document.getElementById('pet')!
 const HOLD_MS = 500
@@ -35,6 +53,7 @@ function snapEdge(): 'hideleft' | 'hideright' | null {
 }
 
 let size = petSize()
+let previousViewport = { ...viewportSize(), size }
 function layout(): void {
   // A pet that grows keeps its center.
   const shift = dragging ? 0 : (petSize() - size) / 2
@@ -47,15 +66,53 @@ function layout(): void {
   petEl.style.width = petEl.style.height = `${size}px`
   petEl.style.left = `${info.lastX}px`
   petEl.style.top = `${info.lastY}px`
+  const area = viewportSize()
+  if (area.width === previousViewport.width && area.height === previousViewport.height) previousViewport.size = size
 }
 
 if (info.lastX === -1 && info.lastY === -1) {
   setInfo('lastX', (innerWidth - size) / 2)
   setInfo('lastY', (innerHeight - size) / 2)
 }
-// A save from another screen, or a phone turned, leaves the pet off this one.
+// A save from another screen can leave the pet outside the current viewport.
 clampOnScreen()
-addEventListener('resize', () => { if (!dragging) clampOnScreen() })
+function resizeMobilePet(): void {
+  const next = { ...viewportSize(), size: petSize() }
+  if (next.width === previousViewport.width && next.height === previousViewport.height && next.size === previousViewport.size) return
+  const pose = machine.pose.a
+  const edge = pose === 'hideleft' || pose === 'hideright' ? pose : null
+  const position = resizePetPosition({ x: info.lastX, y: info.lastY }, previousViewport, next, edge)
+  // A pointer's grab point belongs to the previous viewport, even on hosts
+  // which do not send an orientation cancellation themselves.
+  if (dragging) petInput.cancel()
+  previousViewport = next
+  size = next.size
+  setInfo('lastX', position.x)
+  setInfo('lastY', position.y)
+  layout()
+}
+// Desktop transfers use native global coordinates, including mid-drag.
+if (window.qqpet.setDragging) addEventListener('resize', () => { if (!dragging) clampOnScreen() })
+else {
+  let resizeFrame = 0
+  const scheduleResize = (): void => {
+    if (resizeFrame) return
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0
+      resizeMobilePet()
+    })
+  }
+  addEventListener('resize', scheduleResize)
+  // WebKit can emit resize with an intermediate width, then settle the root
+  // viewport without another window event. Read the final dimensions per frame.
+  const viewportObserver = new ResizeObserver(scheduleResize)
+  viewportObserver.observe(document.documentElement)
+  addEventListener('pagehide', () => {
+    viewportObserver.disconnect()
+    if (resizeFrame) cancelAnimationFrame(resizeFrame)
+    removeEventListener('resize', scheduleResize)
+  })
+}
 layout()
 onInfoChange((key) => {
   if (key === 'lastX' || key === 'lastY' || key === 'growth') layout()
@@ -119,109 +176,130 @@ window.qqpet.onCursor((p) => {
 // The store's asynchronous load may finish after the initial cursor broadcast.
 if (window.qqpet.setDragging) void window.qqpet.setDragging(false).then(syncDesktop)
 
-petEl.addEventListener('contextmenu', (e) => openMenu({ x: e.clientX, y: e.clientY, pet: true }, adoptPet))
+petEl.addEventListener('contextmenu', (e) => openMenu({ x: pageX(e), y: pageY(e), pet: true }, adoptPet))
 
-petEl.addEventListener('pointerdown', (e) => {
-  if (dragging || e.button !== 0 || (e.target as HTMLElement).classList.contains('point')) return
-  closeMenu()
-  if (save.settings.petBar) showControl()
-  dragging = true
-  catchDiudiule()
-  let dx = pageX(e) - info.lastX
-  let dy = pageY(e) - info.lastY
-  let grabX = dx / size
-  let grabY = dy / size
-  const startX = pageX(e) - desktopOffset.x
-  const startY = pageY(e) - desktopOffset.y
-  let px = pageX(e)
-  let py = pageY(e)
-  let pt = performance.now()
-  let vx = 0
-  let vy = 0
-  // Touch has no right button, and Ruffle keeps the browser from turning a long press into one.
-  const hold = touch ? setTimeout(() => openMenu({ x: pageX(e), y: pageY(e), pet: true }, adoptPet), HOLD_MS) : 0
-  let lifted = false
-  const movePoint = (point: DesktopCursor, desktop: boolean): void => {
-    const { x, y } = point
-    const t = performance.now()
-    const dt = (t - pt) / 1000
-    const globalX = desktop ? x - desktopOffset.x : x
-    const globalY = desktop ? y - desktopOffset.y : y
-    if (dt > 0 && (globalX !== px || globalY !== py)) {
-      vx = (globalX - px) / dt
-      vy = (globalY - py) / dt
-      pt = t
+let releaseDomInput = (): void => {}
+const petInput = createPetInput({
+  clock: () => performance.now(),
+  position: () => ({ x: info.lastX, y: info.lastY, size }),
+  begin: () => {
+    closeMenu()
+    if (save.settings.petBar) showControl()
+    catchDiudiule()
+  },
+  active: (on) => { dragging = on; if (!on) releaseDomInput() },
+  hold: (x, y) => openMenu({ x, y, pet: true }, adoptPet),
+  lift: (s) => {
+    // Preserve upstream: Adult uses the scruff; Egg/Kid keep their stage/sex and original grab point.
+    if (stage() === 'Adult') {
+      machine.play({ a: 'drag', opt: { url: 'pet/Action/drag.swf', opt: {} } })
+      return { dx: s * 0.73, dy: s * 0.14 }
     }
-    px = globalX
-    py = globalY
-    if (Math.hypot(x - desktopOffset.x - startX, y - desktopOffset.y - startY) > 8) {
-      clearTimeout(hold)
-      if (!lifted) {
-        lifted = true
-        // Only the adult has a lifted-by-the-scruff clip, and drag.swf draws that scruff in the
-        // upper-right; anchor it under the cursor. Younger pets stand and keep the grab point.
-        if (stage() === 'Adult') {
-          machine.play({ a: 'drag', opt: { url: 'pet/Action/drag.swf', opt: {} } })
-          grabX = 0.73
-          grabY = 0.14
-          dx = size * 0.73
-          dy = size * 0.14
-        } else machine.play({ a: 'drag' })
-      }
-    }
-    setInfo('lastX', x - (desktop ? petSize() * grabX : dx))
-    setInfo('lastY', y - (desktop ? petSize() * grabY : dy))
-    // Once lifted the grab point is the cursor; clamping the box would pull it off.
+    machine.play({ a: 'drag' })
+    return null
+  },
+  move: (x, y, lifted) => {
+    setInfo('lastX', x)
+    setInfo('lastY', y)
     if (!lifted) clampOnScreen()
-  }
-  const nativeDrag = window.qqpet.setDragging
-  const move = (m: PointerEvent): void => {
-    if (nativeDrag) return
-    movePoint({ x: pageX(m), y: pageY(m) }, false)
-  }
-  if (nativeDrag) {
-    px = startX
-    py = startY
-    dragMove = (p): void => movePoint(p, true)
-    // Native cursor updates survive losing pointer capture when the overlay changes display/DPI.
-    void nativeDrag(true).then((p) => { if (dragMove && syncDesktop(p)) dragMove(p) })
-  }
-  petEl.setPointerCapture(e.pointerId)
-  petEl.addEventListener('pointermove', move)
-  const events = new AbortController()
-  const end = async (): Promise<void> => {
-    if (events.signal.aborted) return
-    events.abort()
-    clearTimeout(hold)
-    if (nativeDrag) {
-      const p = await nativeDrag(false)
-      if (syncDesktop(p)) dragMove?.(p)
-      dragMove = null
-    }
-    dragging = false
-    petEl.removeEventListener('pointermove', move)
-    if (performance.now() - pt > 80) {
-      vx = 0
-      vy = 0
-    }
-    if (releaseDiudiule(lifted, vx, vy)) {
-      scheduleHide()
-      return
-    }
+  },
+  end: (lifted, vx, vy, cancelled) => {
+    if (releaseDiudiule(cancelled ? false : lifted, vx, vy)) return scheduleHide()
     const edge = snapEdge()
-    if (edge && !lifted && machine.pose.a === edge) {
+    if (edge && !lifted && !cancelled && machine.pose.a === edge) {
       out = true
       machine.play({ a: 'normal' })
     } else if (edge) machine.play({ a: edge })
     else if (lifted || machine.pose.a === 'hideleft' || machine.pose.a === 'hideright') machine.play({ a: 'normal' })
     scheduleHide()
+  },
+}, touch ? HOLD_MS : 0)
+
+window.__qqpetInput = (input) => {
+  if (window.__qqpetHostPaused && input.phase !== 'cancel') return
+  cursor.x = input.x
+  cursor.y = input.y
+  petInput.send({ ...input, source: 'native' })
+}
+addEventListener('pagehide', () => petInput.cancel())
+
+petEl.addEventListener('pointerdown', (e) => {
+  if (window.__qqpetNativePetInput || window.__qqpetHostPaused || e.button !== 0 || (e.target as HTMLElement).closest('.point')) return
+  if (petInput.active) return
+  const nativeDrag = window.qqpet.setDragging
+  let lastPoint: DesktopCursor = { x: pageX(e), y: pageY(e) }
+  const sample = (phase: PetPointerInput['phase'], p: DesktopCursor): PetPointerInput => ({
+    phase, id: e.pointerId, x: p.x, y: p.y, source: 'dom',
+    ...(nativeDrag ? { globalX: p.x - desktopOffset.x, globalY: p.y - desktopOffset.y, scaleGrab: true } : {}),
+  })
+  petInput.send(sample('begin', lastPoint))
+  if (!petInput.active) return
+  let ending = false
+  let disposed = false
+  const fromDesktop = (p: DesktopCursor): void => {
+    lastPoint = p
+    petInput.send(sample('move', p))
   }
-  petEl.addEventListener('pointerup', () => void end(), { signal: events.signal })
-  petEl.addEventListener('pointercancel', () => void end(), { signal: events.signal })
+  const move = (m: PointerEvent): void => {
+    if (nativeDrag || m.pointerId !== e.pointerId) return
+    lastPoint = { x: pageX(m), y: pageY(m) }
+    petInput.send(sample('move', lastPoint))
+  }
+  const failed = (error: unknown): void => {
+    console.error('Native desktop drag failed:', error)
+    if (!disposed) petInput.cancel()
+  }
+  const stopFollowing = (): void => {
+    if (nativeDrag) void nativeDrag(false).then(syncDesktop).catch(failed)
+  }
+  const dispose = (): void => {
+    if (disposed) return
+    disposed = true
+    petEl.removeEventListener('pointermove', move)
+    petEl.removeEventListener('pointerup', end)
+    petEl.removeEventListener('pointercancel', end)
+    if (nativeDrag) {
+      removeEventListener('pointerup', end)
+      removeEventListener('pointercancel', end)
+      if (dragMove === fromDesktop) dragMove = null
+      if (!ending) { ending = true; stopFollowing() }
+    }
+    if (petEl.hasPointerCapture(e.pointerId)) petEl.releasePointerCapture(e.pointerId)
+    releaseDomInput = () => {}
+  }
+  const end = (m: PointerEvent): void => {
+    if (m.pointerId !== e.pointerId || ending || disposed) return
+    ending = true
+    if (m.type === 'pointercancel') {
+      petInput.send(sample('cancel', lastPoint))
+      stopFollowing()
+      return
+    }
+    if (nativeDrag) {
+      // Resolve the target display and final sample before releasing or clamping the pet.
+      void nativeDrag(false).then((p) => {
+        if (disposed) return
+        if (syncDesktop(p)) fromDesktop(p)
+        petInput.send(sample('end', lastPoint))
+      }).catch(failed)
+    } else {
+      lastPoint = { x: pageX(m), y: pageY(m) }
+      petInput.send(sample('end', lastPoint))
+    }
+  }
+  releaseDomInput = dispose
   if (nativeDrag) {
-    // A display/DPI change can release capture; the release still bubbles to the window.
-    addEventListener('pointerup', () => void end(), { signal: events.signal })
-    addEventListener('pointercancel', () => void end(), { signal: events.signal })
+    dragMove = fromDesktop
+    // Native cursor updates survive losing pointer capture during a display/DPI transfer.
+    void nativeDrag(true).then((p) => { if (!disposed && !ending && syncDesktop(p)) fromDesktop(p) }).catch(failed)
+  }
+  petEl.setPointerCapture(e.pointerId)
+  petEl.addEventListener('pointermove', move)
+  petEl.addEventListener('pointerup', end)
+  petEl.addEventListener('pointercancel', end)
+  if (nativeDrag) {
+    addEventListener('pointerup', end)
+    addEventListener('pointercancel', end)
   }
 })
 
@@ -241,30 +319,24 @@ if (touch) {
         tip.style.top = `${e.clientY}px`
         document.body.append(tip)
       }, HOLD_MS)
-      const off = new AbortController()
-      const signal = { signal: off.signal }
+      const move = (m: PointerEvent): void => {
+        if (Math.hypot(m.clientX - e.clientX, m.clientY - e.clientY) > 8) end()
+      }
       const end = (): void => {
         clearTimeout(hold)
-        off.abort()
+        document.removeEventListener('pointermove', move)
+        document.removeEventListener('pointercancel', end)
+        document.removeEventListener('pointerup', up)
       }
-      document.addEventListener(
-        'pointermove',
-        (m) => {
-          if (Math.hypot(m.clientX - e.clientX, m.clientY - e.clientY) > 8) end()
-        },
-        signal,
-      )
-      document.addEventListener('pointercancel', end, signal)
-      document.addEventListener(
-        'pointerup',
-        () => {
-          end()
-          if (!tip.isConnected) return
-          document.addEventListener('click', eat, true)
-          setTimeout(() => document.removeEventListener('click', eat, true))
-        },
-        signal,
-      )
+      const up = (): void => {
+        end()
+        if (!tip.isConnected) return
+        document.addEventListener('click', eat, true)
+        setTimeout(() => document.removeEventListener('click', eat, true))
+      }
+      document.addEventListener('pointermove', move)
+      document.addEventListener('pointercancel', end)
+      document.addEventListener('pointerup', up)
     },
     true,
   )

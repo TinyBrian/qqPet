@@ -21,7 +21,7 @@ export function openPhoto(id: string): void {
 /** Every photo brought back, newest first. */
 export function albumView(): HTMLElement {
   const list = shots().reverse()
-  const items = list.map((s) => button('albumItem fC', () => openPhoto(s.id), img('albumImg', photoUrl(s.id)), div('albumCap', caption(s))))
+  const items = list.map((s) => button('albumItem fC', () => openPhoto(s.id), div('albumRatio', img('albumImg', photoUrl(s.id))), div('albumCap', caption(s))))
   return div(
     'album fC',
     div('albumTip', `已收集 ${list.length} / ${PHOTOS.length} 张旅行照片，点击照片查看大图`),

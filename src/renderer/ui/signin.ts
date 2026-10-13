@@ -67,7 +67,7 @@ function calendar(): HTMLElement {
   for (let k = 1; k <= days; k++) {
     const t = new Date(y, m, k, 6).getTime() / 1000
     const cls = ['days', t < today && 'pass', signed.includes(t) && 'haveGet', t === today && 'nowDay'].filter(Boolean).join(' ')
-    cells.push(div(cls, String(k)))
+    cells.push(div(cls, div('dayNumber', String(k))))
   }
   return div('calendar', div('weekdays fcc', ...WEEK.map((w) => div('week f1', w))), div('daysBox fcw', ...cells))
 }

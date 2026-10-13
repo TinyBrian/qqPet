@@ -1,4 +1,5 @@
 import type { CalendarDay } from '../../shared/ipc'
+import { findLast } from '../../shared/compat'
 import { FESTIVAL, GREET, HOLIDAY } from './data/greet'
 import type { Line } from './data/talk'
 import { rand } from './rand'
@@ -27,7 +28,7 @@ export function dayText(): string {
 /** A launch greeting for the time of day. */
 export function greeting(): Line {
   const h = new Date().getHours()
-  return pick(GREET.findLast(([from]) => h >= from)![1])
+  return pick(findLast(GREET, ([from]) => h >= from)![1])
 }
 
 /** What the pet says about today's holiday, festival, make-up working day or solar term; only solar festivals while offline. */

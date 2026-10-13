@@ -1,8 +1,17 @@
 import type { QQPetApi } from '../shared/ipc'
+import type { SaveData } from '../shared/save'
+import type { PetPointerInput } from './pet/input'
 
 declare global {
   interface Window {
     qqpet: QQPetApi
+    __qqpetReady?: Promise<void>
+    __qqpetInitialSave?: SaveData
+    __qqpetFlush?: () => Promise<void>
+    __qqpetInput?: (input: PetPointerInput) => void
+    __qqpetNativePetInput?: boolean
+    __qqpetSetPaused?: (paused: boolean) => void
+    __qqpetHostPaused?: boolean
     RufflePlayer: { newest(): { createPlayer(): RufflePlayerElement } }
     /** Called by pet action SWFs (Stand and edge-peek eyes follow the cursor; scripts/swf-eyes.py). Values are "x,y,0" / "x,y,w,h". The community reads its ini through it. */
     API: { GetCursorPosition(): string; GetWindowRect(): string; GetPrivateProfileString(section: string, key: string, fallback: string, file: string): string }

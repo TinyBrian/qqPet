@@ -4,6 +4,8 @@ import { stripTypeScriptTypes } from 'node:module'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { route } from '../../src/renderer/pet/router.ts'
+import { createPetInput } from '../../src/renderer/pet/input.ts'
+import { resizePetPosition } from '../../src/shared/layout.ts'
 
 test('drag keeps the stage, sex and adult mood, using an available standing clip', () => {
   for (const sex of ['GG', 'MM']) {
@@ -20,22 +22,38 @@ test('drag keeps the stage, sex and adult mood, using an available standing clip
 
 // Execute the renderer entry with inert app services and real EventTargets, so
 // the pointer tests exercise the actual handlers without starting Electron.
-export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Egg') {
+export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Egg', initial = {}) {
   const pet = new EventTarget()
+  const windowEvents = new EventTarget()
+  const captured = new Set()
   pet.style = {}
-  pet.setPointerCapture = () => {}
-  const info = { lastX: 500, lastY: 300 }
+  pet.closest = () => null
+  pet.setPointerCapture = id => captured.add(id)
+  pet.hasPointerCapture = id => captured.has(id)
+  pet.releasePointerCapture = id => captured.delete(id)
+  const info = { lastX: initial.x ?? 500, lastY: initial.y ?? 300 }
   const listeners = []
   const poses = []
   const releases = []
   let clock = 0
+  let nextFrame = 0
+  const frames = new Map()
+  const observers = new Set()
+  const flushFrame = () => {
+    const pending = [...frames.values()]
+    frames.clear()
+    clock += 16
+    for (const callback of pending) callback(clock)
+  }
   const noop = () => {}
-  let area = { width: 1920, height: 1080 }
+  let area = initial.area ?? { width: 1920, height: 1080 }
   let cursorListener
   const services = {
+    createPetInput,
+    resizePetPosition,
     info,
-    save: { settings: { petBar: false }, havePet: false },
-    machine: { pose: { a: 'normal' }, play: pose => poses.push(pose) },
+    save: { settings: { petBar: false }, petInfo: info, havePet: false },
+    machine: { pose: { a: initial.pose ?? 'normal' }, play: pose => poses.push(pose) },
     setInfo: (key, value) => {
       info[key] = value
       listeners.forEach(listener => listener(key))
@@ -56,6 +74,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
       documentElement: { dataset: { cropX: String(crop.x), cropY: String(crop.y) } },
     },
     window: {
+      addEventListener: windowEvents.addEventListener.bind(windowEvents),
       qqpet: {
         onCursor: listener => { cursorListener = listener }, onTrayClick: noop, onClipboard: noop,
         onPresence: noop, onFront: noop,
@@ -66,9 +85,17 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     performance: { now: () => clock },
     AbortController,
     ShadowRoot: class {},
-    innerWidth: 1920,
-    innerHeight: 1080,
-    addEventListener: noop,
+    innerWidth: area.width,
+    innerHeight: area.height,
+    addEventListener: windowEvents.addEventListener.bind(windowEvents),
+    removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
+    requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame },
+    cancelAnimationFrame: id => frames.delete(id),
+    ResizeObserver: class {
+      constructor(callback) { this.callback = callback }
+      observe() { observers.add(this) }
+      disconnect() { observers.delete(this) }
+    },
     setInterval: noop,
     setTimeout: noop,
     clearTimeout: noop,
@@ -84,15 +111,36 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
   const source = readFileSync(new URL('../../src/renderer/main.ts', import.meta.url), 'utf8')
   runInNewContext(stripTypeScriptTypes(source).replace(/^import .*$/gm, ''), services)
 
-  const pointer = (type, x, y) => {
+  const pointer = (type, x, y, target = pet) => {
     clock += 16
     const event = new Event(type)
     Object.assign(event, { button: 0, pointerId: 1, clientX: x - crop.x, clientY: y - crop.y })
     // Ruffle is the normal target and does not have an interaction point class.
     pet.classList = { contains: () => false }
-    pet.dispatchEvent(event)
+    target.dispatchEvent(event)
   }
-  return { info, poses, releases, pointer, save: services.save, cursor: point => { clock += 16; cursorListener(point) } }
+  return {
+    info, poses, releases, pointer, save: services.save,
+    windowPointer: (type, x, y) => pointer(type, x, y, windowEvents),
+    pause: () => { services.window.__qqpetHostPaused = true; services.window.__qqpetInput({ phase: 'cancel', id: -1, x: 0, y: 0 }) },
+    cursor: point => { clock += 16; cursorListener(point) },
+    resize: next => {
+      area = next
+      services.innerWidth = next.width
+      services.innerHeight = next.height
+      windowEvents.dispatchEvent(new Event('resize'))
+      flushFrame()
+    },
+    rootResize: next => {
+      area = next
+      services.innerWidth = next.width
+      services.innerHeight = next.height
+      for (const observer of observers) observer.callback([{ target: services.document.documentElement }], observer)
+      flushFrame()
+    },
+    observePosition: listener => listeners.push(listener),
+    element: pet,
+  }
 }
 
 for (const stage of ['Egg', 'Kid']) test(`${stage} drag keeps the original grab point at different sizes and offsets`, () => {
@@ -155,4 +203,69 @@ test('a lifted pet follows the cursor past the screen edge and is clamped on rel
   pointer('pointerup', 30, 350)
   assert.equal(info.lastX, 0)
   assert.equal(info.lastY, 310)
+})
+
+test('pointer cancellation ends the shared drag without a fling', () => {
+  const { pointer, releases } = renderer(144)
+  pointer('pointerdown', 550, 340)
+  pointer('pointermove', 610, 380)
+  pointer('pointercancel', 610, 380)
+  assert.deepEqual(releases.at(-1), [false, 0, 0])
+})
+
+test('host pause cancels the active DOM gesture and removes its listeners', () => {
+  const { pointer, pause, releases, info } = renderer(144)
+  pointer('pointerdown', 550, 340)
+  pointer('pointermove', 610, 380)
+  pause()
+  assert.deepEqual(releases.at(-1), [false, 0, 0])
+  const position = { ...info }
+  pointer('pointermove', 700, 430)
+  pointer('pointerup', 700, 430)
+  assert.deepEqual(info, position)
+  assert.equal(releases.length, 1)
+})
+
+test('the renderer keeps a peeking pet attached through a staged rotation and publishes its position', () => {
+  const initial = { x: 688, y: 493, pose: 'hideright', area: { width: 834, height: 1194 } }
+  const app = renderer(146, { x: 0, y: 0 }, null, 'Kid', initial)
+  const changed = []
+  app.observePosition(key => changed.push(key))
+  app.resize({ width: 1194, height: 1194 })
+  app.resize({ width: 1194, height: 834 })
+  assert.equal(app.info.lastX, 1048)
+  assert.ok(Math.abs(app.info.lastY - 493 * 688 / 1048) < 1e-8)
+  assert.equal(app.element.style.left, '1048px')
+  assert.ok(changed.includes('lastX'), 'existing position subscribers must follow the resized pet')
+  assert.ok(changed.includes('lastY'))
+  app.resize({ width: 834, height: 1194 })
+  assert.equal(app.info.lastX, 688)
+  assert.ok(Math.abs(app.info.lastY - 493) < 1e-8)
+})
+
+test('rotation cancels an old grab point before applying the new viewport position', () => {
+  const app = renderer(146, { x: 0, y: 0 }, null, 'Kid', { x: 600, y: 493, area: { width: 834, height: 1194 } })
+  app.pointer('pointerdown', 650, 530)
+  app.resize({ width: 1194, height: 834 })
+  assert.deepEqual(app.releases.at(-1), [false, 0, 0])
+  assert.ok(Math.abs(app.info.lastX - 600 * 1048 / 688) < 1e-8)
+  const position = { ...app.info }
+  app.pointer('pointermove', 700, 550)
+  app.pointer('pointerup', 700, 550)
+  assert.deepEqual(app.info, position)
+})
+
+test('the settled root viewport repairs a rotation with no second window resize event', () => {
+  const app = renderer(146, { x: 0, y: 0 }, null, 'Kid', { x: 688, y: 315, pose: 'hideright', area: { width: 834, height: 1194 } })
+  app.resize({ width: 854, height: 834 })
+  assert.equal(app.info.lastX, 708)
+  const landscapeY = 315 * 688 / 1048
+  assert.ok(Math.abs(app.info.lastY - landscapeY) < 1e-8)
+  app.rootResize({ width: 1194, height: 834 })
+  assert.equal(app.info.lastX, 1048)
+  assert.ok(Math.abs(app.info.lastY - landscapeY) < 1e-8)
+  assert.equal(app.element.style.left, '1048px')
+  app.rootResize({ width: 834, height: 1194 })
+  assert.equal(app.info.lastX, 688)
+  assert.ok(Math.abs(app.info.lastY - 315) < 1e-8)
 })

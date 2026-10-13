@@ -19,6 +19,49 @@ const CONFIG = {
   logLevel: 'error',
 }
 
+const players = new Set<SwfPlayer>()
+const LOAD_MS = 30_000
+const CALLBACK_MS = 10_000
+let hostPaused = Boolean(window.__qqpetHostPaused)
+
+/** Display lifecycle is independent from the user's paused-growth setting. */
+export function setHostPaused(paused: boolean): void {
+  hostPaused = paused
+  window.__qqpetHostPaused = paused
+  if (paused) window.__qqpetInput?.({ phase: 'cancel', id: -1, x: 0, y: 0 })
+  for (const player of players) player.pauseForHost(paused)
+}
+window.__qqpetSetPaused = setHostPaused
+
+// Panels usually remove their DOM directly. Dispose players, including those inside removed iframes.
+const removed = new MutationObserver(() => {
+  for (const player of players) {
+    const frame = player.el.ownerDocument.defaultView?.frameElement
+    if (!player.el.isConnected || (frame && !frame.isConnected)) player.destroy()
+  }
+})
+removed.observe(document.documentElement, { childList: true, subtree: true })
+
+function safari14Styles(el: HTMLElement): void {
+  const shadow = el.shadowRoot
+  if (!shadow || shadow.getElementById('qqpet-safari14')) return
+  const style = el.ownerDocument.createElement('style')
+  style.id = 'qqpet-safari14'
+  style.textContent = '#container,#message-overlay,#panic,#panic-details-modal,#play-button,#splash-screen,#unmute-overlay,#unmute-overlay .background{top:0;right:0;bottom:0;left:0}'
+  shadow.appendChild(style)
+}
+
+/** A detached generation can finish building after its original DOM disconnect. */
+function disposeDetached(el: RufflePlayerElement): void {
+  try {
+    el.volume = 0
+    el.ruffle().suspend()
+    // Pinned Ruffle 0.6 releases its Rust instance in this custom-element lifecycle method.
+    const disconnected = (el as RufflePlayerElement & { disconnectedCallback?: () => void }).disconnectedCallback
+    disconnected?.call(el)
+  } catch { /* A removed or partially built instance may already have been released. */ }
+}
+
 /**
  * One Ruffle instance. Ruffle has no Flash scripting API (CurrentFrame,
  * TotalFrames, StopPlay...), so the playhead is derived from the SWF header
@@ -33,6 +76,12 @@ export class SwfPlayer {
   private stoppedAt: number | null = null
   private callbacks = new Set<string>()
   private muted = false
+  private destroyed = false
+  private revision = 0
+  private loading = false
+  private pausedAt: number | null = null
+  private pending = new Set<(error: Error) => void>()
+  private keyboardCleanup = (): void => {}
 
   /** The SWF's ExternalInterface calls go to the globals of the window that owns `parent`. */
   constructor(parent: HTMLElement) {
@@ -40,14 +89,56 @@ export class SwfPlayer {
     this.el.style.width = '100%'
     this.el.style.height = '100%'
     parent.appendChild(this.el)
+    safari14Styles(this.el)
+    players.add(this)
     // Ruffle types into text fields from a hidden <input> it empties on every input event, which breaks IME
     // composition (Chinese). Keep the composing keystrokes from it and hand it the committed text at once.
-    const keyboard = this.el.shadowRoot!.getElementById('virtual-keyboard')!
+    const keyboard = this.el.shadowRoot?.getElementById('virtual-keyboard')
     const composing = (e: Event): void => {
       if ((e as InputEvent).isComposing) e.stopImmediatePropagation()
     }
-    for (const type of ['input', 'keydown', 'keyup']) keyboard.addEventListener(type, composing, true)
-    keyboard.addEventListener('compositionend', () => keyboard.dispatchEvent(new Event('input')))
+    if (keyboard) {
+      const committed = (): void => { keyboard.dispatchEvent(new Event('input')) }
+      for (const type of ['input', 'keydown', 'keyup']) keyboard.addEventListener(type, composing, true)
+      keyboard.addEventListener('compositionend', committed)
+      this.keyboardCleanup = () => {
+        for (const type of ['input', 'keydown', 'keyup']) keyboard.removeEventListener(type, composing, true)
+        keyboard.removeEventListener('compositionend', committed)
+      }
+    }
+  }
+
+  private cancelPending(message: string): void {
+    for (const cancel of [...this.pending]) cancel(new Error(message))
+  }
+
+  private bounded<T>(operation: Promise<T>, label: string, milliseconds: number): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const finish = (): void => { clearTimeout(timer); this.pending.delete(cancel) }
+      const cancel = (error: Error): void => { finish(); reject(error) }
+      const timer = setTimeout(() => cancel(new Error(`${label} timed out`)), milliseconds)
+      this.pending.add(cancel)
+      operation.then((value) => { finish(); resolve(value) }, cancel)
+    })
+  }
+
+  private waitFor<T>(read: () => T | null | undefined, label: string, milliseconds: number): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const deadline = performance.now() + milliseconds
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const finish = (): void => { clearTimeout(timer); this.pending.delete(cancel) }
+      const cancel = (error: Error): void => { finish(); reject(error) }
+      const poll = (): void => {
+        try {
+          const value = read()
+          if (value != null) { finish(); resolve(value); return }
+          if (performance.now() >= deadline) return cancel(new Error(`${label} timed out`))
+          timer = setTimeout(poll, 50)
+        } catch (error) { cancel(error instanceof Error ? error : new Error(String(error))) }
+      }
+      this.pending.add(cancel)
+      poll()
+    })
   }
 
   /**
@@ -62,28 +153,57 @@ export class SwfPlayer {
 
   /** `base` (relative to the page) resolves the SWF's own relative URLs; `options` override Ruffle's config. */
   async load(url: string, base = BASE, options: Record<string, unknown> = {}): Promise<RuffleMetadata> {
+    if (this.destroyed) throw new Error('SWF player was destroyed')
+    // Ruffle does not cancel its async WASM/font builder. Never reuse an in-flight element.
+    if (this.loading) {
+      this.destroy()
+      throw new Error('SWF player had an unfinished load; a new player is required')
+    }
+    // Some hosts request a callback before the first load (the pond); retain those initial waits.
+    if (this.revision) this.cancelPending('SWF movie was replaced')
+    const revision = ++this.revision
     this.meta = null
     // The mobile overlay window learns per movie which part of the box it draws.
     this.el.dataset.swf = url
     // Ruffle leaves the previous movie's callbacks on the element; calling one before the new movie registers it does nothing.
     for (const name of this.callbacks) delete (this.el as unknown as Record<string, unknown>)[name]
     this.callbacks.clear()
-    const ready = new Promise<void>((resolve) => this.el.addEventListener('loadedmetadata', () => resolve(), { once: true }))
-    await this.el.ruffle().load({ ...CONFIG, ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href })
-    // The rebuilt instance is live and already at Ruffle's own volume; restore ours before the
-    // movie's one-shot audio (the edge-peek 嘿嘿嘿) can be heard.
-    this.el.volume = this.muted ? 0 : 1
-    await ready
-    this.meta = this.el.ruffle().metadata!
-    this.startedAt = performance.now()
-    this.stoppedAt = null
-    return this.meta
+    this.loading = true
+    try {
+      const operation = this.el.ruffle().load({ ...CONFIG, ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href }).finally(() => {
+        if (this.destroyed || revision !== this.revision) disposeDetached(this.el)
+      })
+      await this.bounded(operation, 'SWF load', LOAD_MS)
+      if (this.destroyed || revision !== this.revision) throw new Error('SWF load was cancelled')
+      // The rebuilt instance is live and already at Ruffle's own volume; restore ours before the
+      // movie's one-shot audio (the edge-peek 嘿嘿嘿) can be heard.
+      this.el.volume = this.muted ? 0 : 1
+      const metadata = await this.waitFor(() => this.el.ruffle().metadata, 'SWF metadata', LOAD_MS)
+      if (this.destroyed || revision !== this.revision) throw new Error('SWF load was cancelled')
+      this.meta = metadata
+      this.startedAt = performance.now()
+      this.stoppedAt = null
+      this.pausedAt = null
+      this.pauseForHost(hostPaused)
+      return this.meta
+    } catch (error) {
+      // Removing the failed generation isolates every late fetch/build from future players.
+      const cancelled = this.destroyed
+      this.destroy()
+      if (!cancelled) {
+        const message = error instanceof Error ? error.message : String(error)
+        window.dispatchEvent(new CustomEvent('qqpet-swf-error', { detail: { url, message } }))
+      }
+      throw error
+    } finally {
+      this.loading = false
+    }
   }
 
   /** 0-based, same convention as Flash's CurrentFrame(). -1 (== totalFrames - 1) before the first load. */
   get currentFrame(): number {
     if (!this.meta) return -1
-    const elapsed = (this.stoppedAt ?? performance.now()) - this.startedAt
+    const elapsed = (this.stoppedAt ?? this.pausedAt ?? performance.now()) - this.startedAt
     return Math.min(Math.floor((elapsed / 1000) * this.meta.frameRate), this.meta.numFrames - 1)
   }
 
@@ -92,12 +212,43 @@ export class SwfPlayer {
   }
 
   get isPlaying(): boolean {
-    return this.stoppedAt === null && this.el.ruffle().isPlaying
+    return !hostPaused && this.stoppedAt === null && this.el.ruffle().isPlaying
   }
 
   stop(): void {
     this.el.ruffle().suspend()
-    this.stoppedAt ??= performance.now()
+    this.stoppedAt ??= this.pausedAt ?? performance.now()
+  }
+
+  pauseForHost(paused: boolean): void {
+    if (this.destroyed || !this.meta) return
+    const now = performance.now()
+    if (paused) {
+      this.pausedAt ??= now
+      this.el.ruffle().suspend()
+    } else {
+      if (this.pausedAt !== null) {
+        const elapsed = now - this.pausedAt
+        this.startedAt += elapsed
+        if (this.stoppedAt !== null) this.stoppedAt += elapsed
+        this.pausedAt = null
+      }
+      if (this.stoppedAt === null) this.el.ruffle().resume()
+    }
+  }
+
+  async nextPaint(): Promise<void> {
+    const view = this.el.ownerDocument.defaultView!
+    let first = 0
+    let second = 0
+    try {
+      await this.bounded(new Promise<void>((resolve) => {
+        first = view.requestAnimationFrame(() => { second = view.requestAnimationFrame(() => resolve()) })
+      }), 'SWF paint', LOAD_MS)
+    } finally {
+      view.cancelAnimationFrame(first)
+      view.cancelAnimationFrame(second)
+    }
   }
 
   /**
@@ -105,13 +256,20 @@ export class SwfPlayer {
    * SWFs register from their first frame script, some time after load() resolves.
    */
   async callback(name: string): Promise<(...args: unknown[]) => unknown> {
+    if (this.destroyed) throw new Error('SWF player was destroyed')
     const host = this.el as unknown as Record<string, unknown>
-    while (typeof host[name] !== 'function') await new Promise((r) => setTimeout(r, 50))
+    const fn = await this.waitFor(() => typeof host[name] === 'function' ? host[name] as (...args: unknown[]) => unknown : null, `SWF callback ${name}`, CALLBACK_MS)
     this.callbacks.add(name)
-    return (host[name] as (...args: unknown[]) => unknown).bind(this.el)
+    return fn.bind(this.el)
   }
 
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
+    ++this.revision
+    this.cancelPending('SWF player was destroyed')
+    this.keyboardCleanup()
+    players.delete(this)
     this.el.remove()
   }
 }

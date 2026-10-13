@@ -1,3 +1,4 @@
+import { withTimeoutSignal } from './compat'
 import type { Fetch, Release } from './ipc'
 
 /** GitHub's latest-release API, proxied. */
@@ -10,8 +11,10 @@ interface Reply {
 
 /** Rejects while offline or when the proxy fails. */
 export async function latestRelease(fetch: Fetch): Promise<Release> {
-  const r = await fetch(API, { signal: AbortSignal.timeout(20_000) })
-  if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 100)}`)
-  const d = (await r.json()) as Reply
-  return { version: d.tag_name.replace(/^v/, ''), url: d.html_url }
+  return withTimeoutSignal(20_000, async (signal) => {
+    const r = await fetch(API, { signal })
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 100)}`)
+    const d = (await r.json()) as Reply
+    return { version: d.tag_name.replace(/^v/, ''), url: d.html_url }
+  })
 }

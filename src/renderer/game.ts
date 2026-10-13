@@ -6,6 +6,10 @@ const swf = new URLSearchParams(location.search).get('swf')!
 document.title = swf.replace(/^.*\//, '').replace(/\.swf$/, '')
 const player = new SwfPlayer(document.body)
 // The stage keeps its aspect and fills the window; whatever lies off stage is hidden behind the bars.
-await player.load(`pet/game/${swf}`, undefined, { letterbox: 'on' })
-player.el.focus()
-if (touch) gamepad(player.el, swf)
+async function start(): Promise<void> {
+  await window.__qqpetReady
+  await player.load(`pet/game/${swf}`, undefined, { letterbox: 'on' })
+  player.el.focus()
+  if (touch) gamepad(player.el, swf)
+}
+void start().catch((error: unknown) => console.error('Game startup failed:', error))

@@ -1,7 +1,7 @@
 .ui-signin {position:relative}
 .ui-signin .calendar {font-family:Arial,sans-serif;text-align:center;width:100%;font-size:12px}
 .ui-signin .weekdays {font-size:14px;margin-bottom:10px}
-.ui-signin .days {width:calc((100% / 7) - 4px);aspect-ratio:1;margin:2px;padding:4px 0;border-radius:5px}
+.ui-signin .days {width:calc((100% / 7) - 4px);position:relative;margin:2px;padding:0;border-radius:5px}
 .ui-signin .hidden {opacity:0}
 .ui-signin .pass {background-color:#72727270;color:#fff}
 .ui-signin .haveGet {background-color:#e2295470!important;color:#fff}
@@ -38,3 +38,5 @@
 .ui-signin .p4:hover .goodFloatMsg {display:unset!important}
 .ui-signin .open {color:#518eff;font-weight:400}
 .ui-signin .closeOpen {max-height:0;overflow:hidden}
+.ui-signin .days::before {content:"";display:block;padding-top:100%}
+.ui-signin .dayNumber {position:absolute;top:4px;left:0;right:0}

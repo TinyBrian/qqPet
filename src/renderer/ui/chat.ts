@@ -118,7 +118,7 @@ export function openChat(): void {
     input.focus()
   }
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') void send()
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) void send()
   })
 
   close = openBox(

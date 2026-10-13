@@ -3,6 +3,7 @@
 // the system cannot pass touches through transparent pixels.
 import { aiChat, aiModels } from '../shared/ai'
 import { calendar } from '../shared/calendar'
+import { abortReason, cloneJson } from '../shared/compat'
 import { cover } from '../mobile/overlay'
 import type { Fetch, Point, QQPetApi, TrayClick, TrayState } from '../shared/ipc'
 import type { SaveData } from '../shared/save'
@@ -75,11 +76,16 @@ window.__qqpet = {
 const nativeFetch: Fetch = (url, init = {}) =>
   new Promise((resolve, reject) => {
     const { signal } = init
-    signal?.addEventListener('abort', () => reject(signal.reason))
+    if (signal?.aborted) return reject(abortReason(signal))
+    const abort = (): void => reject(abortReason(signal!))
+    signal?.addEventListener('abort', abort, { once: true })
     call((id) => native.http(id, init.method ?? 'GET', url, JSON.stringify(init.headers ?? {}), (init.body as string | undefined) ?? '')).then((r) => {
-      const { status, body } = JSON.parse(r!)
-      resolve(new Response(body, { status }))
-    }, reject)
+      signal?.removeEventListener('abort', abort)
+      try {
+        const { status, body } = JSON.parse(r!)
+        resolve(new Response(body, { status }))
+      } catch (error) { reject(error) }
+    }, (error) => { signal?.removeEventListener('abort', abort); reject(error) })
   })
 
 const FILE = 'save.json'
@@ -207,10 +213,10 @@ listeners.outside.push(() => {
 })
 
 const api: QQPetApi = {
-  load: async () => structuredClone(save),
+  load: async () => cloneJson(save),
   save(patch) {
     if (leaving) return
-    applyPatch(save, structuredClone(patch))
+    applyPatch(save, cloneJson(patch))
     write()
     if (patch.petInfo) showTray()
   },

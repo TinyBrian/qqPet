@@ -1,14 +1,14 @@
-import { version } from '../../../package.json'
+import { APP_VERSION } from '../../shared/version'
 import type { Release } from '../../shared/ipc'
 import { save, update } from '../pet/store'
 import { windowView } from './window-view'
 
 const DAY = 86400
 
-/** x.y.z compared numerically; a pre-release suffix is ignored. */
+/** x.y.z compared numerically; pre-release and build metadata are ignored. */
 function newer(a: string, b: string): boolean {
-  const pa = a.split('-')[0].split('.').map(Number)
-  const pb = b.split('-')[0].split('.').map(Number)
+  const pa = a.split(/[+-]/)[0].split('.').map(Number)
+  const pb = b.split(/[+-]/)[0].split('.').map(Number)
   for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0)
   return false
 }
@@ -23,13 +23,13 @@ export async function checkUpdate(manual: boolean): Promise<void> {
     return
   }
   update('settings', { updateCheckedAt: Math.floor(Date.now() / 1000) })
-  if (!newer(r.version, version)) {
-    if (manual) windowView({ title: '检查更新', msg: `已经是最新版本 v${version}~` })
+  if (!newer(r.version, APP_VERSION)) {
+    if (manual) windowView({ title: '检查更新', msg: `已经是最新版本 v${APP_VERSION}~` })
     return
   }
   windowView({
     title: '发现新版本',
-    msg: `新版本 v${r.version}（当前 v${version}），点击确认前往 GitHub 下载~`,
+    msg: `新版本 v${r.version}（当前 v${APP_VERSION}），点击确认前往 GitHub 下载~`,
     ok: (close) => {
       close()
       window.qqpet.openUrl(r.url)
