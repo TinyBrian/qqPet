@@ -61,17 +61,43 @@ function moodActions(play: number, speak: Range = { notNum: true }): Table {
   }
 }
 
+/**
+ * Per-pet action content, kept as plain data so it can later move into the content pack (#28).
+ * Paths are relative to `pet/Action/<sex>/<stage>/`, without `.swf`. A missing entry keeps the default clip.
+ */
+export interface ActionData {
+  /** Numbered idle plays: Egg/Kid `play/P1..n`, Adult `peaceful/play/P1..n`. */
+  play: { egg: number; kid: number; peaceful: number }
+  /** Alternatives picked at random for an action key (`walk_left`, `walk_right`, `drag`, `dirty`, `poor`). */
+  variants: Partial<Record<Stage, Record<string, string[]>>>
+}
+
+const walks = (n: number): Record<string, string[]> => ({
+  walk_left: Array.from({ length: n }, (_, i) => `walk/walk_left${i ? i + 1 : ''}`),
+  walk_right: Array.from({ length: n }, (_, i) => `walk/walk_right${i ? i + 1 : ''}`),
+})
+
+const DRAG = (ids: number[]): string[] => ids.map((i) => `motion/drag${i}101213`)
+
+export const ACTIONS: Record<Sex, ActionData> = {
+  // GG has the newer client's extra clips (#25).
+  GG: {
+    play: { egg: 47, kid: 127, peaceful: 127 },
+    variants: {
+      Egg: { ...walks(2), drag: DRAG([1, 2, 3]) },
+      Kid: { ...walks(3), drag: DRAG([1, 3]), dirty: ['Dirty', 'lead/dirty20110805'], poor: ['Poor', 'lead/poor20110826'] },
+      Adult: walks(3),
+    },
+  },
+  MM: { play: { egg: 29, kid: 111, peaceful: 100 }, variants: {} },
+}
+
 const KID = { exit: { end: 3 }, eat: { end: 1 }, clean: { notNum: true }, sick: { notNum: true }, cure: { notNum: true } }
 const EGG = { enter: { end: 2 }, exit: { end: 3 }, clean: { notNum: true }, sick: { notNum: true }, cure: { notNum: true } }
 
 const MOOD_PLAY: Record<Mood, number> = { happy: 47, peaceful: 100, upset: 23, sad: 22 }
 
-/** Extra plays from the newer client exist only for GG. */
-interface PlayCount { egg: number; kid: number; peaceful: number }
-const PLAY: Record<Sex, PlayCount> = {
-  GG: { egg: 47, kid: 127, peaceful: 127 },
-  MM: { egg: 29, kid: 111, peaceful: 100 },
-}
+type PlayCount = ActionData['play']
 
 type Tables = Record<Stage, Table>
 
@@ -81,10 +107,10 @@ const tables = (adultBury: number, play: PlayCount): Tables => ({
   Egg: { ...common({ ...EGG, bury: 140 }), ...moodActions(play.egg, { end: 3 }) },
 })
 
-const TABLES: Record<Sex, Tables> = { GG: tables(76, PLAY.GG), MM: tables(142, PLAY.MM) }
+const TABLES: Record<Sex, Tables> = { GG: tables(76, ACTIONS.GG.play), MM: tables(142, ACTIONS.MM.play) }
 const adultMoods = (sex: Sex) =>
   Object.fromEntries(
-    Object.entries(MOOD_PLAY).map(([m, n]) => [m, moodActions(m === 'peaceful' ? PLAY[sex].peaceful : n)]),
+    Object.entries(MOOD_PLAY).map(([m, n]) => [m, moodActions(m === 'peaceful' ? ACTIONS[sex].play.peaceful : n)]),
   ) as Record<Mood, Table>
 const ADULT_MOODS: Record<Sex, Record<Mood, Table>> = { GG: adultMoods('GG'), MM: adultMoods('MM') }
 
@@ -99,6 +125,19 @@ export function route(sex: Sex, stage: Stage, action: string, mood: Mood): Targe
     dir += `${mood}/`
   }
   const r = routes[action]
+  const alt = stage === 'Adult' && BY_MOOD.includes(action) ? null : variant(sex, stage, action)
+  if (alt) return { url: `${dir}${alt}.swf`, opt: r }
   const n = r.start && r.end && !r.notNum ? Math.trunc(Math.random() * r.end + r.start) : ''
   return { url: `${dir}${r.name}${n}.swf`, opt: r }
+}
+
+/** A random alternative clip (relative to the stage directory), or null when this pet has none. */
+export function variant(sex: Sex, stage: Stage, key: string, pick: (n: number) => number = (n) => Math.trunc(Math.random() * n)): string | null {
+  const list = ACTIONS[sex].variants[stage]?.[key]
+  return list?.length ? list[pick(list.length)] : null
+}
+
+/** Walk cycle for a direction; GG has extra gait variants. */
+export function walkUrl(sex: Sex, stage: Stage, dir: 'left' | 'right'): string {
+  return `pet/Action/${sex}/${stage}/${variant(sex, stage, `walk_${dir}`) ?? `walk/walk_${dir}`}.swf`
 }

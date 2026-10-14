@@ -13,7 +13,9 @@ test('drag keeps the stage, sex and adult mood, using an available standing clip
       for (const mood of ['happy', 'peaceful', 'upset', 'sad']) {
         const target = route(sex, stage, 'drag', mood)
         const expected = `pet/Action/${sex}/${stage}/${stage === 'Adult' ? `${mood}/` : ''}Stand.swf`
-        assert.equal(target.url, expected)
+        // GG Egg/Kid pick one of the newer client's drag poses instead (#25).
+        if (sex === 'GG' && stage !== 'Adult') assert.match(target.url, new RegExp(`^pet/Action/GG/${stage}/motion/drag\\d101213\\.swf$`))
+        else assert.equal(target.url, expected)
         assert.ok(existsSync(new URL(`../../resources/${target.url}`, import.meta.url)), target.url)
       }
     }

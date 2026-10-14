@@ -12,6 +12,7 @@ import { doctor, useItem } from './items'
 import { deliverMails } from './mail'
 import { Machine, type Pose } from './machine'
 import { rand } from './rand'
+import { walkUrl } from './router'
 import {
   activity,
   addInfo,
@@ -152,7 +153,7 @@ function walk(): boolean {
   const speed = 8 * (s / 144) * (dir === 'left' ? -1 : 1)
   machine.play({
     a: 'walk',
-    opt: { url: `pet/Action/${info.sex}/${stage()}/walk/walk_${dir}.swf`, opt: {} },
+    opt: { url: walkUrl(info.sex, stage(), dir), opt: {} },
     s: () => startWalkMove(speed, Date.now() + rand(2000, 5000)),
   })
   return true
