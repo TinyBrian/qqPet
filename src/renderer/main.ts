@@ -250,9 +250,15 @@ petEl.addEventListener('pointerdown', (e) => {
   if (!petInput.active) return
   let ending = false
   let disposed = false
+  // The grab point comes from the DOM event, every later point from the native cursor. Where the two
+  // disagree (Windows display scaling, mixed-DPI screens), the pet would jump off the cursor on the
+  // first native sample; measure the gap once and keep it while the pointer stays on that display.
+  const start = lastPoint
+  let shift: { id: number | undefined; x: number; y: number } | null = null
   const fromDesktop = (p: DesktopCursor): void => {
-    lastPoint = p
-    petInput.send(sample('move', p))
+    shift ??= { id: p.desktop?.id, x: p.x - start.x, y: p.y - start.y }
+    lastPoint = shift.id === p.desktop?.id ? { ...p, x: p.x - shift.x, y: p.y - shift.y } : p
+    petInput.send(sample('move', lastPoint))
   }
   const move = (m: PointerEvent): void => {
     if (nativeDrag || m.pointerId !== e.pointerId) return

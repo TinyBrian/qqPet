@@ -173,3 +173,21 @@ test('release outside the pet still uses the final native display and retains re
   assert.notEqual(app.releases.at(-1)[1], 0)
   assert.equal(app.poses.at(-1).a, 'normal')
 })
+
+test('a native cursor that disagrees with the DOM grab point keeps the pet under the cursor (#31)', async () => {
+  const d = desktop()
+  const position = desktopCursor(d.win, d.screen, 1)
+  let following = false
+  // Windows display scaling can round the native DIP cursor away from the DOM event's point.
+  const skewed = on => { const p = position(following || on); following = on; return { ...p, x: p.x + 7, y: p.y - 5 } }
+  const app = renderer(144, { x: 0, y: 0 }, async on => skewed(on))
+  await setImmediate()
+  app.pointer('pointerdown', 550, 340)
+  await setImmediate()
+  assert.equal(app.info.lastX, 500)
+  assert.equal(app.info.lastY, 300)
+  d.move({ x: 650, y: 400 })
+  app.cursor(skewed(true))
+  assert.equal(app.info.lastX, 600)
+  assert.equal(app.info.lastY, 360)
+})
