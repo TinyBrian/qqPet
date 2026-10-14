@@ -132,6 +132,9 @@ window.API = {
 let interactive = false
 /** A click stepped the pet out of its peek; it slips back once the cursor leaves it and its bar. */
 let out = false
+/** A cursor overshooting the menu edge, or crossing to a submenu, may come back before this. */
+const MENU_LEAVE_MS = 300
+let menuLeave = 0
 const syncDesktop = (p: DesktopCursor): boolean => {
   const area = p.desktop
   if (!area) return true
@@ -164,7 +167,15 @@ window.qqpet.onCursor((p) => {
   const hit = dragging || overPet || host?.closest('[data-hit]') != null
   // The menu closes once the cursor rests on the desktop; it may still be on the tray, outside the window.
   const inside = p.x >= 0 && p.y >= 0 && p.x < innerWidth && p.y < innerHeight
-  if (!hit && inside) closeMenu()
+  if (!hit && inside) {
+    menuLeave ||= setTimeout(() => {
+      menuLeave = 0
+      closeMenu()
+    }, MENU_LEAVE_MS)
+  } else if (menuLeave) {
+    clearTimeout(menuLeave)
+    menuLeave = 0
+  }
   if (out && !hit) {
     out = false
     const edge = snapEdge()

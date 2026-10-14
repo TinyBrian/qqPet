@@ -46,6 +46,11 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     for (const callback of pending) callback(clock)
   }
   const noop = () => {}
+  // Timers only run when a test advances them.
+  let nextTimer = 0
+  const timers = new Map()
+  let menuCloses = 0
+  let hitAt = null
   let area = initial.area ?? { width: 1920, height: 1080 }
   let cursorListener
   const services = {
@@ -70,7 +75,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     touch: false,
     document: {
       getElementById: () => pet,
-      elementFromPoint: () => null,
+      elementFromPoint: (x, y) => hitAt?.(x, y) ? { getRootNode: () => null, closest: () => ({}) } : null,
       documentElement: { dataset: { cropX: String(crop.x), cropY: String(crop.y) } },
     },
     window: {
@@ -97,10 +102,10 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
       disconnect() { observers.delete(this) }
     },
     setInterval: noop,
-    setTimeout: noop,
-    clearTimeout: noop,
+    setTimeout: callback => { timers.set(++nextTimer, callback); return nextTimer },
+    clearTimeout: id => timers.delete(id),
     adopt: noop,
-    closeMenu: noop,
+    closeMenu: () => { menuCloses++ },
     showControl: noop,
     catchDiudiule: noop,
     releaseDiudiule: (...args) => { releases.push(args); return false },
@@ -124,6 +129,14 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     windowPointer: (type, x, y) => pointer(type, x, y, windowEvents),
     pause: () => { services.window.__qqpetHostPaused = true; services.window.__qqpetInput({ phase: 'cancel', id: -1, x: 0, y: 0 }) },
     cursor: point => { clock += 16; cursorListener(point) },
+    menuCloses: () => menuCloses,
+    /** Which page points elementFromPoint reports on a [data-hit] element, such as an open menu. */
+    hitAt: test => { hitAt = test },
+    runTimers: () => {
+      const pending = [...timers.values()]
+      timers.clear()
+      for (const callback of pending) callback()
+    },
     resize: next => {
       area = next
       services.innerWidth = next.width
@@ -268,4 +281,28 @@ test('the settled root viewport repairs a rotation with no second window resize 
   app.rootResize({ width: 834, height: 1194 })
   assert.equal(app.info.lastX, 688)
   assert.ok(Math.abs(app.info.lastY - 315) < 1e-8)
+})
+
+test('the menu survives the cursor briefly overshooting it, and closes once the cursor stays on the desktop', () => {
+  const app = renderer(144)
+  app.hitAt((x, y) => x >= 100 && x < 210 && y >= 100 && y < 300)
+  app.cursor({ x: 150, y: 200 })
+  app.cursor({ x: 260, y: 200 })
+  app.cursor({ x: 200, y: 200 })
+  app.runTimers()
+  assert.equal(app.menuCloses(), 0)
+
+  app.cursor({ x: 260, y: 200 })
+  app.cursor({ x: 300, y: 220 })
+  assert.equal(app.menuCloses(), 0)
+  app.runTimers()
+  assert.equal(app.menuCloses(), 1)
+})
+
+test('a cursor leaving the window for the tray keeps the menu open', () => {
+  const app = renderer(144)
+  app.cursor({ x: 300, y: 220 })
+  app.cursor({ x: 300, y: 1200 })
+  app.runTimers()
+  assert.equal(app.menuCloses(), 0)
 })
