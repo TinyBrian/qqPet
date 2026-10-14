@@ -51,8 +51,22 @@ function safari14Styles(el: HTMLElement): void {
   shadow.appendChild(style)
 }
 
+const releasedCanvases = new WeakSet<HTMLCanvasElement>()
+/** Ruffle rebuilds its renderer on load; retired WebGL contexts otherwise wait for GC. */
+function releaseRetiredCanvas(canvas: HTMLCanvasElement | null | undefined): void {
+  // The front and the hidden back player still need their live contexts, even when suspended.
+  if (!canvas || canvas.isConnected || releasedCanvases.has(canvas)) return
+  try {
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+    if (!gl) return // Canvas2D and WebGPU renderers own different context types.
+    releasedCanvases.add(canvas)
+    if (!gl.isContextLost()) gl.getExtension('WEBGL_lose_context')?.loseContext()
+  } catch { /* A disposed canvas may already have lost its context. */ }
+}
+
 /** A detached generation can finish building after its original DOM disconnect. */
 function disposeDetached(el: RufflePlayerElement): void {
+  const canvas = el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
   try {
     el.volume = 0
     el.ruffle().suspend()
@@ -60,6 +74,7 @@ function disposeDetached(el: RufflePlayerElement): void {
     const disconnected = (el as RufflePlayerElement & { disconnectedCallback?: () => void }).disconnectedCallback
     disconnected?.call(el)
   } catch { /* A removed or partially built instance may already have been released. */ }
+  finally { releaseRetiredCanvas(canvas) }
 }
 
 /**
@@ -169,10 +184,15 @@ export class SwfPlayer {
     for (const name of this.callbacks) delete (this.el as unknown as Record<string, unknown>)[name]
     this.callbacks.clear()
     this.loading = true
+    const previousCanvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
     try {
       const operation = this.el.ruffle().load({ ...CONFIG, ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href }).finally(() => {
+        releaseRetiredCanvas(previousCanvas)
         if (this.destroyed || revision !== this.revision) disposeDetached(this.el)
       })
+      // Pinned Ruffle destroys the old instance before its first asynchronous build step.
+      // Free it before allocating the next renderer, rather than accumulating GPU contexts.
+      releaseRetiredCanvas(previousCanvas)
       await this.bounded(operation, 'SWF load', LOAD_MS)
       if (this.destroyed || revision !== this.revision) throw new Error('SWF load was cancelled')
       // The rebuilt instance is live and already at Ruffle's own volume; restore ours before the
@@ -270,6 +290,8 @@ export class SwfPlayer {
     this.cancelPending('SWF player was destroyed')
     this.keyboardCleanup()
     players.delete(this)
+    const canvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
     this.el.remove()
+    releaseRetiredCanvas(canvas)
   }
 }
