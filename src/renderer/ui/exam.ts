@@ -17,10 +17,11 @@ let open = false
 
 /** The promotion exam of study topic `topic`: three random questions of its bank, all must be right. */
 export function openExam(topic: string, pass: () => void): void {
-  if (open) return
+  const bank = EXAM[topic as keyof typeof EXAM] as (typeof EXAM)[keyof typeof EXAM] | undefined
+  if (open || !bank?.length) return
   open = true
   // The bank lists most answers first.
-  const questions = shuffle(EXAM[topic as keyof typeof EXAM])
+  const questions = shuffle(bank)
     .slice(0, 3)
     .map((q) => ({ ...q, options: shuffle(q.options) }))
   const picked = questions.map(() => -1)
