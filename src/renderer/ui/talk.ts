@@ -1,4 +1,4 @@
-import { info, petSize } from '../pet/store'
+import { info, petSize, save } from '../pet/store'
 import { SwfPlayer } from '../swf/player'
 
 const W = 261
@@ -12,7 +12,7 @@ el.style.visibility = 'hidden'
 document.body.appendChild(el)
 const player = new SwfPlayer(el)
 
-let skin = 0
+let movie = ''
 let actions: (() => void)[] = []
 let shown = ''
 let labels: string[] = []
@@ -45,8 +45,9 @@ window.BubbleAPI = {
   },
 }
 
-/** Bubble skin follows the VIP flags: 1 plain, 2 pink diamond, 3 sweetheart, 4 both. */
-const skinOf = (): number => (info.pinkDiamond ? (info.sweetHeart ? 4 : 2) : info.sweetHeart ? 3 : 1)
+/** Bubble skin follows the VIP flags: 1 plain, 2 pink diamond, 3 sweetheart, 4 both; hd uses the 2x redraw. */
+const movieOf = (): string =>
+  `pet/talk/${info.pinkDiamond ? (info.sweetHeart ? 4 : 2) : info.sweetHeart ? 3 : 1}/${save.settings.hd ? 'talk@2x' : 'talk'}.swf`
 
 let lift = 0
 /**
@@ -71,9 +72,9 @@ export async function say(text: string, buttons: string[], onButton: (() => void
   actions = onButton
   shown = text
   labels = buttons
-  if (skin !== skinOf()) {
-    skin = skinOf()
-    await player.load(`pet/talk/${skin}/talk.swf`)
+  if (movie !== movieOf()) {
+    movie = movieOf()
+    await player.load(movie)
   }
   const speak = await player.callback('speak')
   place()
