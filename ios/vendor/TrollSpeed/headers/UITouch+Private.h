@@ -12,6 +12,8 @@
 @interface UITouch (Private)
 
 - (void)setWindow:(UIWindow *)window;
+// KIF afa52b5e56ee6e91c5c4b3bae1ccacebe46a8b47, UITouch-KIFAdditions.m.
+- (void)setTapCount:(NSUInteger)tapCount;
 - (void)setView:(UIView *)view;
 - (void)setIsTap:(BOOL)isTap;
 - (void)setTimestamp:(NSTimeInterval)timestamp;

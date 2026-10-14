@@ -13,8 +13,9 @@ BOOL QPLoadPrivateAPI(NSError **error) {
     QP_RESOLVE(registerHID,BKSHIDEventRegisterEventCallback); QP_RESOLVE(springBoardPort,SBSSpringBoardServerPort);
     QP_RESOLVE(getLockStatus,SBGetScreenLockStatus); QP_RESOLVE(launchApplication,SBSLaunchApplicationWithIdentifierAndLaunchOptions);
 #undef QP_RESOLVE
+    BOOL eventsAvailable = NSProcessInfo.processInfo.operatingSystemVersion.majorVersion<15 ? QPPrivate.initializeExtensionEvents!=NULL : QPPrivate.initializeEvents!=NULL;
     if (!QPPrivate.graphicsInitialize || !QPPrivate.startDisplay || !QPPrivate.initializeApplication || !QPPrivate.instantiateApplication || !QPPrivate.pushEventMode || !QPPrivate.runEvents || !QPPrivate.registerHID ||
-        (!QPPrivate.initializeExtensionEvents && (!QPPrivate.initializeEvents || NSProcessInfo.processInfo.operatingSystemVersion.majorVersion<15))) {
+        !eventsAvailable) {
         if (error) *error = QPError(@"Required UIKit/BackBoard/GraphicsServices HUD export missing on this iOS build.");
         return NO;
     }
