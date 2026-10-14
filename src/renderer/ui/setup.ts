@@ -12,6 +12,7 @@ import './css/setup.css'
 import { button, div, typeable } from './dom'
 import { setFaceClick } from './face'
 import { readopt, setHidden } from './menu'
+import { pageZoom } from './viewport'
 import { checkUpdate } from './update'
 import { windowView } from './window-view'
 
@@ -19,7 +20,7 @@ type Option = { label: string; title?: string } & (
   | { type: 'radio'; on: () => boolean; run: () => void }
   | { type: 'slider'; value: () => number; step: (d: number) => void }
   | { type: 'button'; run: () => void }
-  | { type: 'see'; value: string }
+  | { type: 'see'; value: string; run?: () => void }
   | { type: 'input'; value: () => string; set: (v: string) => void }
 )
 
@@ -36,6 +37,11 @@ function setHd(on: boolean): void {
   document.body.classList.toggle('hd', on)
 }
 document.body.classList.toggle('hd', save.settings.hd)
+
+/** The main process zooms the page and reports the new zoom with the next cursor; the pet is rescaled there. */
+function setZoom(v: number): void {
+  update('settings', { zoom: Math.round(Math.min(Math.max(v, 1), 2) * 10) / 10 })
+}
 
 /** Brings a lost pet back on screen. */
 function homing(): void {
@@ -63,6 +69,19 @@ function toggleWatch(kind: 'clipboardWatch' | 'frontWatch', setting: 'clip' | 'w
     return
   }
   update('settings', { [setting]: !save.settings[setting] })
+}
+
+let taps = 0
+let tappedAt = 0
+/** Five quick taps on the version show or hide the 作弊 tab, like Android's developer options. */
+function tapVersion(): void {
+  const now = Date.now()
+  taps = now - tappedAt < 1000 ? taps + 1 : 1
+  tappedAt = now
+  if (taps < 5) return
+  taps = 0
+  update('settings', { cheatTab: !s.cheatTab })
+  speak({ s: s.cheatTab ? '[host]，作弊页已显示在设置里~' : '[host]，作弊页已隐藏~', now: true }, 'appear')
 }
 
 async function exportSave(): Promise<void> {
@@ -184,42 +203,48 @@ const s = save.settings
 const TABS: { label: string; options: Option[] }[] = [
   {
     label: '全局设置',
-    options: [
-      { type: 'button', label: '重生~~~（注意数据丢失）', run: readopt },
-      { type: 'button', label: '重生为另一个性别~~~（注意数据丢失）', run: rebornAsOther },
-      { type: 'button', label: '宠物不见了？点我试试', run: homing },
-      { type: 'slider', label: '透明度', value: () => s.opacity, step: (d) => setOpacity(s.opacity + d) },
-      { type: 'radio', label: '开机自启', title: '仅 Windows、macOS 和 Android 有效', on: () => s.autoStart, run: toggleAutoStart },
-      { type: 'input', label: '天气城市（留空按网络位置自动定位）', value: () => s.weatherCity, set: setCity },
-      {
-        type: 'radio',
-        label: '是否开启互动动作(开启后会导致点击位置不可进行宠物移动~)',
-        title: FACE_TIP,
-        on: () => s.faceClick > 0,
-        run: () => setFaceClick(s.faceClick ? 0 : 1),
-      },
-      { type: 'radio', label: '是否开启互动动作指示器', title: FACE_TIP, on: () => s.faceClick === 2, run: () => setFaceClick(s.faceClick === 2 ? 1 : 2) },
-      { type: 'radio', label: '开启免打扰模式', on: () => s.quiet, run: () => update('settings', { quiet: !s.quiet }) },
-      {
-        type: 'radio',
-        label: '点宠物时显示动作栏',
-        title: '关掉后点宠物不再弹出日常、交互、工具等按钮，不挡视野；功能仍可从右键/长按宠物或托盘（手机通知栏「菜单」）打开',
-        on: () => s.petBar,
-        run: () => update('settings', { petBar: !s.petBar }),
-      },
-      { type: 'radio', label: '随机走动（默认关，贴边不走）', title: '站立闲着时，走动、问候、动画三者随机抽。贴边探头不走。', on: () => s.roam, run: () => update('settings', { roam: !s.roam }) },
-      {
-        type: 'radio',
-        label: '开启宠物音效（贴边探头、点脸逗它）',
-        title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
-        on: () => s.sound,
-        run: () => {
-          update('settings', { sound: !s.sound })
-          applyPetSound()
+    get options(): Option[] {
+      return [
+        { type: 'button', label: '重生~~~（注意数据丢失）', run: readopt },
+        { type: 'button', label: '重生为另一个性别~~~（注意数据丢失）', run: rebornAsOther },
+        { type: 'button', label: '宠物不见了？点我试试', run: homing },
+        { type: 'slider', label: '透明度', value: () => s.opacity, step: (d) => setOpacity(s.opacity + d) },
+        // Only the desktop host zooms the page; touch hosts already fit the screen.
+        ...(pageZoom() === null
+          ? []
+          : [{ type: 'slider', label: '界面缩放（宠物和所有窗口一起放大）', value: () => s.zoom - 1, step: (d) => setZoom(s.zoom + d) } satisfies Option]),
+        { type: 'radio', label: '开机自启', title: '仅 Windows、macOS 和 Android 有效', on: () => s.autoStart, run: toggleAutoStart },
+        { type: 'input', label: '天气城市（留空按网络位置自动定位）', value: () => s.weatherCity, set: setCity },
+        {
+          type: 'radio',
+          label: '是否开启互动动作(开启后会导致点击位置不可进行宠物移动~)',
+          title: FACE_TIP,
+          on: () => s.faceClick > 0,
+          run: () => setFaceClick(s.faceClick ? 0 : 1),
         },
-      },
-      { type: 'radio', label: '开启高清画质', title: '高清托盘图标与窗口边框，新打开的窗口生效；高清界面素材重启后生效', on: () => s.hd, run: () => setHd(!s.hd) },
-    ],
+        { type: 'radio', label: '是否开启互动动作指示器', title: FACE_TIP, on: () => s.faceClick === 2, run: () => setFaceClick(s.faceClick === 2 ? 1 : 2) },
+        { type: 'radio', label: '开启免打扰模式', on: () => s.quiet, run: () => update('settings', { quiet: !s.quiet }) },
+        {
+          type: 'radio',
+          label: '点宠物时显示动作栏',
+          title: '关掉后点宠物不再弹出日常、交互、工具等按钮，不挡视野；功能仍可从右键/长按宠物或托盘（手机通知栏「菜单」）打开',
+          on: () => s.petBar,
+          run: () => update('settings', { petBar: !s.petBar }),
+        },
+        { type: 'radio', label: '随机走动（默认关，贴边不走）', title: '站立闲着时，走动、问候、动画三者随机抽。贴边探头不走。', on: () => s.roam, run: () => update('settings', { roam: !s.roam }) },
+        {
+          type: 'radio',
+          label: '开启宠物音效（贴边探头、点脸逗它）',
+          title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
+          on: () => s.sound,
+          run: () => {
+            update('settings', { sound: !s.sound })
+            applyPetSound()
+          },
+        },
+        { type: 'radio', label: '开启高清画质', title: '高清托盘图标与窗口边框，新打开的窗口生效；高清界面素材重启后生效', on: () => s.hd, run: () => setHd(!s.hd) },
+      ]
+    },
   },
   {
     label: '存档',
@@ -297,7 +322,7 @@ const TABS: { label: string; options: Option[] }[] = [
   {
     label: '关于',
     options: [
-      { type: 'see', label: '软件', value: `QQPet v${APP_VERSION}` },
+      { type: 'see', label: '软件', value: `QQPet v${APP_VERSION}`, run: tapVersion },
       { type: 'button', label: '检查更新', title: '有新版本时打开 GitHub 下载页', run: () => void checkUpdate(true) },
       { type: 'radio', label: '每天自动检查更新', on: () => s.autoUpdate, run: () => update('settings', { autoUpdate: !s.autoUpdate }) },
       { type: 'see', label: '简介', value: description },
@@ -344,6 +369,7 @@ function option(o: Option, redraw: () => void): HTMLElement {
     inner = div('childrenIn fC', div('label', o.label), input)
   } else {
     inner = div('childrenIn fC', div('', `${o.label}：`), div('seeValue', o.value))
+    if (o.run) inner.addEventListener('click', act(o.run))
   }
   const row = div('childrens', inner)
   row.title = o.title ?? ''
@@ -355,20 +381,24 @@ let close = (): void => {}
 export function openSetup(): void {
   close()
   if (!draftModel) draftModel = s.aiModel
-  let tab = 0
+  // By label: showing the 作弊 tab shifts the tabs after it.
+  let tab = TABS[0].label
   const left = div('leftScroll fcC')
   const title = div('right_title ml16')
   const list = div('children')
   const right = div('rightScroll fC', title, list)
   const draw = (): void => {
-    const pick = (i: number) => (): void => {
-      tab = i
+    const tabs = TABS.filter((t) => t.label !== '作弊' || s.cheatTab)
+    const current = tabs.find((t) => t.label === tab) ?? tabs[0]
+    tab = current.label
+    const pick = (label: string) => (): void => {
+      tab = label
       list.scrollTop = 0
       draw()
     }
-    left.replaceChildren(...TABS.map((t, i) => button(i === tab ? 'lm_once focusPress fcc activeMenu' : 'lm_once focusPress fcc', pick(i), t.label)))
-    title.textContent = TABS[tab].label
-    list.replaceChildren(...TABS[tab].options.map((o) => option(o, draw)))
+    left.replaceChildren(...tabs.map((t) => button(t === current ? 'lm_once focusPress fcc activeMenu' : 'lm_once focusPress fcc', pick(t.label), t.label)))
+    title.textContent = current.label
+    list.replaceChildren(...current.options.map((o) => option(o, draw)))
   }
   draw()
   redraw = draw

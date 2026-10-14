@@ -103,6 +103,8 @@ export interface Settings {
   hidden: boolean
   /** High-resolution assets: @2x tray icons and SVG window frames. */
   hd: boolean
+  /** Desktop page zoom, 1 to 2: the pet and every panel grow together. */
+  zoom: number
   /** The pet reads out text copied to the clipboard. */
   clip: boolean
   /** After the same desktop app stays in front for a while, idle talk may mention it. Off by default. */
@@ -113,6 +115,8 @@ export interface Settings {
   petBar: boolean
   /** Chat cheats (元宝+N, 不要死, ...) are recognised. On by default. */
   chatCheat: boolean
+  /** The settings' 作弊 tab is shown; tapping the version 5 times toggles it. Off by default. */
+  cheatTab: boolean
   /** Chat cheat 不要死: the pet revives on the spot whenever it dies. */
   undying: boolean
   /** OpenAI-compatible endpoint; `aiModel` is set only once it passed the settings test, and AI is off while it is empty. */

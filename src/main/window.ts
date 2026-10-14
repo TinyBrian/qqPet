@@ -31,6 +31,7 @@ export function createPetWindow(): BrowserWindow {
       preload: join(import.meta.dirname, '../preload/index.cjs'),
       sandbox: true,
       contextIsolation: true,
+      zoomFactor: getSave().settings.zoom,
     },
   })
   win.setAlwaysOnTop(true, 'screen-saver')
@@ -51,7 +52,7 @@ export function createPetWindow(): BrowserWindow {
   // Click-through windows receive no mouse events on Linux, so the renderer
   // cannot hit-test on hover. Pushing the cursor position from here works the
   // same on every platform.
-  const position = desktopCursor(win, screen, initialDisplay.id)
+  const position = desktopCursor(win, screen, initialDisplay.id, () => getSave().settings.zoom)
   let dragging = false
   ipcMain.handle(IPC.setDragging, (event, on: boolean) => {
     if (event.sender !== win.webContents) throw new Error('Unknown drag sender')

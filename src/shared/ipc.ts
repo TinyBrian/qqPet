@@ -35,8 +35,8 @@ export interface Point {
 }
 
 export interface DesktopCursor extends Point {
-  /** Desktop only. Offset is relative to the window origin at launch, in Electron DIP coordinates. */
-  desktop?: { id: number; width: number; height: number; offset: Point; sequence: number }
+  /** Desktop only. Offset is relative to the window origin at launch; all lengths are Electron DIP divided by zoom. */
+  desktop?: { id: number; width: number; height: number; offset: Point; zoom: number; sequence: number }
 }
 
 export type TrayState =

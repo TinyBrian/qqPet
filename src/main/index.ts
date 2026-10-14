@@ -27,7 +27,8 @@ app.whenReady().then(() => {
   const win = createPetWindow()
   const tray = createPetTray((click) => {
     const b = win.getBounds()
-    win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: click.x - b.x, y: click.y! - b.y })
+    const z = getSave().settings.zoom
+    win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: (click.x - b.x) / z, y: (click.y! - b.y) / z })
   })
   app.on('before-quit', () => tray.destroy())
 
@@ -45,6 +46,7 @@ app.whenReady().then(() => {
     patchSave(patch)
     if (patch.petInfo) tray.retip(getSave().petInfo)
     if (patch.settings?.hd !== undefined) tray.setState(getSave())
+    if (patch.settings?.zoom !== undefined) win.webContents.setZoomFactor(getSave().settings.zoom)
     if (patch.settings?.watchApp !== undefined) watchFront(getSave().settings.watchApp)
   })
   ipcMain.on(IPC.resetPet, (_e, sex?: Sex) => {

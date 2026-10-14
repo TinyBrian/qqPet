@@ -4,7 +4,7 @@ import { resumeTask } from './pet/jobs'
 import { machine, speak, startPet } from './pet/pet'
 import { applyEdge, info, onInfoChange, petSize, save, setInfo, stage, update } from './pet/store'
 import type { DesktopCursor } from '../shared/ipc'
-import { setDesktopSize, viewportSize } from './ui/viewport'
+import { pageZoom, setDesktopSize, viewportSize } from './ui/viewport'
 import { adopt } from './ui/adopt'
 import { catchDiudiule, releaseDiudiule } from './ui/diudiule'
 import { scheduleHide, showControl } from './ui/control'
@@ -140,12 +140,14 @@ const syncDesktop = (p: DesktopCursor): boolean => {
   if (!area) return true
   if (area.sequence <= desktopSequence) return false
   desktopSequence = area.sequence
-  const dx = area.offset.x - desktopOffset.x
-  const dy = area.offset.y - desktopOffset.y
+  // A zoom change rescales every page length, the old offset included; what is left is a real display move.
+  const k = (pageZoom() ?? area.zoom) / area.zoom
+  const dx = area.offset.x - desktopOffset.x * k
+  const dy = area.offset.y - desktopOffset.y * k
   desktopOffset = area.offset
   setDesktopSize(area)
-  setInfo('lastX', info.lastX + dx)
-  setInfo('lastY', info.lastY + dy)
+  setInfo('lastX', info.lastX * k + dx)
+  setInfo('lastY', info.lastY * k + dy)
   if (save.settings.petDisplayId !== area.id) update('settings', { petDisplayId: area.id })
   if (!dragging) clampOnScreen()
   layout()

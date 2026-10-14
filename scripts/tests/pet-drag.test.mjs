@@ -68,6 +68,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     stage: () => stage,
     viewportSize: () => area,
     setDesktopSize: value => { area = value },
+    pageZoom: () => area.zoom ?? null,
     update: (key, value) => Object.assign(services.save[key], value),
     applyEdge: () => null,
     pageX: event => event.clientX + crop.x,

@@ -15,7 +15,7 @@
 .ui-state .closeSweetHeart {height:23px;width:40px;background-image:url(/pet/stateInfo/guanbi_over.png);background-size:100% 100%;position:relative;background-repeat:no-repeat;top:-3px}
 .ui-state .closeSweetHeart:hover {background-image:url(/pet/stateInfo/guanbi_up.png);top:-2px}
 .ui-state .closeSweetHeart:active {background-image:url(/pet/stateInfo/guanbi_down.png);position:relative;top:1px}
-.ui-state .pinkDiamond {height:28px;width:25px;background-repeat:no-repeat;background-size:contain}
+.ui-state .pinkDiamond {height:28px;width:25px;background-repeat:no-repeat;background-size:contain;cursor:pointer}
 .ui-state .valueLine {height:17px}
 .ui-state .label {white-space:nowrap}
 .ui-state .butDo {height:19px;width:35px;background-image:url(/pet/stateInfo/13.svg);background-size:100% 100%;position:relative;background-repeat:no-repeat;border-radius:8px;border:1px solid rgba(31,114,182,.3);display:flex;align-items:center;justify-content:center}

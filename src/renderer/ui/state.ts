@@ -3,7 +3,7 @@ import { goodOf, type TimedType } from '../pet/data/goods'
 import { pay } from '../pet/items'
 import { speak } from '../pet/pet'
 import { activity, growthPerMinute, info, onInfoChange, save, setInfo } from '../pet/store'
-import { addSweetHeart } from '../pet/vip'
+import { addSweetHeart, openPinkDiamond } from '../pet/vip'
 import { openGoods } from './control'
 import './css/state.css'
 import { formatDate } from './date'
@@ -83,6 +83,22 @@ function sweetHeart(): void {
   })
 }
 
+/** Opening or extending pink diamond with yuanbao; 365 days or more is the yearly membership. */
+function pinkDiamond(): void {
+  windowView({
+    title: '粉钻贵族',
+    msg: info.pinkDiamond ? `粉钻${formatDate(info.PDiamondExpirationDate)}到期，续费：300元宝/一天` : '开通粉钻：300元宝/一天，一次开通365天即为年费粉钻',
+    max: 365,
+    init: 30,
+    ok: (close, n) => {
+      close()
+      if (!pay(300 * n)) return
+      openPinkDiamond(n)
+      speak({ s: `[host],粉钻开通啦，${formatDate(info.PDiamondExpirationDate)}到期，谢谢你！~`, now: true }, 'appear')
+    },
+  })
+}
+
 const row = (label: string, ...value: (Node | string)[]): HTMLElement => div('onceInfo fc', div('label', label), ...value)
 
 function bar(label: string, n: number, m: number, onClick: () => void, text?: string): HTMLElement {
@@ -94,7 +110,8 @@ function bar(label: string, n: number, m: number, onClick: () => void, text?: st
 function render(): void {
   if (!panel) return
   const c = save.petComputedlInfo
-  const diamond = div('pinkDiamond')
+  const diamond = button('pinkDiamond', pinkDiamond)
+  diamond.title = info.pinkDiamond ? '续费粉钻' : '开通粉钻'
   diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
   const timed = Object.entries(save.selfGoodUseOption).flatMap(([type, t]) => {
     if (!t) return []

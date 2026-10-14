@@ -5,7 +5,7 @@ import { goodOf, type TimedType } from './data/goods'
 import { levelOf, stageOf, type Stage } from './level'
 import type { Mood } from './router'
 import { touch } from '../ui/dom'
-import { viewportSize } from '../ui/viewport'
+import { pageZoom, viewportSize } from '../ui/viewport'
 
 if (!window.__qqpetInitialSave) throw new Error('QQPet store must be loaded through bootstrap.ts')
 export const save: SaveData = window.__qqpetInitialSave
@@ -86,7 +86,8 @@ export const avatar = (): string => `pet/avatar/${info.sex}${stage()}.png`
  * Other touch hosts use the short side; desktop hosts use the active display width.
  */
 export const petSize = (): number =>
-  petSizeFor(save.petComputedlInfo.level, touch ? { width: innerWidth, height: innerHeight } : viewportSize(), touch, window.qqpet.deviceKind)
+  petSizeFor(save.petComputedlInfo.level, touch ? { width: innerWidth, height: innerHeight } : viewportSize(), touch, window.qqpet.deviceKind) *
+  (pageZoom() ?? 1)
 
 /** How close to a side counts as peeking. Hide_left/right SWFs assume the box sits on that edge. */
 export const EDGE_NEAR = 36

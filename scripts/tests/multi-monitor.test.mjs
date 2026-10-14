@@ -68,6 +68,29 @@ test('disconnecting the active screen relocates the overlay to a visible screen'
   assert.deepEqual(p.desktop.offset, { x: 0, y: 0 })
 })
 
+test('page zoom turns DIP into page pixels, offset included', () => {
+  const d = desktop()
+  const position = desktopCursor(d.win, d.screen, 1, () => 2)
+  d.move({ x: -100, y: 100 })
+  const p = position(true)
+  assert.equal(p.x, 590)
+  assert.equal(p.y, 150)
+  assert.deepEqual(p.desktop, { id: 2, width: 640, height: 492, offset: { x: 640, y: 100 }, zoom: 2, sequence: 1 })
+})
+
+test('changing the zoom rescales the pet where it stands instead of following a display move', async () => {
+  const d = desktop()
+  let zoom = 1
+  const position = desktopCursor(d.win, d.screen, 1, () => zoom)
+  const app = renderer(144, undefined, null, 'Egg', { x: 400, y: 300 })
+  app.cursor(position(false))
+  assert.equal(app.info.lastX, 400)
+  zoom = 2
+  app.cursor(position(false))
+  assert.equal(app.info.lastX, 200)
+  assert.equal(app.info.lastY, 150)
+})
+
 for (const stage of ['Egg', 'Kid', 'Adult']) test(`${stage} drag keeps its hold point across different display widths`, async () => {
   const d = desktop()
   const position = desktopCursor(d.win, d.screen, 1)
