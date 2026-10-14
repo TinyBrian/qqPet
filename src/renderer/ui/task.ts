@@ -16,7 +16,7 @@ export function openTask(): void {
     const items = tasks(tab).map((t, i) =>
       div(
         'taskOnce fc',
-        div('to_left f1 fC w0', div('to_label', `${t.label}（${t.done}/${t.num}） `), div('to_msg', t.msg)),
+        div('to_left f1 fC w0', div('to_label', `${t.label}（${Math.min(t.done, t.num)}/${t.num}） `), div('to_msg', t.msg)),
         div(
           'to_right fc',
           ...t.good.map((g) => Object.assign(img('goodImg', g.url), { title: `${g.outOfPrint ? '绝版：' : ''}${g.name}*${g.num}` })),
