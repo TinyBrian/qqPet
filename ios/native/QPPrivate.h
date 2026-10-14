@@ -14,7 +14,9 @@ typedef struct {
     __typeof__(&BKSHIDEventRegisterEventCallback) registerHID;
     __typeof__(&SBSSpringBoardServerPort) springBoardPort;
     __typeof__(&SBGetScreenLockStatus) getLockStatus;
-    __typeof__(&SBSLaunchApplicationWithIdentifierAndLaunchOptions) launchApplication;
 } QPPrivateAPI;
 FOUNDATION_EXPORT QPPrivateAPI QPPrivate;
 FOUNDATION_EXPORT BOOL QPLoadPrivateAPI(NSError **error);
+// Submits activation through LaunchServices; the manager's IPC acknowledgement
+// confirms that the foreground App actually accepted the requested action.
+FOUNDATION_EXPORT BOOL QPActivateManager(NSString *bundleIdentifier);

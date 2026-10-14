@@ -7,15 +7,27 @@
 @interface QPGameController : UIViewController
 @property(nonatomic,strong) QPHostController *host;
 @property(nonatomic,copy) void (^closed)(void);
+@property(nonatomic) BOOL closing;
 @end
 @implementation QPGameController
 - (void)viewDidLoad {
     [super viewDidLoad]; self.view.backgroundColor=UIColor.blackColor;
-    [self addChildViewController:self.host]; self.host.view.frame=self.view.bounds; self.host.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
-    [self.view addSubview:self.host.view]; [self.host didMoveToParentViewController:self]; self.navigationItem.title=@"小游戏";
+    [self addChildViewController:self.host]; self.host.view.translatesAutoresizingMaskIntoConstraints=NO;
+    [self.view addSubview:self.host.view]; [self.host didMoveToParentViewController:self];
+    UILayoutGuide *content=self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [self.host.view.leadingAnchor constraintEqualToAnchor:content.leadingAnchor],
+        [self.host.view.trailingAnchor constraintEqualToAnchor:content.trailingAnchor],
+        [self.host.view.topAnchor constraintEqualToAnchor:content.topAnchor],
+        [self.host.view.bottomAnchor constraintEqualToAnchor:content.bottomAnchor]
+    ]];
+    if (!self.title.length) self.title=@"小游戏";
     self.navigationItem.rightBarButtonItem=[[UIBarButtonItem alloc] initWithTitle:@"结束" style:UIBarButtonItemStyleDone target:self action:@selector(closeGame)];
 }
-- (void)closeGame { [self.host invalidate]; [self dismissViewControllerAnimated:YES completion:self.closed]; }
+- (void)closeGame {
+    if (self.closing) return;
+    self.closing=YES; [self.host invalidate]; [self dismissViewControllerAnimated:YES completion:self.closed];
+}
 @end
 
 @interface QPManagerController () <UIDocumentPickerDelegate>
@@ -122,6 +134,15 @@
         } else if (self.pendingResponse) [self writePendingResponse];
     }
     if (!request || self.pendingUI || !QPProcessAlive(status) || ![request[@"instance"] isEqual:status[@"instance"]] || [request[@"requestId"] isEqual:self.lastUI] || UIApplication.sharedApplication.applicationState!=UIApplicationStateActive) return;
+    NSTimeInterval created=[request[@"createdAt"] doubleValue],now=NSDate.date.timeIntervalSince1970;
+    if (created<=0 || created>now || now-created>=30) return;
+    if ([request[@"op"] isEqual:@"openGame"] && self.game) {
+        // Returning from the desktop to a different game must not leave the
+        // previously presented game in front. Complete its normal close/reward
+        // path, then the next poll accepts the still-current requested game.
+        [self.game closeGame];
+        return;
+    }
     if (self.presentedViewController && ![request[@"op"] isEqual:@"closeGame"]) return;
     self.lastUI=request[@"requestId"]; self.pendingUI=request;
     NSError *ackError=nil;
@@ -163,13 +184,18 @@
     } else if ([op isEqual:@"openGame"]) {
         if (self.game) { [self finishUI:nil error:@"A game is already open."]; return; }
         NSString *swf=args[@"swf"];
-        if (![swf isKindOfClass:NSString.class] || [swf containsString:@".."] || [swf hasPrefix:@"/"]) { [self finishUI:nil error:@"Invalid game asset."]; return; }
+        if (![swf isKindOfClass:NSString.class] || !swf.length || [swf containsString:@".."] || [swf hasPrefix:@"/"] || ![swf.pathExtension isEqual:@"swf"]) { [self finishUI:nil error:@"Invalid game asset."]; return; }
+        if (![self.state matchesGeneration:args[@"generation"]]) { [self finishUI:nil error:@"存档已更换，请重新打开小游戏。"]; return; }
         QQAssetServer *server=[[QQAssetServer alloc] initWithWebRoot:[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"web"] assetRoot:[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"web"] port:[[NSURL URLWithString:status[@"origin"]].port unsignedShortValue]];
         QPGameController *game=[QPGameController new]; game.host=[[QPHostController alloc] initWithState:self.state server:server role:@"game"]; self.game=game;
+        game.title=swf.lastPathComponent.stringByDeletingPathExtension;
         __weak QPGameController *weakGame=game;
         game.host.managerOperation=^(NSDictionary *request,void (^reply)(id,NSString *)){ if ([request[@"op"] isEqual:@"closeGame"]) { reply(nil,nil); [weakGame closeGame]; } else reply(nil,@"This operation belongs to the pet HUD."); };
-        NSString *encoded=[swf stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
-        NSURL *url=[NSURL URLWithString:[NSString stringWithFormat:@"%@/game.html?swf=%@",status[@"origin"],encoded]];
+        NSURLComponents *components=[NSURLComponents componentsWithString:status[@"origin"]];
+        components.path=@"/game.html"; components.queryItems=@[[NSURLQueryItem queryItemWithName:@"swf" value:swf]];
+        // URLSearchParams uses form decoding, where a literal plus means a space.
+        components.percentEncodedQuery=[components.percentEncodedQuery stringByReplacingOccurrencesOfString:@"+" withString:@"%2B"];
+        NSURL *url=components.URL;
         [game.host loadURL:url];
         NSString *instance=status[@"instance"], *sessionID=NSUUID.UUID.UUIDString, *generation=args[@"generation"] ?: self.state.generation; NSTimeInterval started=NSDate.date.timeIntervalSince1970;
         __weak QPManagerController *weakSelf=self;

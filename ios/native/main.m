@@ -123,17 +123,11 @@ static QPAppDelegate *QPDelegate;
         record[@"createdAt"]=@(NSDate.date.timeIntervalSince1970);
         NSError *writeError=nil;
         if (![QPStorage writeJSON:record name:@"ui-request.json" error:&writeError]) { [delegate finishPendingUI:nil error:writeError.localizedDescription ?: @"Could not write the manager request."]; return; }
-        // A request issued from the visible manager needs no SpringBoard launch.
-        if (delegate.managerActive) return;
-        void (^openManager)(void)=^{
-            [UIApplication.sharedApplication openURL:[NSURL URLWithString:@"qqpetios://manager"] options:@{} completionHandler:^(BOOL opened){
-                dispatch_async(dispatch_get_main_queue(),^{ if (!opened && [delegate.pendingUI isEqual:token]) [delegate finishPendingUI:nil error:@"Could not open QQPet. Open the manager manually and retry this action."]; });
-            }];
-        };
-        if (QPPrivate.launchApplication) {
-            int result=QPPrivate.launchApplication(NSBundle.mainBundle.bundleIdentifier,@{},@{},NO);
-            if (result) openManager();
-        } else openManager();
+        // The HUD is not the foreground App. Its UIApplication URL handling and
+        // the cached managerActive heartbeat cannot establish an App transition.
+        // Every new action requests system activation; poll waits for its token's ack.
+        if (!QPActivateManager(NSBundle.mainBundle.bundleIdentifier))
+            [delegate finishPendingUI:nil error:@"无法打开 QQPet 管理界面，请手动打开 App 后重试。"];
     };
     Class orientationClass=objc_getClass("FBSOrientationObserver");
     if (orientationClass) {
@@ -241,7 +235,10 @@ static QPAppDelegate *QPDelegate;
     if (QPLock>=0) { flock(QPLock,LOCK_UN); close(QPLock); QPLock=-1; }
     exit(QPStatus[@"fatalError"]?1:0);
 }
-- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url options:(NSDictionary *)options { [self.manager poll]; return [url.scheme isEqual:@"qqpetios"]; }
+- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url options:(NSDictionary *)options {
+    if (QPHUD || ![url.scheme isEqual:@"qqpetios"] || ![url.host isEqual:@"manager"]) return NO;
+    [self.manager poll]; return YES;
+}
 - (void)applicationDidBecomeActive:(UIApplication *)application { if (!QPHUD) [self.manager poll]; }
 - (void)applicationDidEnterBackground:(UIApplication *)application {
     if (!QPHUD) [QPStorage writeJSON:@{@"active":@NO,@"pid":@(getpid()),@"updatedAt":@(NSDate.date.timeIntervalSince1970)} name:@"manager.json" error:NULL];
