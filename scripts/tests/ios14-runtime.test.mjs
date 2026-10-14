@@ -17,6 +17,69 @@ test('JSON bridge clones remain independent and greeting search preserves its so
   assert.equal(abortReason({}).name, 'AbortError')
 })
 
+test('movie replacement releases retired GPU contexts without losing the live or paused renderer', async () => {
+  const saved = Object.fromEntries(['window', 'document', 'location', 'MutationObserver'].map(key => [key, globalThis[key]]))
+  const canvases = []
+  let current = null
+  let finishBuild
+  let loads = 0
+  const canvas = connected => {
+    const value = { isConnected: connected, losses: 0, getContext: type => type === 'webgl2' ? gl : null }
+    const gl = { isContextLost: () => value.losses > 0, getExtension: () => ({ loseContext: () => value.losses++ }) }
+    canvases.push(value)
+    return value
+  }
+  const doc = { documentElement: {}, createElement: () => ({}) }
+  const api = {
+    metadata: { width: 100, height: 100, frameRate: 12, numFrames: 24 },
+    load() {
+      if (current) current.isConnected = false
+      current = canvas(element.isConnected)
+      if (++loads === 1) return Promise.resolve()
+      return new Promise(resolve => { finishBuild = () => {
+        // A timed-out or detached async builder can still finish constructing a renderer.
+        if (!element.isConnected) current = canvas(false)
+        resolve()
+      } })
+    },
+    suspend() {}, resume() {}, isPlaying: true,
+  }
+  const element = {
+    style: {}, dataset: {}, ownerDocument: doc, isConnected: true,
+    shadowRoot: { getElementById: () => null, querySelector: () => current, appendChild() {} },
+    ruffle: () => api,
+    remove() { this.isConnected = false; if (current) current.isConnected = false },
+    disconnectedCallback() {},
+  }
+  doc.defaultView = { RufflePlayer: { newest: () => ({ createPlayer: () => element }) } }
+  globalThis.window = {}
+  globalThis.document = doc
+  globalThis.location = { href: 'http://127.0.0.1/index.html' }
+  globalThis.MutationObserver = class { observe() {} }
+  let player
+  try {
+    const { SwfPlayer, setHostPaused } = await import('../../src/renderer/swf/player.ts')
+    player = new SwfPlayer({ ownerDocument: doc, appendChild() {} })
+    await player.load('first.swf')
+    setHostPaused(true)
+    setHostPaused(false)
+    assert.equal(canvases[0].losses, 0, 'suspending a retained movie must preserve its GPU context')
+    const replacement = player.load('second.swf')
+    const rejected = assert.rejects(replacement, /destroyed|cancelled/)
+    assert.equal(canvases[0].losses, 1, 'release the old context before the next async renderer finishes')
+    assert.equal(canvases[1].losses, 0, 'the new renderer remains live')
+    player.destroy()
+    assert.equal(canvases[1].losses, 1)
+    finishBuild()
+    await rejected
+    assert.deepEqual(canvases.map(value => value.losses), [1, 1, 1], 'a late detached renderer also releases its context once')
+  } finally {
+    finishBuild?.()
+    player?.destroy()
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value }
+  }
+})
+
 test('network deadline aborts decoding and is disposed after completion', async () => {
   let completedSignal
   assert.equal(await withTimeoutSignal(5, async signal => { completedSignal = signal; return 7 }), 7)
@@ -87,7 +150,7 @@ test('Ruffle wrapper freezes its frame clock, keeps first-load callbacks, and ca
   const styles = []
   const doc = { documentElement: {}, createElement: () => ({}) }
   const api = { metadata: null, load: async () => { api.metadata = { width: 100, height: 100, frameRate: 10, numFrames: 100 }; element.initial = () => 1 }, suspend() {}, resume() {}, isPlaying: true }
-  const element = { style: {}, dataset: {}, ownerDocument: doc, isConnected: true, shadowRoot: { getElementById: () => null, appendChild: style => styles.push(style) }, ruffle: () => api, remove() { this.isConnected = false } }
+  const element = { style: {}, dataset: {}, ownerDocument: doc, isConnected: true, shadowRoot: { getElementById: () => null, querySelector: () => null, appendChild: style => styles.push(style) }, ruffle: () => api, remove() { this.isConnected = false } }
   doc.defaultView = { RufflePlayer: { newest: () => ({ createPlayer: () => element }) } }
   globalThis.window = {}
   globalThis.document = doc
@@ -150,7 +213,7 @@ test('timed-out Ruffle generation is retired and a late build cannot replace its
     }
     const element = {
       style: {}, dataset: {}, ownerDocument: doc, isConnected: true, volume: 1, released: 0,
-      shadowRoot: { getElementById: () => null, appendChild() {} },
+      shadowRoot: { getElementById: () => null, querySelector: () => null, appendChild() {} },
       ruffle: () => api,
       disconnectedCallback() { this.released++ },
       remove() { this.isConnected = false; this.disconnectedCallback() },

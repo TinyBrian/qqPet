@@ -46,6 +46,8 @@ Ruffle 0.6's fallback Wasm uses sign-extension instructions introduced by WebKit
 
 The compiler runs in a serial Node child with a 512 MiB JavaScript heap limit. Its cache is stored under `out/ruffle-safari14`. Shared Web API and style fallbacks target Safari 14.0; Electron retains its existing deployment requirements.
 
+Movie replacement explicitly releases retired WebGL contexts after Ruffle tears down their instances. Live and suspended players retain their contexts, including the pet's two animation layers; rendering backends and effects are unchanged.
+
 References: [WebKit Safari 14.1 release notes](https://webkit.org/blog/11648/new-webkit-features-in-safari-14-1/), [Binaryen SignExtLowering](https://github.com/WebAssembly/binaryen/blob/version_123/src/passes/SignExtLowering.cpp).
 
 Private declarations and touch helpers are vendored under `vendor/TrollSpeed`, with [source revisions and adaptation notes](vendor/TrollSpeed/ORIGIN.md) and their original licenses.

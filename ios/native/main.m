@@ -282,7 +282,7 @@ int main(int argc,char *argv[]) {
         // including on iOS 14. Initialize its run loop before any HUD gestures.
         // The HUD already receives BackBoard HID events; iOS 14's application
         // initializer tries to register a legacy Purple port outside launchd.
-        if (QPPrivate.initializeExtensionEvents) QPPrivate.initializeExtensionEvents();
+        if (NSProcessInfo.processInfo.operatingSystemVersion.majorVersion < 15) QPPrivate.initializeExtensionEvents();
         else QPPrivate.initializeEvents(0);
         QPPrivate.pushEventMode(kCFRunLoopDefaultMode);
         [UIApplication.sharedApplication __completeAndRunAsPlugin];

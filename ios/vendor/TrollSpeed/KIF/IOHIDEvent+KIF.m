@@ -9,6 +9,7 @@
 #import <dlfcn.h>
 #import <UIKit/UIKit.h>
 #import <mach/mach_time.h>
+#import <objc/runtime.h>
 
 #define IOHIDEventFieldBase(type) (type << 16)
 
@@ -154,6 +155,15 @@ static __typeof__(&IOHIDEventSetSenderID) qp_IOHIDEventSetSenderID;
 static __typeof__(&IOHIDEventCreateDigitizerEvent) qp_IOHIDEventCreateDigitizerEvent;
 static __typeof__(&IOHIDEventCreateDigitizerFingerEventWithQuality) qp_IOHIDEventCreateDigitizerFingerEventWithQuality;
 
+static char kif_touchPathIdentityKey;
+
+void kif_setTouchPathIdentity(UITouch *touch, uint32_t identity)
+{
+    if (!touch) return;
+    objc_setAssociatedObject(touch, &kif_touchPathIdentityKey,
+                             identity ? @(identity) : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 IOHIDEventRef kif_IOHIDEventWithTouches(NSArray *touches)
 {
     static dispatch_once_t once;
@@ -172,6 +182,14 @@ IOHIDEventRef kif_IOHIDEventWithTouches(NSArray *touches)
   timeStamp.hi = (UInt32)(abTime >> 32);
   timeStamp.lo = (UInt32)(abTime);
 
+  BOOL anyTouching = NO;
+  for (UITouch *touch in touches) {
+    if (touch.phase != UITouchPhaseEnded && touch.phase != UITouchPhaseCancelled) {
+      anyTouching = YES;
+      break;
+    }
+  }
+
   IOHIDEventRef handEvent = qp_IOHIDEventCreateDigitizerEvent(
       kCFAllocatorDefault,               // allocator 内存分配器
       timeStamp,                         // timestamp 时间戳
@@ -186,8 +204,10 @@ IOHIDEventRef kif_IOHIDEventWithTouches(NSArray *touches)
       0,                                 // tipPressure
       0,                                 // barrelPressure
       0,                                 // range
-      true,                              // touch
+      anyTouching,                       // touch
       0);                                // options
+
+  if (!handEvent) return NULL;
 
   qp_IOHIDEventSetIntegerValue(handEvent,
                             kIOHIDEventFieldDigitizerIsDisplayIntegrated, true);
@@ -199,13 +219,17 @@ IOHIDEventRef kif_IOHIDEventWithTouches(NSArray *touches)
             ? kIOHIDDigitizerEventPosition
             : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch);
 
-    uint32_t isTouching = (touch.phase == UITouchPhaseEnded) ? 0 : 1;
+    if (touch.phase == UITouchPhaseCancelled) eventMask |= kIOHIDDigitizerEventCancel;
+    uint32_t isTouching = (touch.phase == UITouchPhaseEnded || touch.phase == UITouchPhaseCancelled) ? 0 : 1;
+    NSNumber *pathIdentity = objc_getAssociatedObject(touch, &kif_touchPathIdentityKey);
+    uint32_t index = pathIdentity ? pathIdentity.unsignedIntValue : (uint32_t)[touches indexOfObject:touch] + 1;
+    uint32_t identity = pathIdentity ? pathIdentity.unsignedIntValue : 2;
     CGPoint touchLocation = [touch locationInView:touch.window];
     IOHIDEventRef fingerEvent = qp_IOHIDEventCreateDigitizerFingerEventWithQuality(
         kCFAllocatorDefault,                       // allocator
         timeStamp,                                 // timestamp
-        (UInt32)[touches indexOfObject:touch] + 1, // index
-        2,                                         // identity
+        index,                                     // index
+        identity,                                  // identity
         eventMask,                                 // eventMask
         (IOHIDFloat)touchLocation.x,               // x
         (IOHIDFloat)touchLocation.y,               // y
@@ -220,6 +244,11 @@ IOHIDEventRef kif_IOHIDEventWithTouches(NSArray *touches)
         (IOHIDFloat)isTouching,                    // range
         (IOHIDFloat)isTouching,                    // touch
         0);                                        // options
+
+    if (!fingerEvent) {
+      CFRelease(handEvent);
+      return NULL;
+    }
 
     qp_IOHIDEventSetIntegerValue(fingerEvent,
                               kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1);

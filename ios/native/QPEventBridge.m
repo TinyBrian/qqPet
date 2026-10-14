@@ -11,6 +11,7 @@
 #import <objc/runtime.h>
 #import <sys/utsname.h>
 #import <dlfcn.h>
+#import <stdatomic.h>
 #import "pac_helper.h"
 #import "QPPrivate.h"
 
@@ -19,6 +20,13 @@ static CGPoint sGlobalPoint;
 static BOOL sReady;
 static NSMutableDictionary<NSNumber *, UITouch *> *sTouches;
 static NSMutableSet<NSNumber *> *sCapturedPaths;
+static CFRunLoopSourceRef sTouchSource;
+static NSMutableArray<NSDictionary *> *sTouchBatches;
+static NSMutableArray<UITouch *> *sResetTouches;
+static NSDictionary<NSNumber *, UITouch *> *sDeliveredTouches;
+static _Atomic(uint64_t) sTouchGeneration;
+static BOOL sSendingTouches;
+static UIEvent *sSyntheticEvent;
 static void (^sOutsideTouchHandler)(void);
 static CFTypeRef sMonitor;
 static void (*sUnscheduleMonitor)(CFTypeRef,CFRunLoopRef,CFStringRef);
@@ -26,6 +34,41 @@ static uint32_t (*sEventType)(IOHIDEventRef);
 static CFIndex (*sEventInteger)(IOHIDEventRef,uint32_t);
 static double (*sEventFloat)(IOHIDEventRef,uint32_t);
 static CFArrayRef (*sEventChildren)(IOHIDEventRef);
+
+static void QPSignalTouchSource(void) {
+    if (!sTouchSource) return;
+    CFRunLoopSourceSignal(sTouchSource);
+    CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+
+static void QPSendTouches(NSArray<UITouch *> *touches) {
+    sSendingTouches = YES;
+    UIEvent *event = [UIApplication.sharedApplication _touchesEvent];
+    // Standalone hosts may never receive the raw UIKit event that normally
+    // creates this object. Sending nil silently drops all touch delivery.
+    if (!event) {
+        if (!sSyntheticEvent) {
+            Class eventClass=objc_getClass("UITouchesEvent");
+            UIEvent *allocated=[eventClass alloc];
+            if ([allocated respondsToSelector:@selector(_init)]) sSyntheticEvent=[allocated _init];
+        }
+        event=sSyntheticEvent;
+    }
+    if (![event respondsToSelector:@selector(_clearTouches)] || ![event respondsToSelector:@selector(_addTouch:forDelayedDelivery:)]) {
+        sSendingTouches=NO;
+        QPEventBridgeDiagnostic(@"UIKit touch event construction unavailable.");
+        return;
+    }
+    [event _clearTouches];
+    IOHIDEventRef hidEvent = kif_IOHIDEventWithTouches(touches);
+    if (hidEvent) {
+        if ([event respondsToSelector:@selector(_setHIDEvent:)]) [event _setHIDEvent:hidEvent];
+        CFRelease(hidEvent);
+    }
+    for (UITouch *touch in touches) [event _addTouch:touch forDelayedDelivery:NO];
+    [UIApplication.sharedApplication sendEvent:event];
+    sSendingTouches = NO;
+}
 
 CGPoint QPLatestGlobalTouchPoint(void) { return sGlobalPoint; }
 BOOL QPGlobalEventBridgeReady(void) { return sReady; }
@@ -67,19 +110,26 @@ static BOOL QPInstallDispatcherSources(UIEventDispatcher *dispatcher, UIApplicat
     }
     return NO;
 }
-void QPResetCapturedTouches(void) {
-    if (sTouches.count) {
-        UIEvent *event = [UIApplication.sharedApplication _touchesEvent];
-        [event _clearTouches];
-        for (UITouch *touch in sTouches.allValues) {
-            [touch setPhaseAndUpdateTimestamp:UITouchPhaseCancelled];
-            [touch kif_setHidEvent];
-            [event _addTouch:touch forDelayedDelivery:NO];
-        }
-        [UIApplication.sharedApplication sendEvent:event];
+static void QPResetTouchesOnMain(uint64_t generation) {
+    if (generation != atomic_load_explicit(&sTouchGeneration, memory_order_relaxed)) return;
+    [sTouchBatches removeAllObjects];
+    for (UITouch *touch in sTouches.allValues) {
+        if (touch.phase != UITouchPhaseEnded && touch.phase != UITouchPhaseCancelled && ![sResetTouches containsObject:touch])
+            [sResetTouches addObject:touch];
     }
     [sTouches removeAllObjects];
     [sCapturedPaths removeAllObjects];
+    sDeliveredTouches = nil;
+    // A reset can be requested by a view while sendEvent: is on the stack.
+    // Deliver its cancellation through the source, without reusing that event
+    // recursively, and retain the old target views until cancellation is sent.
+    if (sResetTouches.count) QPSignalTouchSource();
+}
+
+void QPResetCapturedTouches(void) {
+    uint64_t generation = atomic_fetch_add_explicit(&sTouchGeneration, 1, memory_order_relaxed) + 1;
+    if (NSThread.isMainThread) QPResetTouchesOnMain(generation);
+    else dispatch_async(dispatch_get_main_queue(), ^{ QPResetTouchesOnMain(generation); });
 }
 
 @implementation QPHUDApplication
@@ -112,18 +162,19 @@ void QPResetCapturedTouches(void) {
 }
 @end
 
-static void QPDeliverTouch(NSNumber *identity, CGPoint global, UITouchPhase phase) {
+static BOOL QPStageTouch(NSNumber *identity, CGPoint global, UITouchPhase phase) {
     UIWindow *window = sWindow;
-    if (!window || window.hidden || !window.userInteractionEnabled) return;
+    if (!window || window.hidden || !window.userInteractionEnabled) return NO;
     sGlobalPoint = global;
     CGPoint local = [window convertPoint:global fromCoordinateSpace:UIScreen.mainScreen.fixedCoordinateSpace];
     UITouch *touch = sTouches[identity];
     if (!touch) {
-        if (phase != UITouchPhaseBegan) return;
-        if (!CGRectContainsPoint(window.bounds, local)) return;
+        if (phase != UITouchPhaseBegan) return NO;
+        if (!CGRectContainsPoint(window.bounds, local)) return NO;
         UIView *view = [window hitTest:local withEvent:nil];
-        if (!view) return;
+        if (!view) return NO;
         touch = [[UITouch alloc] initAtPoint:local inWindow:window onView:view];
+        kif_setTouchPathIdentity(touch, identity.unsignedIntValue);
         sTouches[identity] = touch;
         [sCapturedPaths addObject:identity];
     } else {
@@ -131,16 +182,74 @@ static void QPDeliverTouch(NSNumber *identity, CGPoint global, UITouchPhase phas
     }
     [touch setPhaseAndUpdateTimestamp:phase];
     [touch kif_setHidEvent];
-    UIEvent *event = [UIApplication.sharedApplication _touchesEvent];
-    [event _clearTouches];
-    for (UITouch *active in sTouches.allValues) [event _addTouch:active forDelayedDelivery:NO];
-    [UIApplication.sharedApplication sendEvent:event];
-    if (phase == UITouchPhaseEnded || phase == UITouchPhaseCancelled) {
-        [sTouches removeObjectForKey:identity];
-        [sCapturedPaths removeObject:identity];
-    } else {
-        [touch setPhaseAndUpdateTimestamp:UITouchPhaseStationary];
+    return YES;
+}
+
+static void QPPrepareNextTouchBatch(void) {
+    // Like the pinned fetcher, keep the delivered phase and strong references
+    // intact until the next input batch, rather than changing them on return
+    // from sendEvent:. Unchanged fingers then appear as stationary together.
+    for (NSNumber *identity in sDeliveredTouches) {
+        UITouch *touch = sDeliveredTouches[identity];
+        if (sTouches[identity] != touch) continue;
+        if (touch.phase == UITouchPhaseEnded || touch.phase == UITouchPhaseCancelled) {
+            [sTouches removeObjectForKey:identity];
+            [sCapturedPaths removeObject:identity];
+        } else if (touch.phase != UITouchPhaseStationary) {
+            [touch setPhaseAndUpdateTimestamp:UITouchPhaseStationary];
+            [touch kif_setHidEvent];
+        }
     }
+    sDeliveredTouches = nil;
+}
+
+static void QPTouchSourcePerform(void *info) {
+    // A nested run loop must not clear the UIEvent currently being dispatched.
+    // The outer invocation signals any remaining work after sendEvent: returns.
+    if (sSendingTouches) return;
+    if (sResetTouches.count) {
+        NSArray<UITouch *> *cancelled = [sResetTouches copy];
+        [sResetTouches removeAllObjects];
+        for (UITouch *touch in cancelled) {
+            [touch setPhaseAndUpdateTimestamp:UITouchPhaseCancelled];
+            [touch kif_setHidEvent];
+        }
+        QPSendTouches(cancelled);
+    } else if (sTouchBatches.count) {
+        NSDictionary *batch = sTouchBatches.firstObject;
+        [sTouchBatches removeObjectAtIndex:0];
+        UIWindow *window = sWindow;
+        if ([batch[@"generation"] unsignedLongLongValue] == atomic_load_explicit(&sTouchGeneration, memory_order_relaxed) &&
+            window && !window.hidden && window.userInteractionEnabled) {
+            QPPrepareNextTouchBatch();
+            BOOL changed = NO;
+            for (NSDictionary *path in batch[@"paths"]) {
+                NSNumber *identity = path[@"identity"];
+                UITouchPhase phase = UITouchPhaseMoved;
+                if ([batch[@"cancel"] boolValue]) phase = UITouchPhaseCancelled;
+                else if (path[@"proximity"]) {
+                    // AX proximity's touch bit distinguishes contact (3) from
+                    // range-only (1) and lift (0). A packet-wide lift can refer
+                    // to a different finger, so each available path wins here.
+                    BOOL touching = ([path[@"proximity"] unsignedCharValue] & 0x2) != 0;
+                    if (!touching) phase = UITouchPhaseEnded;
+                    else if (!sTouches[identity] && [batch[@"down"] boolValue]) phase = UITouchPhaseBegan;
+                } else {
+                    // Older representations expose only packet-wide phases.
+                    if ([batch[@"lift"] boolValue] || [batch[@"inRangeLift"] boolValue] || [batch[@"inRange"] boolValue]) phase = UITouchPhaseEnded;
+                    else if (!sTouches[identity] && [batch[@"down"] boolValue]) phase = UITouchPhaseBegan;
+                }
+                if (QPStageTouch(identity, [path[@"location"] CGPointValue], phase)) changed = YES;
+            }
+            if (changed) {
+                sDeliveredTouches = [sTouches copy];
+                QPSendTouches(sDeliveredTouches.allValues);
+            }
+        }
+    }
+    // CFRunLoopSource signals coalesce. Keep every packet in the FIFO and send
+    // only one batch per perform so a queued end cannot replace an unsent begin.
+    if (sResetTouches.count || sTouchBatches.count) QPSignalTouchSource();
 }
 
 static AXEventRepresentation *QPRepresentation(IOHIDEventRef event) {
@@ -199,6 +308,7 @@ static void QPInstallOutsideMonitor(void) {
 }
 
 static void QPHIDCallback(void *target, void *refcon, IOHIDServiceRef service, IOHIDEventRef event) {
+    uint64_t generation = atomic_load_explicit(&sTouchGeneration, memory_order_relaxed);
     UIWindow *window = sWindow;
     if (!window || window.hidden || !window.userInteractionEnabled) return;
     UIApplication *application = UIApplication.sharedApplication;
@@ -216,21 +326,28 @@ static void QPHIDCallback(void *target, void *refcon, IOHIDServiceRef service, I
         return;
     }
     if (!representation) return;
-    // Preserve every path identity: a gamepad button and a direction may be held together.
-    NSArray *paths = [representation handInfo].paths;
+    // Snapshot the whole HID packet before returning to BackBoard. Per-path
+    // phases are applied against the delivered touch state by the source,
+    // after the preceding batch's deferred cleanup.
+    NSMutableArray<NSDictionary *> *paths = [NSMutableArray new];
+    for (AXEventPathInfoRepresentation *path in [representation handInfo].paths) {
+        NSInteger pathID = path.pathIdentity;
+        if (pathID <= 0) continue;
+        CGPoint location = [path respondsToSelector:@selector(pathLocation)] ? path.pathLocation : representation.location;
+        NSMutableDictionary *value = [@{@"identity":@(pathID), @"location":[NSValue valueWithCGPoint:location]} mutableCopy];
+        if ([path respondsToSelector:@selector(pathProximity)]) value[@"proximity"] = @(path.pathProximity);
+        [paths addObject:[value copy]];
+    }
+    if (!paths.count) return;
+    NSDictionary *batch = @{@"generation":@(generation), @"paths":[paths copy],
+        @"down":@(representation.isTouchDown), @"cancel":@(representation.isCancel),
+        @"lift":@(representation.isLift), @"inRangeLift":@(representation.isInRangeLift),
+        @"inRange":@(representation.isInRange)};
     dispatch_async(dispatch_get_main_queue(), ^{
-        for (AXEventPathInfoRepresentation *path in paths) {
-            NSInteger pathID = path.pathIdentity;
-            if (pathID <= 0) continue;
-            CGPoint location = [path respondsToSelector:@selector(pathLocation)] ? path.pathLocation : representation.location;
-            UITouchPhase phase = UITouchPhaseMoved;
-            if (representation.isCancel) phase = UITouchPhaseCancelled;
-            else if (representation.isLift || representation.isInRangeLift) phase = UITouchPhaseEnded;
-            else if (!sTouches[@(pathID)] && representation.isTouchDown) phase = UITouchPhaseBegan;
-            // A released path is identified independently even while other paths move.
-            if ([path respondsToSelector:@selector(pathProximity)] && path.pathProximity == 0 && sTouches[@(pathID)]) phase = UITouchPhaseEnded;
-            QPDeliverTouch(@(pathID), location, phase);
-        }
+        if (generation != atomic_load_explicit(&sTouchGeneration, memory_order_relaxed) || !sTouchSource ||
+            !sWindow || sWindow.hidden || !sWindow.userInteractionEnabled) return;
+        [sTouchBatches addObject:batch];
+        QPSignalTouchSource();
     });
 }
 
@@ -238,6 +355,17 @@ void QPInstallGlobalEventBridge(UIWindow *window) {
     sWindow = window;
     sTouches = [NSMutableDictionary new];
     sCapturedPaths = [NSMutableSet new];
+    sTouchBatches = [NSMutableArray new];
+    sResetTouches = [NSMutableArray new];
+    sDeliveredTouches = nil;
+    atomic_fetch_add_explicit(&sTouchGeneration, 1, memory_order_relaxed);
+    if (!sTouchSource) {
+        CFRunLoopSourceContext context = {0};
+        context.perform = QPTouchSourcePerform;
+        sTouchSource = CFRunLoopSourceCreate(kCFAllocatorDefault, -2, &context);
+        if (sTouchSource) CFRunLoopAddSource(CFRunLoopGetMain(), sTouchSource, kCFRunLoopCommonModes);
+        else { sReady = NO; QPEventBridgeDiagnostic(@"Touch delivery run-loop source unavailable."); }
+    }
     if (QPPrivate.registerHID) QPPrivate.registerHID(QPHIDCallback);
     QPInstallOutsideMonitor();
     QPEventBridgeDiagnostic(sReady ? @"Global HID bridge installed." : @"Global HID callback installed; private event dispatcher initialization was incomplete.");
