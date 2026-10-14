@@ -66,16 +66,27 @@ const EGG = { enter: { end: 2 }, exit: { end: 3 }, clean: { notNum: true }, sick
 
 const MOOD_PLAY: Record<Mood, number> = { happy: 47, peaceful: 100, upset: 23, sad: 22 }
 
+/** Extra plays from the newer client exist only for GG. */
+interface PlayCount { egg: number; kid: number; peaceful: number }
+const PLAY: Record<Sex, PlayCount> = {
+  GG: { egg: 47, kid: 127, peaceful: 127 },
+  MM: { egg: 29, kid: 111, peaceful: 100 },
+}
+
 type Tables = Record<Stage, Table>
 
-const tables = (adultBury: number): Tables => ({
+const tables = (adultBury: number, play: PlayCount): Tables => ({
   Adult: common({ bury: adultBury }),
-  Kid: { ...common({ ...KID, bury: 134 }), ...moodActions(111) },
-  Egg: { ...common({ ...EGG, bury: 140 }), ...moodActions(29, { end: 3 }) },
+  Kid: { ...common({ ...KID, bury: 134 }), ...moodActions(play.kid) },
+  Egg: { ...common({ ...EGG, bury: 140 }), ...moodActions(play.egg, { end: 3 }) },
 })
 
-const TABLES: Record<Sex, Tables> = { GG: tables(76), MM: tables(142) }
-const ADULT_MOODS = Object.fromEntries(Object.entries(MOOD_PLAY).map(([m, play]) => [m, moodActions(play)])) as Record<Mood, Table>
+const TABLES: Record<Sex, Tables> = { GG: tables(76, PLAY.GG), MM: tables(142, PLAY.MM) }
+const adultMoods = (sex: Sex) =>
+  Object.fromEntries(
+    Object.entries(MOOD_PLAY).map(([m, n]) => [m, moodActions(m === 'peaceful' ? PLAY[sex].peaceful : n)]),
+  ) as Record<Mood, Table>
+const ADULT_MOODS: Record<Sex, Record<Mood, Table>> = { GG: adultMoods('GG'), MM: adultMoods('MM') }
 
 /** Adult animations for these live in a per-mood directory. */
 const BY_MOOD = ['normal', 'drag', 'play', 'speak', 'appear', 'hide']
@@ -84,7 +95,7 @@ export function route(sex: Sex, stage: Stage, action: string, mood: Mood): Targe
   let dir = `pet/Action/${sex}/${stage}/`
   let routes: Table = TABLES[sex][stage]
   if (stage === 'Adult' && BY_MOOD.includes(action)) {
-    routes = ADULT_MOODS[mood]
+    routes = ADULT_MOODS[sex][mood]
     dir += `${mood}/`
   }
   const r = routes[action]
