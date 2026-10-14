@@ -5,7 +5,7 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { renderer } from './pet-drag.test.mjs'
 
-function statePanel() {
+function statePanel(focused = false) {
   const events = new EventTarget()
   const focus = []
   const profiles = []
@@ -28,7 +28,7 @@ function statePanel() {
     .replace(/^import .*$/gm, '').replace(/^export /gm, '')
   const ui = runInNewContext(source + '\n;({ openState, closeState })', {
     window: { addEventListener: events.addEventListener.bind(events), qqpet: { setFocusable: on => focus.push(on) } },
-    document: { body }, innerWidth: 1920, innerHeight: 1080,
+    document: { body, hasFocus: () => focused }, innerWidth: 1920, innerHeight: 1080,
     div: element, img: element,
     button: (cls, click, ...children) => Object.assign(element(cls, ...children), { click }),
     frame: content => content, progress: () => '',
@@ -70,4 +70,12 @@ test('left then right tray clicks hide status before opening the menu, even with
   assert.equal(ui.body.children.length, 0)
   assert.equal(menus, 1)
   assert.deepEqual(ui.focus, [true, false])
+})
+
+test('closing status keeps the focus another panel (chat, setup...) already holds', () => {
+  const ui = statePanel(true)
+  ui.openState(800, 0)
+  ui.blur()
+  assert.equal(ui.body.children.length, 0)
+  assert.deepEqual(ui.focus, [])
 })

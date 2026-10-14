@@ -154,11 +154,15 @@ function render(): void {
   panel.replaceChildren(frame(content, (n) => `pet/stateInfo/ditu0${n}.png`, [32, 32]))
 }
 
+// Only release the focus this panel took; chat, setup, community... may still need the window as a key target.
+let ownsFocus = false
+
 export function closeState(): void {
   if (!panel) return
   panel.parentElement!.remove()
   panel = null
-  window.qqpet.setFocusable(false)
+  if (ownsFocus) window.qqpet.setFocusable(false)
+  ownsFocus = false
 }
 
 window.addEventListener('blur', closeState)
@@ -174,7 +178,11 @@ export function openState(x: number, y: number): void {
   else panel.style.bottom = `${Math.max(innerHeight - y, 0)}px`
   document.body.appendChild(div('ui-state', panel))
   render()
-  window.qqpet.setFocusable(true)
+  // Focus lets a click elsewhere blur the window and close the panel.
+  if (!document.hasFocus()) {
+    ownsFocus = true
+    window.qqpet.setFocusable(true)
+  }
 }
 
 let queued = 0
