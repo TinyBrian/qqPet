@@ -69,12 +69,11 @@ function items(adopt: () => void): Item[] {
     label: '设置帮助',
     children: [
       { label: '宠物资料', run: openPetInfo },
-      // The tray opens it on desktop; phones only have a notification few users find.
-      { label: '宠物状态', run: () => openState(innerWidth / 2, innerHeight / 2) },
       { label: '系统设置', run: openSetup },
     ],
   }
-  if (info.health === 0) return [{ label: '打开商城', run: openShop }, help, { label: '埋葬宠物', run: () => bury() }, leave]
+  const state = { label: '宠物状态', run: () => openState(innerWidth / 2, innerHeight / 2) }
+  if (info.health === 0) return [{ label: '打开商城', run: openShop }, help, state, { label: '埋葬宠物', run: () => bury() }, leave]
   return [
     { label: '和我聊天', run: openChat },
     { label: '打开商城', run: openShop },
@@ -88,6 +87,7 @@ function items(adopt: () => void): Item[] {
     },
     { label: save.settings.hidden ? '显示宠物' : '隐藏宠物', run: toggleHidden },
     help,
+    state,
     { label: save.settings.paused ? '开始成长' : '停止成长', on: save.settings.paused, run: togglePaused },
     leave,
   ]
