@@ -396,11 +396,14 @@ async function daily(): Promise<void> {
   if (deliverMails(today)) speak({ s: '[host]，邮箱里来了新邮件，快去看看吧~', b: '这就去' }, 'speak', { ok: openEmail })
 }
 
+let growthTimer: ReturnType<typeof setInterval> | null = null
+
 function startGrowth(): void {
+  if (growthTimer !== null) return
   grow()
   // A task resumed after a restart may be due already.
   advanceTask(0)
-  setInterval(grow, 60_000)
+  growthTimer = setInterval(grow, 60_000)
 }
 
 export function startPet(): void {
@@ -412,17 +415,19 @@ export function startPet(): void {
     speak({ s: DEAD.tolk, b: '别走~' })
     machine.play({ a: 'dying', s: () => machine.add({ a: 'die' }) })
     setTray('dead')
-    startGrowth()
   } else {
     if (info.health < 5) setTray('ill')
     const a = info.growth === 0 ? 'first' : 'enter'
     // Half the launches greet by the time of day instead of the original enter lines.
     const g = a === 'enter' && Math.random() < 0.5 ? greeting() : null
-    machine.play({ a, s: () => speak(g ? { s: g.tolk, b: g.submitText } : { c: a }), e: startGrowth })
+    machine.play({ a, s: () => speak(g ? { s: g.tolk, b: g.submitText } : { c: a }) })
     if (info.growth === 0) addInfo('growth', 1)
     void daily()
     // Bad weather can turn up later in the day.
     setInterval(() => void weatherTalk(false), 3600_000)
   }
+  // Visual poses can be replaced before they run, especially when a mobile
+  // host resumes. Accounting must not depend on an animation's exit callback.
+  if (!save.isBury) startGrowth()
   machine.start()
 }
