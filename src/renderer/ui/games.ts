@@ -4,7 +4,7 @@ import { addInfo, growthPerMinute, info, save, setInfo } from '../pet/store'
 import { addCount, count } from '../pet/tasks'
 import { openBox } from './box'
 import './css/games.css'
-import { button, div } from './dom'
+import { button, div, img } from './dom'
 import { floatMood } from './float'
 import { playDiudiule } from './diudiule'
 import { playSmallGame, SMALL_GAMES } from './smallgame'
@@ -37,6 +37,7 @@ export function openGames(): void {
       games: [
         ...SMALL_GAMES.map((g) => ({
           name: g.name,
+          icon: g.icon && `pet/quickBar/TickleSystem/${g.icon}00.png`,
           run: () => {
             close()
             open = false
@@ -45,6 +46,7 @@ export function openGames(): void {
         })),
         {
           name: '丢丢乐',
+          icon: undefined as string | undefined,
           run: () => {
             close()
             open = false
@@ -53,13 +55,13 @@ export function openGames(): void {
         },
       ],
     },
-    ...GAMES.map((c) => ({ name: c.name, games: c.games.map((g) => ({ name: g, run: () => window.qqpet.openGame(`${c.dir}/${g}.swf`) })) })),
+    ...GAMES.map((c) => ({ name: c.name, games: c.games.map((g) => ({ name: g, icon: undefined as string | undefined, run: () => window.qqpet.openGame(`${c.dir}/${g}.swf`) })) })),
   ]
   const tabs = div('gameTabs', ...cats.map((c, i) => button('gameTab', () => show(i), c.name)))
   const list = div('gameList')
   function show(i: number): void {
     tabs.querySelectorAll('.gameTab').forEach((t, j) => t.classList.toggle('active', i === j))
-    list.replaceChildren(...cats[i].games.map((g) => Object.assign(button('gameItem', g.run, g.name), { title: g.name })))
+    list.replaceChildren(...cats[i].games.map((g) => Object.assign(button('gameItem', g.run, ...(g.icon ? [img('gameItemIcon', g.icon)] : []), g.name), { title: g.name })))
   }
   show(0)
   const close = openBox(div('ui-games', tabs, list), { onClose: () => (open = false) })

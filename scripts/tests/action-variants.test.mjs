@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import test from 'node:test'
-import { ACTIONS, route, variant, walkUrl } from '../../src/renderer/pet/router.ts'
+import { ACTIONS, extraPlay, lookUrl, route, variant, walkUrl } from '../../src/renderer/pet/router.ts'
 
 const has = (url) => existsSync(new URL(`../../resources/${url}`, import.meta.url))
 const STAGES = ['Egg', 'Kid', 'Adult']
@@ -61,4 +61,49 @@ test('variant-bearing actions resolve to an existing clip', () => {
       }
     }
   }
+})
+
+test('extra plays exist, take one slot each, and only single-frame ones carry holdMs', () => {
+  for (const [sex, data] of Object.entries(ACTIONS)) {
+    for (const [stage, list] of Object.entries(data.extraPlay ?? {})) {
+      for (const e of list) assert.ok(has(`pet/Action/${sex}/${stage}/${e.clip}.swf`), e.clip)
+    }
+  }
+  // Egg GG: 47 numbered + 2 extras; the last two slots are the extras.
+  assert.equal(extraPlay('GG', 'Egg', 47, 0), null)
+  assert.equal(extraPlay('GG', 'Egg', 47, 47 / 49)?.clip, 'motion/003')
+  assert.equal(extraPlay('GG', 'Egg', 47, 0.9999)?.clip, 'turn/ctoe')
+  assert.equal(extraPlay('MM', 'Egg', 29, 0.9999), null)
+  for (let i = 0; i < 400; i++) {
+    const t = route('GG', 'Adult', 'play', 'happy')
+    assert.ok(has(t.url), t.url)
+    if (t.url.includes('/motion/')) assert.equal(!!t.opt.opt?.holdMs, /\/00[59]\.swf$/.test(t.url), t.url)
+  }
+})
+
+test('look-around clips after a walk exist for GG and are absent for MM', () => {
+  for (const stage of STAGES) {
+    for (const dir of ['left', 'right']) {
+      for (let i = 0; i < 20; i++) {
+        const u = lookUrl('GG', stage, dir)
+        assert.ok(u && has(u), `${stage} ${dir} ${u}`)
+      }
+      assert.equal(lookUrl('MM', stage, dir), null)
+    }
+  }
+})
+
+test('hide variants resolve to existing clips', () => {
+  for (const sex of ['GG', 'MM']) {
+    for (const stage of STAGES) {
+      for (const a of ['hideleft', 'hideright']) {
+        for (let i = 0; i < 10; i++) assert.ok(has(route(sex, stage, a, 'happy').url), `${sex} ${stage} ${a}`)
+      }
+    }
+  }
+})
+
+test('small-game icons exist', async () => {
+  const src = (await import('node:fs')).readFileSync(new URL('../../src/renderer/ui/smallgame.ts', import.meta.url), 'utf8')
+  for (const [, icon] of src.matchAll(/icon: '([a-z]+)'/g)) assert.ok(has(`pet/quickBar/TickleSystem/${icon}00.png`), icon)
 })

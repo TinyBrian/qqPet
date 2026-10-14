@@ -12,13 +12,14 @@ import { button, div } from './dom'
  * Every window is an iframe with its own Ruffle, so "API" knows its caller.
  */
 export const SMALL_GAMES = [
-  { dir: 'guess', name: '猜动作' },
-  { dir: 'paopao2', name: '吹泡泡' },
-  { dir: 'rope', name: '跳绳' },
-  { dir: 'mouse', name: '捉老鼠' },
-  { dir: 'ball', name: '颠球' },
+  // Icons: the original TickleSystem quick bar (pet/quickBar/TickleSystem/*00.png).
+  { dir: 'guess', name: '猜动作', icon: 'guess' },
+  { dir: 'paopao2', name: '吹泡泡', icon: 'paopao' },
+  { dir: 'rope', name: '跳绳', icon: 'tiaosheng' },
+  { dir: 'mouse', name: '捉老鼠', icon: 'duolaoshu' },
+  { dir: 'ball', name: '颠球', icon: 'tanliqiu' },
   // Only the kid builds exist: main_102 (GG) and main_103 (MM).
-  { dir: '100ceng', name: '下一百层', kidOnly: true },
+  { dir: '100ceng', name: '下一百层', kidOnly: true, icon: undefined },
 ]
 
 /** Every main_*.swf stage is 140×140. */

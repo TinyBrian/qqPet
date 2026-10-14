@@ -12,7 +12,7 @@ import { doctor, useItem } from './items'
 import { deliverMails } from './mail'
 import { Machine, type Pose } from './machine'
 import { rand } from './rand'
-import { walkUrl } from './router'
+import { lookUrl, SINGLE_FRAME_HOLD, walkUrl } from './router'
 import {
   activity,
   addInfo,
@@ -72,6 +72,7 @@ let lastLead = 0
 const SICK_CD = 600
 let lastSick = 0
 let walkTick = 0
+let walkDir: 'left' | 'right' = 'left'
 
 const peeking = (): boolean => machine.pose.a === 'hideleft' || machine.pose.a === 'hideright'
 
@@ -118,7 +119,10 @@ function stopWalk(): void {
   walkTick = 0
   if (machine.pose.a !== 'walk') return
   // walkstop is a 1-frame clip; the machine treats those as a hold, so it stuck on the same pose.
-  machine.play({ a: applyEdge() ?? 'normal' })
+  // GG may look around first; holdMs ends that single-frame clip.
+  const edge = applyEdge()
+  const look = !edge && Math.random() < 0.5 ? lookUrl(info.sex, stage(), walkDir) : null
+  machine.play(look ? { a: 'look', opt: { url: look, opt: { opt: { holdMs: SINGLE_FRAME_HOLD } } } } : { a: edge ?? 'normal' })
 }
 
 /** Move only after the walk pose is on screen. play() is async; starting the timer earlier suicides. */
@@ -150,6 +154,7 @@ function walk(): boolean {
   const roomR = innerWidth - info.lastX - s
   if (roomL < 48 && roomR < 48) return false
   const dir: 'left' | 'right' = roomL < 80 ? 'right' : roomR < 80 ? 'left' : Math.random() < 0.5 ? 'left' : 'right'
+  walkDir = dir
   const speed = 8 * (s / 144) * (dir === 'left' ? -1 : 1)
   machine.play({
     a: 'walk',

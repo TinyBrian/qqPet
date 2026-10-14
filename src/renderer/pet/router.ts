@@ -8,6 +8,8 @@ export interface PoseOpt {
   afterState?: string[]
   /** Freeze the animation on this frame. */
   overCurrentFrame?: number
+  /** A single-root-frame clip (animated inside a MovieClip) ends after this many ms instead of holding. */
+  holdMs?: number
 }
 
 /** `<name><n>.swf` with n random in [start, end] unless notNum, else `<name>.swf`. */
@@ -68,13 +70,26 @@ function moodActions(play: number, speak: Range = { notNum: true }): Table {
 export interface ActionData {
   /** Numbered idle plays: Egg/Kid `play/P1..n`, Adult `peaceful/play/P1..n`. */
   play: { egg: number; kid: number; peaceful: number }
-  /** Alternatives picked at random for an action key (`walk_left`, `walk_right`, `drag`, `dirty`, `poor`). */
+  /**
+   * Alternatives picked at random for an action key (`walk_left`, `walk_right`, `drag`, `dirty`, `poor`,
+   * `hideleft`, `hideright`, and `look_left` / `look_right` after a walk).
+   */
   variants: Partial<Record<Stage, Record<string, string[]>>>
+  /** Extra idle plays mixed into the numbered ones, one slot each. `single`: one root frame, animated inside. */
+  extraPlay?: Partial<Record<Stage, { clip: string; single?: boolean }[]>>
 }
+
+/** Single-root-frame clips loop inside a MovieClip; this is roughly one loop. */
+export const SINGLE_FRAME_HOLD = 3000
 
 const walks = (n: number): Record<string, string[]> => ({
   walk_left: Array.from({ length: n }, (_, i) => `walk/walk_left${i ? i + 1 : ''}`),
   walk_right: Array.from({ length: n }, (_, i) => `walk/walk_right${i ? i + 1 : ''}`),
+})
+
+const looks = (): Record<string, string[]> => ({
+  look_left: ['walk/left_stop2', 'walk/left_stop3', 'walk/lplay', 'walk/lplay2', 'walk/lplay3'],
+  look_right: ['walk/right_stop2', 'walk/right_stop3', 'walk/rplay', 'walk/rplay2', 'walk/rplay3'],
 })
 
 const DRAG = (ids: number[]): string[] => ids.map((i) => `motion/drag${i}101213`)
@@ -84,9 +99,26 @@ export const ACTIONS: Record<Sex, ActionData> = {
   GG: {
     play: { egg: 47, kid: 127, peaceful: 127 },
     variants: {
-      Egg: { ...walks(2), drag: DRAG([1, 2, 3]) },
-      Kid: { ...walks(3), drag: DRAG([1, 3]), dirty: ['Dirty', 'lead/dirty20110805'], poor: ['Poor', 'lead/poor20110826'] },
-      Adult: walks(3),
+      Egg: {
+        ...walks(2),
+        drag: DRAG([1, 2, 3]),
+        hideleft: ['Hide_left1', 'motion/hide_left130906'],
+        hideright: ['Hide_right1', 'motion/hide_right130906'],
+        look_left: ['walk/lplay'],
+        look_right: ['walk/rplay'],
+      },
+      Kid: {
+        ...walks(3),
+        drag: DRAG([1, 3]),
+        dirty: ['Dirty', 'lead/dirty20110805'],
+        poor: ['Poor', 'lead/poor20110826'],
+        ...looks(),
+      },
+      Adult: { ...walks(3), hideright: ['Hide_right1', 'motion/hide_right130906'], ...looks() },
+    },
+    extraPlay: {
+      Egg: [{ clip: 'motion/003', single: true }, { clip: 'turn/ctoe' }],
+      Adult: [{ clip: 'motion/005', single: true }, { clip: 'motion/009', single: true }, { clip: 'motion/017' }, { clip: 'motion/021' }],
     },
   },
   MM: { play: { egg: 29, kid: 111, peaceful: 100 }, variants: {} },
@@ -125,6 +157,10 @@ export function route(sex: Sex, stage: Stage, action: string, mood: Mood): Targe
     dir += `${mood}/`
   }
   const r = routes[action]
+  if (action === 'play') {
+    const extra = extraPlay(sex, stage, r.end ?? 0)
+    if (extra) return { url: `pet/Action/${sex}/${stage}/${extra.clip}.swf`, opt: { ...r, opt: extra.single ? { holdMs: SINGLE_FRAME_HOLD } : undefined } }
+  }
   const alt = stage === 'Adult' && BY_MOOD.includes(action) ? null : variant(sex, stage, action)
   if (alt) return { url: `${dir}${alt}.swf`, opt: r }
   const n = r.start && r.end && !r.notNum ? Math.trunc(Math.random() * r.end + r.start) : ''
@@ -137,7 +173,20 @@ export function variant(sex: Sex, stage: Stage, key: string, pick: (n: number) =
   return list?.length ? list[pick(list.length)] : null
 }
 
+/** One of the extra plays, with the same odds as any single numbered play; null otherwise. */
+export function extraPlay(sex: Sex, stage: Stage, numbered: number, roll: number = Math.random()): { clip: string; single?: boolean } | null {
+  const list = ACTIONS[sex].extraPlay?.[stage] ?? []
+  const i = Math.trunc(roll * (numbered + list.length)) - numbered
+  return i >= 0 ? list[i] : null
+}
+
 /** Walk cycle for a direction; GG has extra gait variants. */
 export function walkUrl(sex: Sex, stage: Stage, dir: 'left' | 'right'): string {
   return `pet/Action/${sex}/${stage}/${variant(sex, stage, `walk_${dir}`) ?? `walk/walk_${dir}`}.swf`
+}
+
+/** A short look-around after a walk in that direction, or null (MM, or no clip). */
+export function lookUrl(sex: Sex, stage: Stage, dir: 'left' | 'right'): string | null {
+  const v = variant(sex, stage, `look_${dir}`)
+  return v ? `pet/Action/${sex}/${stage}/${v}.swf` : null
 }

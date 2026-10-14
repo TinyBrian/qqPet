@@ -27,6 +27,7 @@ export class Machine {
   private queue: Pose[] = []
   private next: Pose | null = null
   private changing = false
+  private since = 0
 
   constructor(
     private swf: PetSwf,
@@ -55,7 +56,8 @@ export class Machine {
     if (freezeAt && f.currentFrame >= freezeAt && f.isPlaying) f.stop()
     if (this.changing) return
     const hold = this.pose.a === 'normal' || this.pose.a === 'hideleft' || this.pose.a === 'hideright' || this.pose.a === 'drag' || this.pose.a === 'walk' || this.pose.a === 'diudiule'
-    const holding = (hold && !this.queue.length) || f.currentFrame !== last || (last === 0 && !this.queue.length)
+    const timedOut = !!this.poseOpt?.holdMs && Date.now() - this.since >= this.poseOpt.holdMs
+    const holding = !timedOut && ((hold && !this.queue.length) || f.currentFrame !== last || (last === 0 && !this.queue.length))
     if (!this.next && holding) return
 
     const p = this.next ?? this.queue.shift() ?? { a: applyEdge() ?? 'normal' }
@@ -70,6 +72,7 @@ export class Machine {
     void this.swf.load(target.url).then(() => {
       const over = this.pose
       this.pose = p
+      this.since = Date.now()
       this.changing = false
       this.onChange(over, p)
     }).catch(() => {
