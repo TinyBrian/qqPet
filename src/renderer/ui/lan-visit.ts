@@ -98,8 +98,48 @@ function promptView(title: string, hint: string, ok: (text: string) => void): vo
   )
 }
 
+/** Three soft knocks: synthesized taps (a noise burst plus a low thump), quiet by design. */
+function knock(): void {
+  if (!save.settings.sound) return
+  try {
+    const c = new AudioContext()
+    const when = c.currentTime
+    for (let i = 0; i < 3; i++) knockTap(c, when + i * 0.22)
+    window.setTimeout(() => void c.close(), 1500)
+  } catch {
+    /* sound is a nicety; never let it break the knock */
+  }
+}
+
+function knockTap(c: AudioContext, at: number): void {
+  const len = Math.floor(c.sampleRate * 0.06)
+  const buf = c.createBuffer(1, len, c.sampleRate)
+  const data = buf.getChannelData(0)
+  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3)
+  const src = c.createBufferSource()
+  src.buffer = buf
+  const low = c.createBiquadFilter()
+  low.type = 'lowpass'
+  low.frequency.value = 900
+  const gain = c.createGain()
+  gain.gain.value = 0.12
+  src.connect(low).connect(gain).connect(c.destination)
+  src.start(at)
+  const thump = c.createOscillator()
+  thump.type = 'sine'
+  thump.frequency.setValueAtTime(180, at)
+  thump.frequency.exponentialRampToValueAtTime(90, at + 0.08)
+  const g2 = c.createGain()
+  g2.gain.setValueAtTime(0.14, at)
+  g2.gain.exponentialRampToValueAtTime(0.001, at + 0.12)
+  thump.connect(g2).connect(c.destination)
+  thump.start(at)
+  thump.stop(at + 0.15)
+}
+
 /** The knock at the door: two labeled choices and nothing of the letter inside. */
 function knockView(msg: string, open: () => void, refuse: () => void): void {
+  knock()
   const view = div('windowView', div('title', '有人敲门'), div('main', div('msg', msg)))
   const raw = openFrame(div('ui-window', view), 'pet/windowTip/alert/bg.png')
   let decided = false
