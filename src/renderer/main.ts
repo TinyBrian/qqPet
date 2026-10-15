@@ -15,6 +15,7 @@ import { closeMenu, openMenu } from './ui/menu'
 import { closeState, openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
 import { windowView } from './ui/window-view'
+import { initLanVisit } from './ui/lan-visit'
 import { resizePetPosition } from '../shared/layout'
 
 let lastPlatformError = ''
@@ -420,6 +421,9 @@ window.qqpet.onClipboard((text) => {
   note('主人刚复制了一段文字')
   speak({ s: text.length > CLIP_MAX ? `${text.slice(0, CLIP_MAX)}…` : text, b: '当前复制的文字', now: true, ai: clipAsk(text) }, 'speak')
 })
+
+// Friend LAN presence moved into initLanVisit (one registration per channel).
+initLanVisit()
 
 window.qqpet.onPresence((gone) => {
   if (!save.havePet) return

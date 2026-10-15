@@ -5,23 +5,37 @@ import { useItem } from '../pet/items'
 import { work, workGoods } from '../pet/jobs'
 import { speak } from '../pet/pet'
 import { addInfo, info, save, setInfo, update } from '../pet/store'
+import { sendLetterTo, lanPeers } from './lan-visit'
 import { openBox } from './box'
 import './css/chat.css'
 import { button, div } from './dom'
 import { setHidden } from './menu'
 
 const DO =
-  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、HIDE、QUIET 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，HIDE=隐身，QUIET=免打扰。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。'
+  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，HIDE=隐身，QUIET=免打扰。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
+
+/** The protocol plus who is online, so LETTER has a real name to pick. */
+function doPrompt(): string {
+  const names = lanPeers().map((p) => p.name)
+  return `${DO}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}`
+}
 
 // Small models also put the action word after the line instead of before it.
 const ACT = /\b(FEED|CLEAN|WORK|HIDE|QUIET|NONE)\b[:：]?/i
+const LETTER = /^\s*LETTER[:：]\s*([^:：]+?)[:：]\s*(?:「([^」]*)」)?\s*/i
 
-function parse(text: string): { act: string; say: string } {
+function parse(text: string): { act: string; arg: { name: string; text: string }; say: string } {
+  const l = text.match(LETTER)
+  if (l) return { act: 'LETTER', arg: { name: l[1].trim(), text: (l[2] ?? '').trim() }, say: text.replace(LETTER, '').replace(/\s+/g, ' ').trim() }
   const m = text.match(ACT)
-  return { act: m ? m[1].toUpperCase() : 'NONE', say: text.replace(ACT, '').replace(/\s+/g, ' ').trim() }
+  return { act: m ? m[1].toUpperCase() : 'NONE', arg: { name: '', text: '' }, say: text.replace(ACT, '').replace(/\s+/g, ' ').trim() }
 }
 
-function doAct(act: string, say: string): void {
+function doAct(act: string, say: string, arg: { name: string; text: string }): void {
+  if (act === 'LETTER') {
+    sendLetterTo(arg.name, arg.text, say)
+    return
+  }
   if (act === 'FEED') {
     const g = listGoods('food', 1, 1).list[0]
     if (g) return useItem(g, false, say)
@@ -105,14 +119,14 @@ export function openChat(): void {
       show({ role: 'assistant', content: canned })
       speak({ s: canned, now: true, ai: false }, 'speak')
     } else {
-      const reply = await ask([...history.slice(-TURNS), said], DO)
-      const { act, say } = parse(reply ?? '')
+      const reply = await ask([...history.slice(-TURNS), said], doPrompt())
+      const { act, arg, say } = parse(reply ?? '')
       const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
       // The model keeps to the action protocol only while its own earlier replies show it.
-      if (reply) history.push(said, { role: 'assistant', content: `${act} ${line}` })
+      if (reply) history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
       show({ role: 'assistant', content: line })
       note('刚和主人聊过天')
-      if (reply) doAct(act, line)
+      if (reply) doAct(act, line, arg)
     }
     input.disabled = false
     input.focus()

@@ -111,6 +111,8 @@ export interface Settings {
   watchApp: boolean
   /** Randomly walk around the desktop. Off by default. */
   roam: boolean
+  /** Friend LAN presence and visits; off by default. */
+  lan: boolean
   /** Pressing the pet shows the action bar. On by default. */
   petBar: boolean
   /** Chat cheats (元宝+N, 不要死, ...) are recognised. On by default. */

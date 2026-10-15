@@ -253,6 +253,13 @@ const TABS: { label: string; options: Option[] }[] = [
         { type: 'radio', label: '随机走动（默认关，贴边不走）', title: '站立闲着时，走动、问候、动画三者随机抽。贴边探头不走。', on: () => s.roam, run: () => update('settings', { roam: !s.roam }) },
         {
           type: 'radio',
+          label: '局域网联机（默认关）',
+          title: '同一局域网（含 Radmin 等虚拟局域网）内的好友宠物自动互相发现，上线下线互相播报；之后的串门传话也走这里。关闭后完全隐身，不收发任何消息。',
+          on: () => s.lan,
+          run: () => update('settings', { lan: !s.lan }),
+        },
+        {
+          type: 'radio',
           label: '开启宠物音效（贴边探头、点脸逗它）',
           title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
           on: () => s.sound,
