@@ -251,6 +251,10 @@ class PetService : Service() {
             val move = ++moves
             root.viewTreeObserver.registerFrameCommitCallback { reveal(move) }
         }
+        // The committed frame must already carry the new page offset; waiting for the pre-draw listener to
+        // read the new location leaves the page a frame behind the window, so it jumps once when revealed.
+        web.translationX = -nx.toFloat()
+        web.translationY = -ny.toFloat()
         params.x = nx
         params.y = ny
         params.width = maxOf(ceil(w * scale).toInt(), 1)
