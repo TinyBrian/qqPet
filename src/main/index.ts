@@ -48,7 +48,13 @@ app.whenReady().then(() => {
   app.dock?.hide()
   loadSave()
   // The talk key records locally; nothing else asks for permissions here.
-  session.defaultSession.setPermissionRequestHandler((_e, permission, cb) => cb(permission === 'media' || permission === 'clipboard-read'))
+  // The talk key records in the pet window only, and only sound: a game or community page never gets the microphone
+  // or the camera. Every other permission keeps Electron's default (granted), as before voice existed.
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb, details) => {
+    if (permission !== 'media') return cb(true)
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+    cb(wc === win.webContents && types.length > 0 && types.every((t) => t === 'audio'))
+  })
   // CSS keeps decoded images per stylesheet, so @2x bitmaps follow the hd setting as of launch only.
   if (getSave().settings.hd) {
     session.defaultSession.webRequest.onBeforeSendHeaders((d, cb) => cb({ requestHeaders: { ...d.requestHeaders, 'X-HD': '1' } }))
