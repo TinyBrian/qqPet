@@ -117,6 +117,16 @@ export async function talkToPet(content: string): Promise<string> {
 }
 
 let close: (() => void) | null = null
+let chatInput: HTMLInputElement | null = null
+
+/** Voice fills the chat box (opening it when needed) and never sends by itself. */
+export function toChat(text: string): void {
+  if (!close) openChat()
+  if (chatInput) {
+    chatInput.value = text
+    chatInput.focus()
+  }
+}
 
 /** Chat with the pet; replies also come in its speech bubble. The window keeps keyboard focus while this is open. */
 export function openChat(): void {
@@ -128,6 +138,7 @@ export function openChat(): void {
   }
   history.forEach((m) => show(m.role === 'assistant' ? { ...m, content: parse(m.content).say } : m))
   const input = Object.assign(document.createElement('input'), { className: 'chatInput f1', maxLength: 200, placeholder: `和${info.name}说点什么，回车发送` })
+  chatInput = input
 
   async function send(): Promise<void> {
     const content = input.value.trim()
@@ -161,6 +172,7 @@ export function openChat(): void {
       onClose: () => {
         window.qqpet.setFocusable(false)
         close = null
+        chatInput = null
       },
     },
   )

@@ -5,6 +5,7 @@ import { SwfPlayer } from '../swf/player'
 import './css/visit.css'
 import { button, div } from './dom'
 import { openFrame } from './box'
+import { setVoiceSink } from './voice-sink'
 import { floatMood } from './float'
 
 const MOOD = 10
@@ -78,6 +79,7 @@ export function visitDelivery(from: { name: string; sex: Sex; stage: Stage }, te
     if (said) return
     said = true
     clearTimeout(leave)
+    setVoiceSink(null)
     closeView()
     window.qqpet.setFocusable(false)
     finish()
@@ -146,6 +148,18 @@ export function visitDelivery(from: { name: string; sex: Sex; stage: Stage }, te
   })
   input.addEventListener('input', () => (send.textContent = input.value.trim() ? '回话' : '送客'))
   view.append(send)
+  // Speaking fills this box (live while held, final on release) but never sends;
+  // the button or Enter decides. The input event keeps the button label honest.
+  setVoiceSink({
+    partial: (text) => {
+      input.value = text
+      input.dispatchEvent(new Event('input'))
+    },
+    final: (text) => {
+      input.value = text
+      input.dispatchEvent(new Event('input'))
+    },
+  })
   // The visitor goes home rather than waiting forever at a silent screen.
   const leave = window.setTimeout(() => done(''), 300_000)
   // The scene key is friend_host: our pet hosts (suffix) and the visitor should

@@ -3,7 +3,8 @@
 // transcription. The transcript walks the same pipeline as the chat box.
 import { speak } from '../pet/pet'
 import { say, retell } from './talk'
-import { talkToPet } from './chat'
+import { toChat } from './chat'
+import { voiceSink } from './voice-sink'
 
 const RATE = 16_000
 /** Ignore stray taps; a real sentence is longer. */
@@ -34,11 +35,20 @@ function hear(text: string): void {
 export function initVoice(): void {
   window.qqpet.onVoiceStart?.(() => void start())
   window.qqpet.onVoiceStop?.(() => stop())
-  window.qqpet.onVoicePartial?.((text) => hear(text))
+  window.qqpet.onVoicePartial?.((text) => {
+    // A dialog waiting for a spoken line shows it live in its own input.
+    const s = voiceSink()
+    if (s) return s.partial?.(text)
+    hear(text)
+  })
   window.qqpet.onVoiceText?.((text) => {
     hearing = ''
+    const s = voiceSink()
+    // The sink keeps listening: several utterances may polish one reply.
+    if (s) return s.final(text)
     if (!text) return tell('没听清呢~')
-    void talkToPet(text)
+    // Voice only fills the chat box; the person decides when it goes out.
+    toChat(text)
   })
   window.qqpet.onVoiceError?.((message) => {
     hearing = ''
