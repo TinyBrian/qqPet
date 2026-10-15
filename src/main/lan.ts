@@ -16,6 +16,8 @@ const HELLO_MS = 5000
 /** A peer silent for this long (3 missed heartbeats) is gone. */
 const TIMEOUT_MS = 15_000
 const PING_MS = 30_000
+/** Longest accepted line on a direct link; visit letters are a sentence or two. */
+export const MAX_LINE = 64 * 1024
 
 /**
  * The stable LAN identity of this install, created once and kept next to the
@@ -220,6 +222,8 @@ export class LanNode {
     let buf = ''
     sock.on('data', (data) => {
       buf += data.toString('utf8')
+      // Anyone on the LAN can connect: a line that never ends must not grow without bound.
+      if (buf.length > MAX_LINE && buf.indexOf('\n') < 0) return sock.destroy()
       let i: number
       while ((i = buf.indexOf('\n')) >= 0) {
         const text = buf.slice(0, i)

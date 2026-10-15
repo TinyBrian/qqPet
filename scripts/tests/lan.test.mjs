@@ -103,3 +103,20 @@ test('queued visits survive a restart and flush per peer', () => {
   assert.deepEqual(reborn.take('peer-a'), [], 'a taken delivery must not repeat')
   assert.deepEqual(reborn.take('peer-b'), [{ t: 'visit', text: '来玩呀' }])
 })
+
+test('a direct link drops a sender whose line never ends', async () => {
+  const { connect } = await import('node:net')
+  const { MAX_LINE } = await import('../../src/main/lan.ts')
+  const node = mk([], 'cap-1', '戊')
+  await node.start()
+  try {
+    const sock = connect(node.tcpPort, '127.0.0.1')
+    await new Promise((r) => sock.once('connect', r))
+    const closed = new Promise((r) => sock.once('close', r))
+    sock.on('error', () => {})
+    sock.write('x'.repeat(MAX_LINE + 1024))
+    await Promise.race([closed, sleep(3000).then(() => assert.fail('the oversized link stayed open'))])
+  } finally {
+    node.stop()
+  }
+})
