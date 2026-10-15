@@ -3,7 +3,7 @@
 // transcription. The transcript walks the same pipeline as the chat box.
 import { speak } from '../pet/pet'
 import { say, retell } from './talk'
-import { toChat } from './chat'
+import { talkToPet } from './chat'
 import { voiceSink } from './voice-sink'
 
 const RATE = 16_000
@@ -44,11 +44,12 @@ export function initVoice(): void {
   window.qqpet.onVoiceText?.((text) => {
     hearing = ''
     const s = voiceSink()
-    // The sink keeps listening: several utterances may polish one reply.
+    // A dialog waiting for words only fills: transcription slips get fixed by
+    // hand before anything goes out.
     if (s) return s.final(text)
     if (!text) return tell('没听清呢~')
-    // Voice only fills the chat box; the person decides when it goes out.
-    toChat(text)
+    // Talking to the pet is talking to the pet: release sends, no chat window.
+    void talkToPet(text)
   })
   window.qqpet.onVoiceError?.((message) => {
     hearing = ''
