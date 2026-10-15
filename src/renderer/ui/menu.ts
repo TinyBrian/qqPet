@@ -1,4 +1,4 @@
-import { bury, machine, speak } from '../pet/pet'
+import { bury, machine, rest, speak } from '../pet/pet'
 import type { TrayMenuItem } from '../../shared/ipc'
 import { info, save, setPaused, setTray, update } from '../pet/store'
 import { openChat } from './chat'
@@ -10,6 +10,7 @@ import { openPetInfo } from './petinfo'
 import { openSetup } from './setup'
 import { openShop } from './shop'
 import { openState } from './state'
+import { visitFriend } from './visit'
 import { windowView } from './window-view'
 
 const ditu = (n: number): string => `pet/Menu/ditu0${n}.png`
@@ -96,6 +97,13 @@ function items(adopt: () => void): Item[] {
     help,
     state,
     { label: save.settings.paused ? '开始成长' : '停止成长', on: save.settings.paused, run: togglePaused },
+    {
+      label: '一起玩耍',
+      children: [
+        { label: '休息一下', run: () => void (rest() || speak({ s: '[host]，我现在还不想躺下呢~', now: true }, 'speak')) },
+        { label: '找朋友玩', run: visitFriend },
+      ],
+    },
     leave,
   ]
 }

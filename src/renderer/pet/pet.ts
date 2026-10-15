@@ -12,7 +12,7 @@ import { doctor, useItem } from './items'
 import { deliverMails } from './mail'
 import { Machine, type Pose } from './machine'
 import { rand } from './rand'
-import { lookUrl, SINGLE_FRAME_HOLD, walkUrl } from './router'
+import { lookUrl, restPlan, SINGLE_FRAME_HOLD, walkUrl } from './router'
 import {
   activity,
   addInfo,
@@ -51,6 +51,8 @@ export const applyPetSound = (): void => petSwf.applySound()
 
 export const machine = new Machine(petSwf, (over, next) => {
   clearTimeout(idleTimer)
+  // Anything else (drag, click, a queued action) ends the rest.
+  if (next.a !== 'liedown' && next.a !== 'lying') endRest()
   if (next.a === 'normal' || next.a === 'hideleft' || next.a === 'hideright') {
     idleTimer = window.setTimeout(idle, Math.trunc(Math.random() * 40000 + 20000))
   }
@@ -164,10 +166,40 @@ function walk(): boolean {
   return true
 }
 
+const REST_POSES = ['liedown', 'lying']
+let restTimer = 0
+const resting = (): boolean => REST_POSES.includes(machine.pose.a)
+
+function endRest(): void {
+  clearTimeout(restTimer)
+  restTimer = 0
+}
+
+/** Lies down for 20-60 s (or until interrupted), then gets up. False when this pet cannot. */
+export function rest(): boolean {
+  if (busy() || playingDesk() || info.health < 5 || resting()) return false
+  if (machine.pose.a !== 'normal' && machine.pose.a !== 'walk') return false
+  const plan = restPlan(info.sex, stage())
+  if (!plan) return false
+  stopWalk()
+  const lying: Pose = { a: 'lying', opt: { url: plan.lying.url, opt: { opt: { overCurrentFrame: plan.lying.freeze } } } }
+  // play() clears the queue when it starts, so the lying pose is queued once lying down is on screen.
+  if (plan.down) machine.play({ a: 'liedown', opt: { url: plan.down, opt: {} }, s: () => machine.add(lying) })
+  else machine.play(lying)
+  endRest()
+  restTimer = window.setTimeout(() => {
+    restTimer = 0
+    if (!resting()) return
+    machine.play(plan.up ? { a: 'getup', opt: { url: plan.up, opt: {} } } : { a: 'normal' })
+  }, rand(20000, 60000))
+  return true
+}
+
 /** After 20-60 s of standing: walk / play / talk, same timer. Walk only if roam is on. */
 function idle(): void {
   if (peeking() || playingDesk()) return
   if (maybeLead()) return
+  if (Math.random() < 0.1 && rest()) return
   if (save.settings.roam) {
     const n = Math.trunc(Math.random() * 3)
     if (n === 0 && walk()) return

@@ -53,7 +53,7 @@ function fixture(platform) {
     innerWidth: 1920, innerHeight: 1080,
     save, info: { health: 5 },
     div: element, button: (cls, run, ...children) => element(cls, ...children), frame: content => content,
-    openChat: () => actions.push('chat'), openShop: () => actions.push('shop'),
+    openChat: () => actions.push('chat'), openShop: () => actions.push('shop'), rest: () => actions.push('rest'), visitFriend: () => actions.push('visit'),
     openGoods: kind => actions.push(kind), openPetInfo: () => actions.push('info'),
     openState: () => actions.push('state'), openSetup: () => actions.push('setup'),
     update: (key, patch) => Object.assign(save[key], patch),
@@ -72,7 +72,7 @@ test('macOS tray popup ignores overlay coordinates and dispatches the existing a
   assert.equal(f.appended.length, 0, 'a tray on another display must not create a clamped HTML menu')
   assert.equal(f.clicks.length, 1, 'opening a native menu must not also open the status panel')
   const menu = f.popups[0]
-  assert.deepEqual(Array.from(menu, item => item.label), ['和我聊天', '打开商城', '喂养宠物', '隐藏宠物', '设置帮助', '宠物状态', '停止成长', '退出宠物'])
+  assert.deepEqual(Array.from(menu, item => item.label), ['和我聊天', '打开商城', '喂养宠物', '隐藏宠物', '设置帮助', '宠物状态', '停止成长', '一起玩耍', '退出宠物'])
   menu[2].submenu[1].click()
   assert.deepEqual(f.actions, ['clean'])
   f.save.settings.paused = true

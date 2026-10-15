@@ -77,6 +77,15 @@ export interface ActionData {
   variants: Partial<Record<Stage, Record<string, string[]>>>
   /** Extra idle plays mixed into the numbered ones, one slot each. `single`: one root frame, animated inside. */
   extraPlay?: Partial<Record<Stage, { clip: string; single?: boolean }[]>>
+  /** Lie down and rest: optional `down` clip, a held `lying` pose (frozen on `freeze` if set), optional `up` clip. */
+  rest?: Partial<Record<Stage, RestClips>>
+}
+
+export interface RestClips {
+  down?: string
+  lying: string
+  freeze?: number
+  up?: string
 }
 
 /** Single-root-frame clips loop inside a MovieClip; this is roughly one loop. */
@@ -120,8 +129,16 @@ export const ACTIONS: Record<Sex, ActionData> = {
       Egg: [{ clip: 'motion/003', single: true }, { clip: 'turn/ctoe' }],
       Adult: [{ clip: 'motion/005', single: true }, { clip: 'motion/009', single: true }, { clip: 'motion/017' }, { clip: 'motion/021' }],
     },
+    rest: {
+      // ctoj (21 frames) lies down; frozen one frame short of the end so the machine holds it.
+      Egg: { lying: 'turn/ctoj', freeze: 19 },
+      // jtoe (20 frames) gets up from lying; its first frame is the lying pose.
+      Kid: { lying: 'turn/jtoe', freeze: 1, up: 'turn/jtoe' },
+      Adult: { down: 'Etoj', lying: 'prostrate/Stand', up: 'Jtoc' },
+    },
   },
-  MM: { play: { egg: 29, kid: 111, peaceful: 100 }, variants: {} },
+  // MM only has the adult lying pose.
+  MM: { play: { egg: 29, kid: 111, peaceful: 100 }, variants: {}, rest: { Adult: { lying: 'prostrate/Stand' } } },
 }
 
 const KID = { exit: { end: 3 }, eat: { end: 1 }, clean: { notNum: true }, sick: { notNum: true }, cure: { notNum: true } }
@@ -189,4 +206,18 @@ export function walkUrl(sex: Sex, stage: Stage, dir: 'left' | 'right'): string {
 export function lookUrl(sex: Sex, stage: Stage, dir: 'left' | 'right'): string | null {
   const v = variant(sex, stage, `look_${dir}`)
   return v ? `pet/Action/${sex}/${stage}/${v}.swf` : null
+}
+
+export interface RestPlan {
+  down?: string
+  lying: { url: string; freeze?: number }
+  up?: string
+}
+
+/** URLs for lying down to rest, or null when this pet has no lying pose. */
+export function restPlan(sex: Sex, stage: Stage): RestPlan | null {
+  const r = ACTIONS[sex].rest?.[stage]
+  if (!r) return null
+  const url = (clip: string): string => `pet/Action/${sex}/${stage}/${clip}.swf`
+  return { down: r.down && url(r.down), lying: { url: url(r.lying), freeze: r.freeze }, up: r.up && url(r.up) }
 }
