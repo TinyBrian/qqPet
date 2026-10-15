@@ -53,7 +53,7 @@ function fixture(platform) {
     innerWidth: 1920, innerHeight: 1080,
     save, info: { health: 5 },
     div: element, button: (cls, run, ...children) => element(cls, ...children), frame: content => content,
-    openChat: () => actions.push('chat'), openShop: () => actions.push('shop'), rest: () => actions.push('rest'), visitFriend: () => actions.push('visit'),
+    openChat: () => actions.push('chat'), openShop: () => actions.push('shop'), rest: () => actions.push('rest'), visitFriend: () => actions.push('visit'),  sendLetter: () => actions.push("letter"),
     openGoods: kind => actions.push(kind), openPetInfo: () => actions.push('info'),
     openState: () => actions.push('state'), openSetup: () => actions.push('setup'),
     update: (key, patch) => Object.assign(save[key], patch),
