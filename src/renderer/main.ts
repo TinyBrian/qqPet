@@ -195,6 +195,8 @@ petEl.addEventListener('contextmenu', (e) => openMenu({ x: pageX(e), y: pageY(e)
 let releaseDomInput = (): void => {}
 const petInput = createPetInput({
   clock: () => performance.now(),
+  requestFrame: requestAnimationFrame,
+  cancelFrame: cancelAnimationFrame,
   position: () => ({ x: info.lastX, y: info.lastY, size }),
   begin: () => {
     closeMenu()
@@ -203,11 +205,13 @@ const petInput = createPetInput({
   },
   active: (on) => { dragging = on; if (!on) releaseDomInput() },
   hold: (x, y) => openMenu({ x, y, pet: true }, adoptPet),
-  lift: (s) => {
-    // Preserve upstream: Adult uses the scruff; Egg/Kid keep their stage/sex and original grab point.
+  lift: (s, align) => {
     if (stage() === 'Adult') {
-      machine.play({ a: 'drag', opt: { url: 'pet/Action/drag.swf', opt: {} } })
-      return { dx: s * 0.73, dy: s * 0.14 }
+      // Hold the upper-right rim of the head, so the finger lifts it from the side.
+      // Keep following the original grab until the double-buffered SWF is on screen.
+      machine.play({ a: 'drag', opt: { url: 'pet/Action/drag.swf', opt: {} },
+        s: () => align({ dx: s * 0.58, dy: s * 0.30, duration: 120 }) })
+      return null
     }
     machine.play({ a: 'drag' })
     return null
