@@ -6,6 +6,8 @@
 
 import { createRequire } from 'node:module'
 
+export { DEFAULT_HOTKEY, hotkeyLabel } from '../shared/hotkey'
+
 const NAMED: Record<string, number> = {
   Ctrl: 0x11, LeftCtrl: 0xa2, RightCtrl: 0xa3,
   Alt: 0x12, LeftAlt: 0xa4, RightAlt: 0xa5,
@@ -15,9 +17,6 @@ const NAMED: Record<string, number> = {
   Insert: 0x2d, Delete: 0x2e, Home: 0x24, End: 0x23, PageUp: 0x21, PageDown: 0x22,
   Mouse3: 0x04, Mouse4: 0x05, Mouse5: 0x06,
 }
-
-/** The talk key: tap left Alt, then hold it. Every keyboard has one. */
-export const DEFAULT_HOTKEY = 'LeftAlt*2'
 
 export interface Hotkey {
   /** Virtual-key codes, all down together. */
