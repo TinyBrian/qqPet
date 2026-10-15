@@ -96,6 +96,7 @@ public struct M { public int Size; public R Mon, Work; public int Flags; }
 [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out R r);
 [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+[DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
 [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h, int flags);
 [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref M info);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);
@@ -109,8 +110,9 @@ public static bool Covers(IntPtr h) {
   var c = new System.Text.StringBuilder(32); GetClassName(h, c, 32);
   if (c.ToString() == "Progman" || c.ToString() == "WorkerW") return false;
   R r; M m = new M(); m.Size = Marshal.SizeOf(m);
-  // A maximized window covers the monitor too once the taskbar auto-hides; full screen is never maximized.
-  if (IsZoomed(h) || !GetWindowRect(h, out r) || !GetMonitorInfo(MonitorFromWindow(h, 2), ref m)) return false;
+  // A maximized window covers the monitor too once the taskbar auto-hides, so one with a caption does not count.
+  // Full screen drops the caption but keeps WS_MAXIMIZE when entered from a maximized window (F11 in a maximized browser).
+  if ((IsZoomed(h) && (GetWindowLong(h, -16) & 0xC00000) == 0xC00000) || !GetWindowRect(h, out r) || !GetMonitorInfo(MonitorFromWindow(h, 2), ref m)) return false;
   return r.L <= m.Mon.L && r.T <= m.Mon.T && r.Rt >= m.Mon.Rt && r.B >= m.Mon.B;
 }'
 while ($true) {
