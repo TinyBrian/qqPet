@@ -166,13 +166,32 @@ function pickFriend(ok: (p: LanPeer) => void): void {
 
 function goVisit(peer: LanPeer): void {
   if (stage() === 'Egg') return tell('主人~ 等我破壳了再去送信吧~')
-  promptView(`去${peer.name}家送信`, '想让它带句什么话？（可留空单纯去玩）', (text) => {
-    const msg: VisitMsg = { t: 'visit', name: info.name, host: info.host, sex: info.sex, stage: stage(), text }
-    void window.qqpet.lanSend?.(peer.id, msg).then((r) => {
-      if (r === 'queued') return tell(`主人~ ${peer.name}不在家，我先把话记下，等他回来就去说~~`)
-      depart(peer.id, `主人~ 我去${peer.name}家送信啦~~`)
-    })
+  promptView(`去${peer.name}家送信`, '想让它带句什么话？（可留空单纯去玩）', (text) => dispatch(peer, text))
+}
+
+/** Sets off with the letter (or queues it) and reports where the pet went. */
+function dispatch(peer: LanPeer, text: string): void {
+  const msg: VisitMsg = { t: 'visit', name: info.name, host: info.host, sex: info.sex, stage: stage(), text }
+  void window.qqpet.lanSend?.(peer.id, msg).then((r) => {
+    if (r === 'queued') return tell(`主人~ ${peer.name}不在家，我先把话记下，等他回来就去说~~`)
+    depart(peer.id, `主人~ 我去${peer.name}家送信啦~~`)
   })
+}
+
+/**
+ * The chat AI's letter tool: the model names a friend and the line to carry.
+ * Refusals speak for themselves; `say` is the model's own line before leaving.
+ */
+export function sendLetterTo(name: string, text: string, say: string): void {
+  const say1 = say.trim()
+  const line = (s: string): void => speak({ s: say1 ? `${say1}（${s}）` : s, now: true, ai: false }, 'speak')
+  if (stage() === 'Egg') return line('主人~ 等我破壳了再去送信吧~')
+  if (awayTo !== null) return line('主人~ 我正在外面呢，等我回来再说~')
+  const list = lanPeers()
+  const peer = list.find((p) => p.name === name) ?? list.find((p) => p.name.includes(name) || name.includes(p.name))
+  if (!peer) return line(`主人~ 没有叫「${name}」的朋友在线呢`)
+  if (say1) tell(say1)
+  dispatch(peer, text)
 }
 
 function onMsg(fromId: string, m: VisitMsg): void {
