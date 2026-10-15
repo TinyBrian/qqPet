@@ -7,7 +7,7 @@ import { route } from '../../src/renderer/pet/router.ts'
 import { createPetInput } from '../../src/renderer/pet/input.ts'
 import { resizePetPosition } from '../../src/shared/layout.ts'
 
-test('drag keeps the stage, sex and adult mood, using an available standing clip', () => {
+test('drag fallback keeps the stage, sex and mood', () => {
   for (const sex of ['GG', 'MM']) {
     for (const stage of ['Egg', 'Kid', 'Adult']) {
       for (const mood of ['happy', 'peaceful', 'upset', 'sad']) {
@@ -111,6 +111,8 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     adopt: noop,
     closeMenu: () => { menuCloses++ },
     showControl: noop,
+    clearFacePoints: noop,
+    showFacePoints: noop,
     catchDiudiule: noop,
     releaseDiudiule: (...args) => { releases.push(args); return false },
     scheduleHide: noop,
@@ -133,6 +135,8 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
   }
   return {
     info, poses, releases, pointer, save: services.save, clickThrough,
+    readInt: key => services.window.DataCenter_ReadInt32(key),
+    movieMove: (dx, dy) => services.window.API.MoveBy(dx, dy),
     startPose: () => poses.at(-1)?.s?.(),
     advance: flushFrame,
     windowPointer: (type, x, y) => pointer(type, x, y, windowEvents),
@@ -191,6 +195,34 @@ for (const stage of ['Egg', 'Kid']) test(`${stage} drag keeps the original grab 
       assert.equal(info.lastY, 340)
     }
   }
+})
+
+test('drag movies see the lift threshold and release without moving the host a second time', () => {
+  const app = renderer(144)
+  assert.equal(app.readInt('drag'), 0)
+  assert.equal(app.readInt('unknown'), 0)
+  app.pointer('pointerdown', 550, 340)
+  app.pointer('pointermove', 555, 340)
+  assert.equal(app.readInt('drag'), 0, 'a press alone must not enter the held loop')
+  app.pointer('pointermove', 580, 365)
+  assert.equal(app.readInt('drag'), 1)
+  app.pointer('pointerup', 580, 365)
+  assert.equal(app.readInt('drag'), 0)
+  const position = { ...app.info }
+  app.movieMove(0, 10)
+  assert.deepEqual(app.info, position, 'outgoing drop frames cannot shift the new pose')
+
+  app.pointer('pointerdown', 580, 365)
+  app.pointer('pointermove', 610, 385)
+  assert.equal(app.readInt('drag'), 1)
+  app.pointer('pointercancel', 610, 385)
+  assert.equal(app.readInt('drag'), 0)
+
+  app.pointer('pointerdown', 610, 385)
+  app.pointer('pointermove', 640, 410)
+  assert.equal(app.readInt('drag'), 1)
+  app.pause()
+  assert.equal(app.readInt('drag'), 0)
 })
 
 test('adult drag uses the upstream scruff animation and anchors the held head under the cursor', () => {

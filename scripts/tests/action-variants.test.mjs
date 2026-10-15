@@ -17,20 +17,47 @@ test('every variant clip listed in ACTIONS exists on disk', () => {
   }
 })
 
-test('numbered play counts match the files on disk for both sexes', () => {
+test('every allowed numbered play exists on disk for both sexes', () => {
   for (const [sex, { play }] of Object.entries(ACTIONS)) {
     const dirs = { egg: `pet/Action/${sex}/Egg/play`, kid: `pet/Action/${sex}/Kid/play`, peaceful: `pet/Action/${sex}/Adult/peaceful/play` }
     for (const [k, dir] of Object.entries(dirs)) {
       for (let i = 1; i <= play[k]; i++) assert.ok(has(`${dir}/P${i}.swf`), `${dir}/P${i}.swf`)
-      assert.ok(!has(`${dir}/P${play[k] + 1}.swf`), `${dir} has more than ${play[k]} plays`)
     }
   }
+})
+
+test('GG younger idle plays keep the original artwork in every mood', () => {
+  const random = Math.random
+  try {
+    for (const [stage, key, count, importedLast] of [['Egg', 'egg', 29, 47], ['Kid', 'kid', 111, 127]]) {
+      const dir = `pet/Action/GG/${stage}/play`
+      const expected = Array.from({ length: count }, (_, i) => `${dir}/P${i + 1}.swf`)
+      assert.equal(ACTIONS.GG.play[key], count)
+      // Imported adult clips stay in the content pack, outside the younger stage's playable pool.
+      for (let i = count + 1; i <= importedLast; i++) assert.ok(has(`${dir}/P${i}.swf`))
+      for (const mood of ['happy', 'peaceful', 'upset', 'sad']) {
+        const selected = expected.map((url, i) => {
+          Math.random = () => (i + 0.5) / count
+          const target = route('GG', stage, 'play', mood)
+          assert.equal(target.url, url)
+          return target.url
+        })
+        assert.deepEqual(selected, expected)
+        for (const [roll, url] of [[0, expected[0]], [1 - Number.EPSILON, expected.at(-1)]]) {
+          Math.random = () => roll
+          assert.equal(route('GG', stage, 'play', mood).url, url)
+        }
+      }
+    }
+  } finally { Math.random = random }
 })
 
 test('variant picks by index and returns null without variants', () => {
   assert.equal(variant('GG', 'Kid', 'dirty', () => 1), 'lead/dirty20110805')
   assert.equal(variant('GG', 'Kid', 'poor', () => 0), 'Poor')
   assert.equal(variant('MM', 'Kid', 'dirty'), null)
+  assert.equal(variant('GG', 'Egg', 'drag'), null)
+  assert.equal(variant('GG', 'Kid', 'drag'), null)
   assert.equal(variant('GG', 'Adult', 'drag'), null)
 })
 
@@ -69,10 +96,10 @@ test('extra plays exist, take one slot each, and only single-frame ones carry ho
       for (const e of list) assert.ok(has(`pet/Action/${sex}/${stage}/${e.clip}.swf`), e.clip)
     }
   }
-  // Egg GG: 47 numbered + 2 extras; the last two slots are the extras.
-  assert.equal(extraPlay('GG', 'Egg', 47, 0), null)
-  assert.equal(extraPlay('GG', 'Egg', 47, 47 / 49)?.clip, 'motion/003')
-  assert.equal(extraPlay('GG', 'Egg', 47, 0.9999)?.clip, 'turn/ctoe')
+  // The imported Egg extras contain adult artwork, so every roll keeps a numbered play.
+  for (const roll of [0, 0.5, 29 / 31, 0.9999]) assert.equal(extraPlay('GG', 'Egg', 29, roll), null)
+  assert.equal(extraPlay('GG', 'Adult', 127, (127 + 0.25) / 131)?.clip, 'motion/005')
+  assert.equal(extraPlay('GG', 'Adult', 127, 0.9999)?.clip, 'motion/021')
   assert.equal(extraPlay('MM', 'Egg', 29, 0.9999), null)
   for (let i = 0; i < 400; i++) {
     const t = route('GG', 'Adult', 'play', 'happy')
@@ -101,6 +128,24 @@ test('hide variants resolve to existing clips', () => {
       }
     }
   }
+})
+
+test('younger peeking always keeps its stage-specific artwork', () => {
+  const random = Math.random
+  try {
+    for (const roll of [0, 0.5, 0.999999]) {
+      Math.random = () => roll
+      for (const sex of ['GG', 'MM']) {
+        for (const stage of ['Egg', 'Kid']) {
+          for (const side of ['left', 'right']) {
+            const target = route(sex, stage, `hide${side}`, 'happy')
+            assert.equal(target.url, `pet/Action/${sex}/${stage}/Hide_${side}1.swf`)
+            assert.ok(has(target.url), target.url)
+          }
+        }
+      }
+    }
+  } finally { Math.random = random }
 })
 
 test('small-game icons exist', async () => {
