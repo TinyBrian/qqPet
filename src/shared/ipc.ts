@@ -1,3 +1,4 @@
+import type { ShapeRect } from './hit-shape'
 import type { SaveData, SavePatch, Sex } from './save'
 
 export const IPC = {
@@ -20,6 +21,7 @@ export const IPC = {
   presence: 'app:presence',
   front: 'app:front',
   setClickThrough: 'win:set-click-through',
+  setHitShape: 'win:set-hit-shape',
   setAlwaysOnTop: 'win:set-always-on-top',
   setFocusable: 'win:set-focusable',
   setAutoStart: 'app:set-auto-start',
@@ -157,6 +159,11 @@ export interface QQPetApi {
   /** Opens a web page in the system browser. */
   openUrl(url: string): void
   setClickThrough(enabled: boolean): void
+  /**
+   * Linux only: the page rectangles (CSS px) that take the mouse; the rest of the window lets it through.
+   * A click-through window there never learns where the cursor is (#45), so hit testing cannot wait for it.
+   */
+  setHitShape?(rects: ShapeRect[]): void
   setAlwaysOnTop(enabled: boolean): void
   setFocusable(enabled: boolean): void
   setAutoStart(enabled: boolean): void

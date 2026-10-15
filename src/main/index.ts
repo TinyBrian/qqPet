@@ -1,9 +1,12 @@
+import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { app, clipboard, dialog, ipcMain, net, powerMonitor, session, shell } from 'electron'
 import { IPC, type TrayMenuItem, type TrayState } from '../shared/ipc'
 import type { SavePatch, Sex } from '../shared/save'
 import { aiChat, aiModels } from '../shared/ai'
 import { calendar } from '../shared/calendar'
 import { latestRelease } from '../shared/update'
+import { toShape, type ShapeRect } from '../shared/hit-shape'
 import { weather } from '../shared/weather'
 import { handleScheme, registerScheme } from './protocol'
 import { exportSave, getSave, importSave, loadSave, patchSave, resetSave } from './save'
@@ -11,7 +14,23 @@ import { createPetTray } from './tray'
 import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 
-if (!app.requestSingleInstanceLock()) app.exit(0)
+// A click-through window on Wayland never learns where the cursor is, and its input region cannot be shaped, so
+// nothing on the pet could ever be clicked (#45). Under XWayland, as on X11, an input shape does the hit testing.
+// Electron picks the platform (and records it as the ozone-platform switch) before this script runs, so the app
+// restarts itself with the switch before taking the single-instance lock. An AppImage restarts through its own file,
+// since its mount goes away with this process; app.relaunch() dies with that mount, hence a detached spawn.
+// A platform the user chose on the command line stays.
+const toX11 =
+  process.platform === 'linux' && !!process.env.DISPLAY && app.commandLine.getSwitchValue('ozone-platform') === 'wayland' &&
+  !process.argv.some((a) => a.startsWith('--ozone-platform'))
+if (toX11) {
+  const args = [process.env.APPIMAGE || process.execPath, ...process.argv.slice(1), '--ozone-platform=x11']
+  // Electron keeps app.asar, icudtl.dat... open across the spawn, which would pin the old AppImage mount; bash drops them.
+  const closeFds = 'for f in /proc/$$/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] && eval "exec $n<&-"; done 2>/dev/null; exec "$0" "$@"'
+  const [file, argv] = existsSync('/bin/bash') ? ['/bin/bash', ['-c', closeFds, ...args]] : [args[0], args.slice(1)]
+  spawn(file, argv, { detached: true, stdio: 'inherit' }).unref()
+  app.exit(0)
+} else if (!app.requestSingleInstanceLock()) app.exit(0)
 
 registerScheme()
 
@@ -89,7 +108,13 @@ app.whenReady().then(() => {
   ipcMain.on(IPC.quit, () => app.quit())
   ipcMain.on(IPC.copyText, (_e, text: string) => clipboard.writeText(text))
   ipcMain.on(IPC.openUrl, (_e, url: string) => /^https?:\/\//.test(url) && void shell.openExternal(url))
-  ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => win.setIgnoreMouseEvents(on))
+  // Linux shapes the window's input instead: ignoring the mouse would also hide the cursor from the pet (#45).
+  ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => process.platform === 'linux' || win.setIgnoreMouseEvents(on))
+  ipcMain.on(IPC.setHitShape, (e, rects: ShapeRect[]) => {
+    if (process.platform !== 'linux' || e.sender !== win.webContents || !Array.isArray(rects)) return
+    const { width, height } = win.getContentBounds()
+    win.setShape(toShape(rects, win.webContents.getZoomFactor(), width, height))
+  })
   ipcMain.on(IPC.setAlwaysOnTop, (_e, on: boolean) => win.setAlwaysOnTop(on, 'screen-saver'))
   ipcMain.on(IPC.setFocusable, (_e, on: boolean) => {
     panel = on

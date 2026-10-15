@@ -22,6 +22,7 @@ const api: QQPetApi = {
   copyText: send(IPC.copyText),
   openUrl: send(IPC.openUrl),
   setClickThrough: send(IPC.setClickThrough),
+  ...(process.platform === 'linux' && { setHitShape: send(IPC.setHitShape) }),
   setAlwaysOnTop: send(IPC.setAlwaysOnTop),
   setFocusable: send(IPC.setFocusable),
   setAutoStart: send(IPC.setAutoStart),
