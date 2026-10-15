@@ -122,6 +122,7 @@ fi
   -framework Foundation -framework UIKit -framework WebKit -framework QuartzCore -framework CoreGraphics -framework CoreFoundation
 "$node" "$repo_root/scripts/version.mjs" --plist "$ios_root/Info.plist" --output "$bundle_dir/Info.plist"
 cp "$ios_root"/icons/*.png "$bundle_dir/"
+cp "$ios_root/audio-policy.js" "$bundle_dir/"
 if [[ "$compile_only" == false ]]; then
   if [[ ! -f "$web_root/index.html" || ! -f "$web_root/game.html" ]]; then printf 'Missing built iOS web pages in %s. Run the separate web build first.\n' "$web_root" >&2; exit 1; fi
   if [[ ! -d "$resource_root/pet" ]]; then resource_root="$repo_root/resources"; fi
