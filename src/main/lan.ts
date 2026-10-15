@@ -51,10 +51,15 @@ export class LanNode {
   private readonly peers = new Map<string, { peer: LanPeer; tcp: number; lastSeen: number }>()
   private helloTimer: ReturnType<typeof setInterval> | undefined
   private sweepTimer: ReturnType<typeof setInterval> | undefined
+  private readonly helloMs: number
+  private readonly timeoutMs: number
 
-  constructor(me: { id: string } & LanPeerInit, handlers: LanHandlers = {}) {
+  constructor(me: { id: string } & LanPeerInit, handlers: LanHandlers = {}, timing: { helloMs?: number; timeoutMs?: number } = {}) {
     this.me = me
     this.h = handlers
+    // Tests shrink these to run in seconds instead of half a minute.
+    this.helloMs = timing.helloMs ?? HELLO_MS
+    this.timeoutMs = timing.timeoutMs ?? TIMEOUT_MS
   }
 
   /** Pet identity follows renames and level-ups. */
@@ -80,8 +85,8 @@ export class LanNode {
       udp.bind(UDP_PORT, () => res())
     })
     udp.setBroadcast(true)
-    this.helloTimer = setInterval(() => this.hello(), HELLO_MS)
-    this.sweepTimer = setInterval(() => this.sweep(), HELLO_MS)
+    this.helloTimer = setInterval(() => this.hello(), this.helloMs)
+    this.sweepTimer = setInterval(() => this.sweep(), this.helloMs)
     // A startup burst: peers learn about a newcomer in under a second instead
     // of waiting out their own heartbeat, and missed binds self-heal.
     this.hello()
@@ -146,7 +151,7 @@ export class LanNode {
   private sweep(): void {
     const now = Date.now()
     for (const [id, { peer, lastSeen }] of this.peers) {
-      if (now - lastSeen < TIMEOUT_MS) continue
+      if (now - lastSeen < this.timeoutMs) continue
       this.peers.delete(id)
       this.links.get(id)?.destroy()
       this.links.delete(id)

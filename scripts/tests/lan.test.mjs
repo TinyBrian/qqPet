@@ -9,14 +9,21 @@ import { LanNode } from '../../src/main/lan.ts'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+// The suite shares the real UDP port with any pet app actually running on this
+// machine (the dev pet broadcasts too). Assert only on the fake pets' own comings
+// and goings, never on ambient traffic.
+const OWN = new Set(['甲', '乙', '丙', '丁', '戊'])
+
 const mk = (log, id, name) =>
   new LanNode(
     { id, name, host: `${name}家`, sex: 'GG', level: 1 },
     {
-      online: (p) => log.push(`+${p.name}`),
-      offline: (p) => log.push(`-${p.name}`),
+      online: (p) => OWN.has(p.name) && log.push(`+${p.name}`),
+      offline: (p) => OWN.has(p.name) && log.push(`-${p.name}`),
       message: (_from, body) => log.push(`m:${String(body)}`),
     },
+    // Fast heartbeats keep the suite in seconds with generous margins.
+    { helloMs: 500, timeoutMs: 2500 },
   )
 
 test('pets discover, link, deliver, and go home', async () => {
@@ -30,7 +37,7 @@ test('pets discover, link, deliver, and go home', async () => {
   await B.start()
   await C.start()
   try {
-    await sleep(2500)
+    await sleep(1500)
     assert.deepEqual([...a].sort(), ['+丙', '+乙'].sort())
     assert.deepEqual([...b].sort(), ['+丙', '+甲'].sort())
     assert.deepEqual([...c].sort(), ['+乙', '+甲'].sort())
@@ -63,7 +70,7 @@ test('a crashed pet is missed within the timeout', async () => {
   await A.start()
   await D.start()
   try {
-    await sleep(2500)
+    await sleep(1500)
     assert.ok(a.includes('+戊'), `丁 never saw 戊: ${a}`)
     // Pull the plug without a goodbye, as a crash would.
     clearInterval(D.helloTimer)
@@ -72,9 +79,9 @@ test('a crashed pet is missed within the timeout', async () => {
     D.udp.close()
     D.server.close()
     a.length = 0
-    // The sweep ticks every 5s and drops peers silent for 15s: give it a full
-    // extra tick over the timeout.
-    await sleep(22_000)
+    // The sweep ticks every 500ms and drops peers silent for 2.5s: waiting
+    // three extra sweeps leaves a wide margin over the timeout.
+    await sleep(4500)
     assert.deepEqual(a, ['-戊'])
   } finally {
     A.stop()

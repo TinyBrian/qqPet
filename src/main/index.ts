@@ -69,10 +69,10 @@ app.whenReady().then(() => {
     },
   )
   // Discovery failing (port taken, firewall) must never take the pet down.
-  // An unadopted egg stays invisible on the LAN: no pet, no announcement.
+  // The LAN is opt-in (settings.lan), and an unadopted egg stays invisible.
   let lanOn = false
   const startLan = (): void => {
-    if (lanOn || !getSave().havePet) return
+    if (lanOn || !getSave().settings.lan || !getSave().havePet) return
     lanOn = true
     void lan.start().catch((e) => console.error('lan start failed:', e))
   }
@@ -113,6 +113,14 @@ app.whenReady().then(() => {
     if (patch.settings?.hd !== undefined) tray.setState(getSave())
     if (patch.settings?.zoom !== undefined) win.webContents.setZoomFactor(getSave().settings.zoom)
     if (patch.settings?.watchApp !== undefined) watchFront(getSave().settings.watchApp)
+    if (patch.settings?.lan !== undefined) {
+      if (patch.settings.lan) startLan()
+      else {
+        // stop() says goodbye on the way out, so friends hear 回家啦 at once.
+        lan.stop()
+        lanOn = false
+      }
+    }
   })
   ipcMain.on(IPC.resetPet, (_e, sex?: Sex) => {
     resetSave(sex)
