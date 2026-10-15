@@ -101,24 +101,20 @@ const looks = (): Record<string, string[]> => ({
   look_right: ['walk/right_stop2', 'walk/right_stop3', 'walk/rplay', 'walk/rplay2', 'walk/rplay3'],
 })
 
-const DRAG = (ids: number[]): string[] => ids.map((i) => `motion/drag${i}101213`)
-
 export const ACTIONS: Record<Sex, ActionData> = {
   // GG has the newer client's extra clips (#25).
   GG: {
     play: { egg: 47, kid: 127, peaceful: 127 },
     variants: {
       Egg: {
+        // motion/drag*101213 and motion/hide_*130906 under Egg/Kid draw the adult (hide_right130906 is the Adult
+        // file byte for byte): dragging or peeking turned an egg into a grown pet (#43). They stay unused.
         ...walks(2),
-        drag: DRAG([1, 2, 3]),
-        hideleft: ['Hide_left1', 'motion/hide_left130906'],
-        hideright: ['Hide_right1', 'motion/hide_right130906'],
         look_left: ['walk/lplay'],
         look_right: ['walk/rplay'],
       },
       Kid: {
         ...walks(3),
-        drag: DRAG([1, 3]),
         dirty: ['Dirty', 'lead/dirty20110805'],
         poor: ['Poor', 'lead/poor20110826'],
         ...looks(),

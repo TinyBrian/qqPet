@@ -107,3 +107,15 @@ test('small-game icons exist', async () => {
   const src = (await import('node:fs')).readFileSync(new URL('../../src/renderer/ui/smallgame.ts', import.meta.url), 'utf8')
   for (const [, icon] of src.matchAll(/icon: '([a-z]+)'/g)) assert.ok(has(`pet/quickBar/TickleSystem/${icon}00.png`), icon)
 })
+
+test('an egg or kid is dragged and peeks from the edge as itself, never with the adult clips (#43)', async () => {
+  const { route } = await import('../../src/renderer/pet/router.ts')
+  for (const sex of ['GG', 'MM'])
+    for (const stage of ['Egg', 'Kid'])
+      for (let i = 0; i < 30; i++)
+        for (const a of ['drag', 'hideleft', 'hideright']) {
+          const { url } = route(sex, stage, a, 'happy')
+          assert.ok(url.startsWith(`pet/Action/${sex}/${stage}/`), url)
+          assert.doesNotMatch(url, /motion\/(drag\d101213|hide_(left|right)130906)/, url)
+        }
+})
