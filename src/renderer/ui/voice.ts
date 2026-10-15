@@ -2,6 +2,7 @@
 // and on release the recording goes out as one 16 kHz utterance for local
 // transcription. The transcript walks the same pipeline as the chat box.
 import { speak } from '../pet/pet'
+import { say, retell } from './talk'
 import { talkToPet } from './chat'
 
 const RATE = 16_000
@@ -15,17 +16,34 @@ let mic: MediaStream | null = null
 let node: ScriptProcessorNode | null = null
 let chunks: Float32Array[] = []
 let samples = 0
+let partTimer = 0
+/** The live transcript line currently in the bubble; retell swaps it in place. */
+let hearing = ''
 
 const tell = (s: string): void => speak({ s, now: true, ai: false }, 'speak')
+
+/** The bubble tracks what has been heard so far, refreshing without stacking. */
+function hear(text: string): void {
+  const next = text ? `在听~：${text}` : '在听~…'
+  const prev = hearing
+  hearing = next
+  if (prev) void retell(prev, next)
+  else void say(next, ['在听'])
+}
 
 export function initVoice(): void {
   window.qqpet.onVoiceStart?.(() => void start())
   window.qqpet.onVoiceStop?.(() => stop())
+  window.qqpet.onVoicePartial?.((text) => hear(text))
   window.qqpet.onVoiceText?.((text) => {
+    hearing = ''
     if (!text) return tell('没听清呢~')
     void talkToPet(text)
   })
-  window.qqpet.onVoiceError?.((message) => tell(`耳朵出故障了：${message}`))
+  window.qqpet.onVoiceError?.((message) => {
+    hearing = ''
+    tell(`耳朵出故障了：${message}`)
+  })
 }
 
 async function start(): Promise<void> {
@@ -54,12 +72,21 @@ async function start(): Promise<void> {
   source.connect(node)
   node.connect(mute)
   mute.connect(c.destination)
-  tell('在听~')
+  hearing = ''
+  hear('')
+  // Live transcript: try the audio so far twice a second; the main process
+  // drops a beat when a decode is already in flight.
+  partTimer = window.setInterval(() => {
+    const total = chunks.reduce((n, f) => n + f.length, 0)
+    if (!c || total < c.sampleRate * 0.4) return
+    window.qqpet.voicePart?.(resample(join(chunks, total), c.sampleRate, RATE))
+  }, 600)
 }
 
 function stop(): void {
   const c = ctx
   if (!c || !mic) return
+  clearInterval(partTimer)
   node?.disconnect()
   void c.close().catch(() => {})
   mic.getTracks().forEach((t) => t.stop())

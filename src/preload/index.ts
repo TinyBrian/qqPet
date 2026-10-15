@@ -62,6 +62,11 @@ const api: QQPetApi = {
   lanSend: (toId, body) => ipcRenderer.invoke(IPC.lanSend, toId, body),
   lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
   voiceAudio: (samples) => ipcRenderer.send(IPC.voiceAudio, samples),
+  voicePart: (samples) => ipcRenderer.send(IPC.voicePart, samples),
+  onVoicePartial: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.voicePartial)
+    ipcRenderer.on(IPC.voicePartial, (_e, text) => listener(text))
+  },
   onVoiceStart: (listener) => {
     ipcRenderer.removeAllListeners(IPC.voiceStart)
     ipcRenderer.on(IPC.voiceStart, () => listener())

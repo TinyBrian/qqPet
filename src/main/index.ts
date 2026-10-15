@@ -98,6 +98,20 @@ app.whenReady().then(() => {
       .then((text) => win.webContents.send(IPC.voiceText, text))
       .catch((e: unknown) => win.webContents.send(IPC.voiceError, String((e as Error).message)))
   })
+  // 边说边译：每段音频到一半就试译一次，只保一发在途，慢了就跳过这一拍。
+  let partBusy = false
+  ipcMain.on(IPC.voicePart, (_e, samples: Float32Array) => {
+    if (partBusy) return
+    partBusy = true
+    void transcribe(samples)
+      .then((text) => {
+        if (text) win.webContents.send(IPC.voicePartial, text)
+      })
+      .catch(() => {
+        /* partials are best-effort; the final pass reports errors */
+      })
+      .finally(() => (partBusy = false))
+  })
   let talkKey: KeyWatcher | undefined
   const startVoice = (): void => {
     if (talkKey) return

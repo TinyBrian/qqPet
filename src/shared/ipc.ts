@@ -48,6 +48,8 @@ export const IPC = {
   voiceText: 'voice:text',
   voiceError: 'voice:error',
   voiceAudio: 'voice:audio',
+  voicePart: 'voice:part',
+  voicePartial: 'voice:partial',
 } as const
 
 export interface Point {
@@ -243,4 +245,8 @@ export interface QQPetApi {
   /** Transcript of the last utterance; '' means nothing was heard. */
   onVoiceText?(listener: (text: string) => void): void
   onVoiceError?(listener: (message: string) => void): void
+  /** Audio so far, for the live transcript shown while the key is held. */
+  voicePart?(samples: Float32Array): void
+  /** What has been heard so far; keeps changing until the final transcript. */
+  onVoicePartial?(listener: (text: string) => void): void
 }
