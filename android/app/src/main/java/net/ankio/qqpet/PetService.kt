@@ -244,15 +244,9 @@ class PetService : Service() {
         val scale = web.layoutParams.width / viewport
         val nx = floor(x * scale).toInt()
         val ny = floor(y * scale).toInt()
-        // Until the app draws again the system shows the old frame at the new origin, i.e. the page
-        // jumps toward the screen corner; the window stays transparent until that frame is committed.
-        if (nx != params.x || ny != params.y) {
-            params.alpha = 0f
-            val move = ++moves
-            root.viewTreeObserver.registerFrameCommitCallback { reveal(move) }
-        }
-        // The committed frame must already carry the new page offset; waiting for the pre-draw listener to
-        // read the new location leaves the page a frame behind the window, so it jumps once when revealed.
+        // The window is never hidden while it moves: hiding until the next frame commit and showing it again
+        // with a second relayout blanked the pet for up to half a second on every tap or menu (#18).
+        // The frame drawn for this layout must already carry the new page offset, or the page lags the window by a frame.
         web.translationX = -nx.toFloat()
         web.translationY = -ny.toFloat()
         params.x = nx
@@ -263,14 +257,6 @@ class PetService : Service() {
         wm.updateViewLayout(root, params)
         // Chromium rasters only the visible rect; without this, static content uncovered by a bigger window stays blank.
         web.invalidate()
-    }
-
-    private var moves = 0
-
-    private fun reveal(move: Int) = web.post {
-        if (move != moves) return@post
-        params.alpha = 1f
-        wm.updateViewLayout(root, params)
     }
 
     private fun http(id: Int, method: String, url: String, headers: String, body: String?) = net.execute {
