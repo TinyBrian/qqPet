@@ -1,4 +1,5 @@
 import type { ShapeRect } from './hit-shape'
+import type { LanPeer } from './lan'
 import type { SaveData, SavePatch, Sex } from './save'
 
 export const IPC = {
@@ -37,6 +38,9 @@ export const IPC = {
   trayClick: 'tray:click',
   trayMenu: 'tray:menu',
   trayMenuAction: 'tray:menu-action',
+  lanOnline: 'lan:online',
+  lanOffline: 'lan:offline',
+  lanMessage: 'lan:message',
 } as const
 
 export interface Point {
@@ -213,4 +217,10 @@ export interface QQPetApi {
   onPresence(listener: (away: boolean) => void): void
   /** Frontmost app, as a short label or the process name. Desktop only; never fires on the phone. */
   onFront(listener: (name: string) => void): void
+  /** A pet appeared on the friend LAN. Absent on bridges without networking. */
+  onLanOnline?(listener: (peer: LanPeer) => void): void
+  /** A pet left the friend LAN (goodbye or missed heartbeats). */
+  onLanOffline?(listener: (peer: LanPeer) => void): void
+  /** A message body from a linked pet (visits and deliveries ride on this). */
+  onLanMessage?(listener: (fromId: string, body: unknown) => void): void
 }

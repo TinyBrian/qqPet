@@ -15,6 +15,10 @@ import { exportSave, getSave, importSave, loadSave, patchSave, resetSave } from 
 import { createPetTray } from './tray'
 import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
+import { LanNode, persistedLanId } from './lan'
+
+// A test sidecar (QQPET_USER_DATA) runs beside the real pet: own save, own id, own lock.
+if (process.env.QQPET_USER_DATA) app.setPath('userData', process.env.QQPET_USER_DATA)
 
 // A click-through window on Wayland never learns where the cursor is, and its input region cannot be shaped, so
 // nothing on the pet could ever be clicked (#45). Under XWayland, as on X11, an input shape does the hit testing.
@@ -46,12 +50,42 @@ app.whenReady().then(() => {
   }
 
   const win = createPetWindow()
+  const petInit = (): { name: string; host: string; sex: 'GG' | 'MM'; level: number } => {
+    const s = getSave()
+    return { name: s.petInfo.name, host: s.petInfo.host, sex: s.petInfo.sex, level: s.petComputedlInfo.level }
+  }
+  const lan = new LanNode(
+    { id: persistedLanId(app.getPath('userData')), ...petInit() },
+    {
+      online: (p) => {
+        console.log(`[lan] ${p.name}(${p.host}) 出来玩了`)
+        win.webContents.send(IPC.lanOnline, p)
+      },
+      offline: (p) => {
+        console.log(`[lan] ${p.name}(${p.host}) 回家了`)
+        win.webContents.send(IPC.lanOffline, p)
+      },
+      message: (fromId, body) => win.webContents.send(IPC.lanMessage, fromId, body),
+    },
+  )
+  // Discovery failing (port taken, firewall) must never take the pet down.
+  // An unadopted egg stays invisible on the LAN: no pet, no announcement.
+  let lanOn = false
+  const startLan = (): void => {
+    if (lanOn || !getSave().havePet) return
+    lanOn = true
+    void lan.start().catch((e) => console.error('lan start failed:', e))
+  }
+  startLan()
   const tray = createPetTray((click) => {
     const b = win.getBounds()
     const z = getSave().settings.zoom
     win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: (click.x - b.x) / z, y: (click.y! - b.y) / z })
   })
-  app.on('before-quit', () => tray.destroy())
+  app.on('before-quit', () => {
+    tray.destroy()
+    lan.stop()
+  })
   ipcMain.on(IPC.trayMenu, (event, items: TrayMenuItem[]) => {
     if (event.sender !== win.webContents) return
     tray.popupMenu(items, (action) => {
@@ -71,7 +105,11 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.load, () => getSave())
   ipcMain.on(IPC.save, (_e, patch: SavePatch) => {
     patchSave(patch)
-    if (patch.petInfo) tray.retip(getSave().petInfo)
+    if (patch.petInfo) {
+      tray.retip(getSave().petInfo)
+      lan.setIdentity(petInit())
+      startLan()
+    }
     if (patch.settings?.hd !== undefined) tray.setState(getSave())
     if (patch.settings?.zoom !== undefined) win.webContents.setZoomFactor(getSave().settings.zoom)
     if (patch.settings?.watchApp !== undefined) watchFront(getSave().settings.watchApp)

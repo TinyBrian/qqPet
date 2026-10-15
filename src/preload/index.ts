@@ -46,6 +46,9 @@ const api: QQPetApi = {
   onClipboard: (listener) => ipcRenderer.on(IPC.clipboard, (_e, text) => listener(text)),
   onPresence: (listener) => ipcRenderer.on(IPC.presence, (_e, away) => listener(away)),
   onFront: (listener) => ipcRenderer.on(IPC.front, (_e, name) => listener(name)),
+  onLanOnline: (listener) => ipcRenderer.on(IPC.lanOnline, (_e, p) => listener(p)),
+  onLanOffline: (listener) => ipcRenderer.on(IPC.lanOffline, (_e, p) => listener(p)),
+  onLanMessage: (listener) => ipcRenderer.on(IPC.lanMessage, (_e, fromId, body) => listener(fromId, body)),
 }
 
 contextBridge.exposeInMainWorld('qqpet', api)

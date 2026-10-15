@@ -5,20 +5,23 @@ import { join } from 'node:path'
 import type { SaveData, SavePatch, Sex } from '../shared/save'
 import { applyPatch, buried, petOf, startSave } from '../shared/save-logic'
 
-const FILE = join(app.getPath('userData'), 'save.json')
+// Resolved lazily: a test sidecar swaps userData before the first use, and a
+// module-level const would freeze the path from before that swap.
+const saveFile = (): string => join(app.getPath('userData'), 'save.json')
 // Arctic Penguin T800 kept the same data under `petInfoData` in electron-store.
 const LEGACY_FILE = join(app.getPath('appData'), 'Arctic Penguin', 'config.json')
 
 const readJson = (file: string): Record<string, any> => JSON.parse(readFileSync(file, 'utf8'))
 
 function read(): Record<string, any> | null {
-  if (existsSync(FILE)) {
+  const file = saveFile()
+  if (existsSync(file)) {
     try {
-      return readJson(FILE)
+      return readJson(file)
     } catch (e) {
       // Keep the broken file for manual recovery instead of silently losing the pet.
-      const backup = `${FILE}.corrupt-${Date.now()}`
-      renameSync(FILE, backup)
+      const backup = `${file}.corrupt-${Date.now()}`
+      renameSync(file, backup)
       console.error(`save file is corrupt, moved to ${backup}:`, e)
       return null
     }
@@ -31,7 +34,7 @@ function read(): Record<string, any> | null {
 }
 
 function write(data: Record<string, any>): void {
-  atomicWrite(FILE, JSON.stringify(data))
+  atomicWrite(saveFile(), JSON.stringify(data))
 }
 
 let retry: ReturnType<typeof setTimeout> | undefined
@@ -75,7 +78,7 @@ export function exportSave(file: string): void {
 export function importSave(file: string): void {
   const pet = petOf(readJson(file))
   if (pet.havePet !== true) throw new Error('no pet in this file')
-  copyFileSync(FILE, `${FILE}.bak`)
+  copyFileSync(saveFile(), `${saveFile()}.bak`)
   write(pet)
 }
 
