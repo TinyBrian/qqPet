@@ -14,6 +14,12 @@ export const IPC = {
   aiChat: 'ai:chat',
   weather: 'app:weather',
   latestRelease: 'app:latest-release',
+  packInfo: 'pack:info',
+  importPack: 'pack:import',
+  resetPacks: 'pack:reset',
+  findPack: 'pack:find',
+  downloadPack: 'pack:download',
+  relaunch: 'app:relaunch',
   quit: 'app:quit',
   copyText: 'app:copy-text',
   openUrl: 'app:open-url',
@@ -113,6 +119,28 @@ export interface AiConfig {
 }
 
 /** What the network modules need from fetch: Electron's net.fetch in the main process, a native bridge on Android. */
+/** An incremental content pack of the latest release that applies on the installed content (#28). */
+export interface PackOffer {
+  version: string
+  base: string
+  size: number
+}
+
+/** Desktop content packs (#28); absent on mobile shells, which keep their bundled content. */
+export interface PackApi {
+  /** Installed content version and the shell's own. */
+  info(): Promise<{ content: string; shell: string }>
+  /** Picks and installs a .qqpetpack; the new content version, null when cancelled. Rejects with why it was refused. */
+  importPack(): Promise<string | null>
+  /** Removes every installed pack, back to the bundled content. */
+  reset(): Promise<void>
+  /** Rejects while offline. */
+  find(): Promise<PackOffer | null>
+  /** Downloads and installs the pack find() offered; the new content version. */
+  download(): Promise<string>
+  relaunch(): void
+}
+
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
 export interface AiMessage {
@@ -154,6 +182,7 @@ export interface QQPetApi {
   weather(city: string): Promise<Weather>
   /** Rejects while offline. */
   latestRelease(): Promise<Release>
+  packs?: PackApi
   quit(): void
   copyText(text: string): void
   /** Opens a web page in the system browser. */
