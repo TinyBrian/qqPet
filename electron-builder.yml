@@ -11,6 +11,7 @@ extraResources:
     filter:
       - pet/**
       - icons/**
+      - asr/**
 asar: true
 # Releases are uploaded by the GitHub workflow; no auto-update feed.
 publish: []
