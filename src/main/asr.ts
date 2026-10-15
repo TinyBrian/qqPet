@@ -7,7 +7,7 @@
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { resourcesRoot } from './protocol'
+import { resourcesRoot } from './content'
 
 const SAMPLE_RATE = 16_000
 
