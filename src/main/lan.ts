@@ -39,6 +39,8 @@ export interface LanHandlers {
   online?: (peer: LanPeer) => void
   offline?: (peer: LanPeer) => void
   message?: (fromId: string, body: unknown) => void
+  /** A direct link is up; queued deliveries ride out on this. */
+  linked?: (id: string) => void
 }
 
 export class LanNode {
@@ -48,6 +50,7 @@ export class LanNode {
   private server: Server | null = null
   private tcpPort = 0
   private readonly links = new Map<string, TcpSocket>()
+  private readonly dialing = new Set<string>()
   private readonly peers = new Map<string, { peer: LanPeer; tcp: number; lastSeen: number }>()
   private helloTimer: ReturnType<typeof setInterval> | undefined
   private sweepTimer: ReturnType<typeof setInterval> | undefined
@@ -112,9 +115,22 @@ export class LanNode {
     this.udp = null
   }
 
-  /** Sends to one pet over its direct link; silently drops when unlinked. */
-  send(toId: string, body: unknown): void {
-    this.links.get(toId)?.write(line({ t: 'msg', body }))
+  /** Sends to one pet over its direct link; false when no link carries it. */
+  send(toId: string, body: unknown): boolean {
+    const s = this.links.get(toId)
+    if (!s) return false
+    s.write(line({ t: 'msg', body }))
+    return true
+  }
+
+  /** Whether this peer has been heard from recently. */
+  knows(id: string): boolean {
+    return this.peers.has(id)
+  }
+
+  /** Peers heard from recently; a starting renderer seeds itself from this. */
+  peersList(): LanPeer[] {
+    return [...this.peers.values()].map(({ peer }) => peer)
   }
 
   /** Sends to every linked pet. */
@@ -150,7 +166,9 @@ export class LanNode {
 
   private sweep(): void {
     const now = Date.now()
-    for (const [id, { peer, lastSeen }] of this.peers) {
+    for (const [id, { peer, tcp, lastSeen }] of this.peers) {
+      // A known friend without a link is a lost dial or a dropped socket: try again.
+      if (!this.links.has(id) && now - lastSeen < this.timeoutMs) this.link(peer, tcp)
       if (now - lastSeen < this.timeoutMs) continue
       this.peers.delete(id)
       this.links.get(id)?.destroy()
@@ -168,15 +186,24 @@ export class LanNode {
     this.h.offline?.(seen.peer)
   }
 
-  /** Both ends connect deterministically: only the greater id dials, so one link per pair. */
+  /** Dials whenever the link is missing (both ends may try; the reader keeps one). */
   private link(peer: LanPeer, tcp: number): void {
-    if (this.me.id < peer.id || this.links.has(peer.id)) return
+    if (this.links.has(peer.id) || this.dialing.has(peer.id)) return
+    this.dialing.add(peer.id)
     const sock = connect(tcp, peer.addr)
-    sock.on('error', () => sock.destroy())
+    sock.on('error', (e) => {
+      console.error(`[lan] dial ${peer.name} failed:`, e.message)
+      sock.destroy()
+    })
     sock.once('connect', () => {
       sock.write(line({ t: 'hello', v: 1, tcp: this.tcpPort, ...this.me }))
-      this.links.set(peer.id, sock)
+      if (!this.links.has(peer.id)) {
+        this.links.set(peer.id, sock)
+        console.log(`[lan] link up: ${peer.name}`)
+        this.h.linked?.(peer.id)
+      }
     })
+    sock.once('close', () => this.dialing.delete(peer.id))
     this.reader(sock, (id) => id ?? peer.id)
     sock.setKeepAlive(true, PING_MS)
   }
@@ -210,11 +237,17 @@ export class LanNode {
           const prev = this.links.get(id)
           if (prev && prev !== sock) return sock.destroy()
           this.links.set(id, sock)
+          console.log(`[lan] link up: ${id}`)
+          this.h.linked?.(id)
           continue
         }
         const from = idOf(id)
         if (!from) return sock.destroy()
-        if (pkt.t === 'msg') this.h.message?.(from, pkt.body)
+        if (pkt.t === 'msg') {
+          // Counts every delivered message: duplicate knocks show up right here.
+          console.log('[lan] msg', from, (pkt.body as { t?: string } | null)?.t ?? '?')
+          this.h.message?.(from, pkt.body)
+        }
         // `ping` and `bye` need no action here: keep-alive is TCP's, presence is UDP's.
       }
     })

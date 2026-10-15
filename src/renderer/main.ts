@@ -15,6 +15,7 @@ import { closeMenu, openMenu } from './ui/menu'
 import { closeState, openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
 import { windowView } from './ui/window-view'
+import { initLanVisit } from './ui/lan-visit'
 import { resizePetPosition } from '../shared/layout'
 
 let lastPlatformError = ''
@@ -421,16 +422,8 @@ window.qqpet.onClipboard((text) => {
   speak({ s: text.length > CLIP_MAX ? `${text.slice(0, CLIP_MAX)}…` : text, b: '当前复制的文字', now: true, ai: clipAsk(text) }, 'speak')
 })
 
-// Friend LAN presence: every pet announces comings and goings to every pet,
-// in the pet's own voice (主人~ is how the pet addresses its owner).
-window.qqpet.onLanOnline?.((p) => {
-  if (!save.havePet) return
-  speak({ s: `主人~ ${p.name}出来玩啦~~`, now: true, ai: false }, 'speak')
-})
-window.qqpet.onLanOffline?.((p) => {
-  if (!save.havePet) return
-  speak({ s: `主人~ ${p.name}回家啦~~`, now: true, ai: false }, 'speak')
-})
+// Friend LAN presence moved into initLanVisit (one registration per channel).
+initLanVisit()
 
 window.qqpet.onPresence((gone) => {
   if (!save.havePet) return

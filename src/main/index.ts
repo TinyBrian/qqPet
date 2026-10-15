@@ -16,6 +16,7 @@ import { createPetTray } from './tray'
 import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
+import { VisitQueue } from './visit-queue'
 
 // A test sidecar (QQPET_USER_DATA) runs beside the real pet: own save, own id, own lock.
 if (process.env.QQPET_USER_DATA) app.setPath('userData', process.env.QQPET_USER_DATA)
@@ -61,6 +62,10 @@ app.whenReady().then(() => {
         console.log(`[lan] ${p.name}(${p.host}) 出来玩了`)
         win.webContents.send(IPC.lanOnline, p)
       },
+      linked: (id) => {
+        // The pet that sat by the door sets off once the path is open.
+        for (const body of visits.take(id)) if (!lan.send(id, body)) visits.add(id, body)
+      },
       offline: (p) => {
         console.log(`[lan] ${p.name}(${p.host}) 回家了`)
         win.webContents.send(IPC.lanOffline, p)
@@ -70,6 +75,19 @@ app.whenReady().then(() => {
   )
   // Discovery failing (port taken, firewall) must never take the pet down.
   // The LAN is opt-in (settings.lan), and an unadopted egg stays invisible.
+  const visits = new VisitQueue(app.getPath('userData'))
+  ipcMain.handle(IPC.lanSend, (_e, toId: string, body: { t?: string }) => {
+    // Everything visit-shaped queues while the path is down: a lost visitNo or
+    // visitEnd would leave the sender's pet away until the timeout.
+    if (body?.t?.startsWith('visit')) {
+      if (lan.send(toId, body)) return 'sent' as const
+      visits.add(toId, body)
+      return 'queued' as const
+    }
+    lan.send(toId, body)
+    return 'sent' as const
+  })
+  ipcMain.handle(IPC.lanPeers, () => lan.peersList())
   let lanOn = false
   const startLan = (): void => {
     if (lanOn || !getSave().settings.lan || !getSave().havePet) return

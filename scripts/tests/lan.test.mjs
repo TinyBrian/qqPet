@@ -5,7 +5,11 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { LanNode } from '../../src/main/lan.ts'
+import { VisitQueue } from '../../src/main/visit-queue.ts'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -86,4 +90,16 @@ test('a crashed pet is missed within the timeout', async () => {
   } finally {
     A.stop()
   }
+})
+
+test('queued visits survive a restart and flush per peer', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'qqpet-queue'))
+  const q = new VisitQueue(dir)
+  q.add('peer-a', { t: 'visit', text: '晚上开黑' })
+  q.add('peer-b', { t: 'visit', text: '来玩呀' })
+  // A whole new instance reading the same userData sees the same queue.
+  const reborn = new VisitQueue(dir)
+  assert.deepEqual(reborn.take('peer-a'), [{ t: 'visit', text: '晚上开黑' }])
+  assert.deepEqual(reborn.take('peer-a'), [], 'a taken delivery must not repeat')
+  assert.deepEqual(reborn.take('peer-b'), [{ t: 'visit', text: '来玩呀' }])
 })

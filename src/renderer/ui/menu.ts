@@ -10,6 +10,7 @@ import { openPetInfo } from './petinfo'
 import { openSetup } from './setup'
 import { openShop } from './shop'
 import { openState } from './state'
+import { sendLetter } from './lan-visit'
 import { visitFriend } from './visit'
 import { windowView } from './window-view'
 
@@ -103,6 +104,7 @@ function items(adopt: () => void): Item[] {
       children: [
         { label: '休息一下', run: () => void (rest() || speak({ s: '[host]，我现在还不想躺下呢~', now: true }, 'speak')) },
         { label: '找朋友玩', run: visitFriend },
+        { label: '去朋友家送信', run: sendLetter },
       ],
     },
     leave,

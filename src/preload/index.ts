@@ -46,9 +46,21 @@ const api: QQPetApi = {
   onClipboard: (listener) => ipcRenderer.on(IPC.clipboard, (_e, text) => listener(text)),
   onPresence: (listener) => ipcRenderer.on(IPC.presence, (_e, away) => listener(away)),
   onFront: (listener) => ipcRenderer.on(IPC.front, (_e, name) => listener(name)),
-  onLanOnline: (listener) => ipcRenderer.on(IPC.lanOnline, (_e, p) => listener(p)),
-  onLanOffline: (listener) => ipcRenderer.on(IPC.lanOffline, (_e, p) => listener(p)),
-  onLanMessage: (listener) => ipcRenderer.on(IPC.lanMessage, (_e, fromId, body) => listener(fromId, body)),
+  // The preload outlives page reloads: replace per channel, never stack.
+  onLanOnline: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.lanOnline)
+    ipcRenderer.on(IPC.lanOnline, (_e, p) => listener(p))
+  },
+  onLanOffline: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.lanOffline)
+    ipcRenderer.on(IPC.lanOffline, (_e, p) => listener(p))
+  },
+  onLanMessage: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.lanMessage)
+    ipcRenderer.on(IPC.lanMessage, (_e, fromId, body) => listener(fromId, body))
+  },
+  lanSend: (toId, body) => ipcRenderer.invoke(IPC.lanSend, toId, body),
+  lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
 }
 
 contextBridge.exposeInMainWorld('qqpet', api)
