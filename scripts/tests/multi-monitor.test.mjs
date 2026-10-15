@@ -101,14 +101,16 @@ for (const stage of ['Egg', 'Kid', 'Adult']) test(`${stage} drag keeps its hold 
     return p
   }
   const app = renderer(144, { x: 0, y: 0 }, native, stage)
-  const anchorX = stage === 'Adult' ? 0.73 : 50 / 144
-  const anchorY = stage === 'Adult' ? 0.14 : 40 / 144
+  const anchorX = stage === 'Adult' ? 0.58 : 50 / 144
+  const anchorY = stage === 'Adult' ? 0.30 : 40 / 144
   await setImmediate()
   app.pointer('pointerdown', 550, 340)
   await setImmediate()
   d.move({ x: -100, y: 100 })
   const p = position(true)
   app.cursor(p)
+  app.startPose()
+  app.advance(120)
   const smallSize = 144 * 1280 / 1920
   assert.ok(Math.abs(app.info.lastX - (p.x - anchorX * smallSize)) < 1e-8)
   assert.ok(Math.abs(app.info.lastY - (p.y - anchorY * smallSize)) < 1e-8)
