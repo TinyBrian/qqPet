@@ -3,11 +3,13 @@ import { calendar } from '../shared/calendar'
 import { cloneJson } from '../shared/compat'
 import type { Fetch, Point, QQPetApi, TrayClick, TrayState } from '../shared/ipc'
 import type { SaveData } from '../shared/save'
+import type { SwfFailure } from '../renderer/swf/player'
 import { applyPatch, buried, petOf, startSave } from '../shared/save-logic'
 import { TRAY_STATES, trayTip } from '../shared/tray'
 import { latestRelease } from '../shared/update'
 import { weather } from '../shared/weather'
 import { gameRewards } from './game-rewards'
+import { isFatalRufflePanic, readRufflePanic, type RufflePanic } from './diagnostics'
 import { startGeometry, type PetPointer } from './geometry'
 import { IOSRPC } from './rpc'
 import { IOSSaveWriter } from './save-writer'
@@ -103,12 +105,71 @@ function reportError(operation: string, error: unknown): void {
 function command(op: string, args: Record<string, unknown> = {}): void {
   void rpc.request(op, args).catch((error) => reportError(op, error))
 }
+let publishedRufflePanic = false
+let fatalRufflePanic = false
+let fatalPanicNotice: (RufflePanic & { observedAt: number; page: string }) | null = null
+let postedFatalPanic = false
+let fatalPanicAttempts = 0
+let terminalSWFNotice: (SwfFailure & { observedAt: number; page: string }) | null = null
+let postedTerminalSWF = false
+let terminalSWFAttempts = 0
+function publishTerminalSWF(): void {
+  if (!terminalSWFNotice || postedTerminalSWF || terminalSWFAttempts >= 3) return
+  terminalSWFAttempts++
+  try {
+    rpc.notify('swfTerminalFailure', { ...terminalSWFNotice,
+      url: terminalSWFNotice.url.slice(0, 8192),
+      message: (terminalSWFNotice.message || 'WebGL context recovery failed').slice(0, 8192),
+    })
+    postedTerminalSWF = true
+  }
+  catch (error) { console.error('QQPet could not publish its renderer failure:', error) }
+}
+function publishFatalPanic(): void {
+  if (!fatalPanicNotice || postedFatalPanic || fatalPanicAttempts >= 3) return
+  fatalPanicAttempts++
+  try { rpc.notify('rufflePanic', { ...fatalPanicNotice }); postedFatalPanic = true }
+  catch (error) { console.error('QQPet could not publish its Ruffle failure:', error) }
+}
+function acceptRufflePanic(panic: RufflePanic): void {
+  if (!panic || typeof panic.details !== 'string' || !panic.details.trim()) return
+  const observed = { ...panic, observedAt: Date.now() / 1000, page: rpc.page }
+  if (!publishedRufflePanic) {
+    try {
+      rpc.notify('status', { lastRufflePanic: observed })
+      publishedRufflePanic = true
+    } catch { /* Keep the DOM/event details available for the next publication. */ }
+  }
+  if (fatalRufflePanic || !isFatalRufflePanic(panic)) return
+  fatalRufflePanic = true
+  fatalPanicNotice = observed
+  // Post native isolation before touching an already damaged Rust player.
+  // Pose retries are then stopped in the same JavaScript turn.
+  publishFatalPanic()
+  try { setPaused(true) }
+  catch (error) { console.error('QQPet could not suspend its failed Ruffle player:', error) }
+  finally { geometry?.stop() }
+}
+function publishRufflePanic(): void {
+  publishTerminalSWF()
+  if (fatalRufflePanic) { publishFatalPanic(); return }
+  const panic = readRufflePanic(document)
+  if (!panic) return
+  acceptRufflePanic(panic)
+}
+window.addEventListener('qqpet-ruffle-panic', (event) => acceptRufflePanic((event as CustomEvent<RufflePanic>).detail))
 function savedStatus(): void {
+  publishRufflePanic()
   if (!model) return
   const pet = model.petInfo
   const element = document.getElementById('pet')
+  const visual = window.visualViewport
   const render = element ? {
+    observedAt: Date.now() / 1000,
     hidden: element.hidden, paused: Boolean(window.__qqpetHostPaused),
+    viewport: { width: innerWidth, height: innerHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight,
+      visibility: document.visibilityState, visual: visual ? { width: visual.width, height: visual.height, scale: visual.scale } : null },
+    timing: geometry?.timing() ?? null,
     position: { x: element.offsetLeft, y: element.offsetTop, size: element.offsetWidth },
     players: Array.from(element.querySelectorAll('ruffle-player')).map((player) => {
       const movie = player as RufflePlayerElement
@@ -119,14 +180,26 @@ function savedStatus(): void {
   } : null
   try { rpc.notify('status', {
     role, state: 'saved', havePet: model.havePet,
+    audioSessionPolicy: (window as Window & { __qqpetAudioPolicyState?: string }).__qqpetAudioPolicyState ?? 'system-default',
+    audioSessionError: (window as Window & { __qqpetAudioPolicyError?: string }).__qqpetAudioPolicyError ?? null,
     pet: { name: pet.name, sex: pet.sex, level: model.petComputedlInfo.level, health: pet.health, mood: pet.mood },
     settings: { clip: model.settings.clip, watchApp: model.settings.watchApp, hd: model.settings.hd },
     render,
   }) } catch (error) { reportError('status', error) }
 }
 window.addEventListener('qqpet-swf-error', (event) => {
-  const detail = (event as CustomEvent<{ url: string; message: string }>).detail
-  try { rpc.notify('status', { lastSWFError: detail }) } catch { /* A disconnected page cannot publish diagnostics. */ }
+  publishRufflePanic()
+  const detail = (event as CustomEvent<SwfFailure>).detail
+  const observed = { ...detail, observedAt: Date.now() / 1000, page: rpc.page }
+  try { rpc.notify('status', { lastSWFError: observed }) } catch { /* A disconnected page cannot publish diagnostics. */ }
+  if (fatalRufflePanic || terminalSWFNotice || !['context-recovery-failed', 'context-recovery-exhausted'].includes(detail.terminal ?? '')) return
+  terminalSWFNotice = observed
+  // The renderer is already gone; stop interaction and pose retries until the
+  // native host completes the existing save-and-stop barrier.
+  publishTerminalSWF()
+  try { setPaused(true) }
+  catch (error) { console.error('QQPet could not suspend its failed renderer:', error) }
+  finally { geometry?.stop() }
 })
 function requireOwner(): { save: SaveData; persistence: IOSSaveWriter } {
   if (gamePage || !model || !writer) throw new Error('Only the initialized pet page can change its save.')
@@ -229,6 +302,7 @@ function setText(payload: unknown): void {
   active.dispatchEvent(new Event('change', { bubbles: true }))
 }
 function setPaused(paused: boolean): void {
+  paused ||= fatalRufflePanic || Boolean(terminalSWFNotice)
   window.__qqpetHostPaused = paused
   geometry?.pause(paused)
   window.__qqpetSetPaused?.(paused)

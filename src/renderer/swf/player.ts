@@ -393,6 +393,7 @@ export class SwfPlayer {
     try {
       const operation = this.el.ruffle().load({
         ...CONFIG,
+        ...(this.recoverContext && window.__qqpetNativePetInput === true ? { preferredRenderer: 'webgl' } : {}),
         ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href,
       }).finally(() => {
         releaseRetiredCanvas(previousCanvas)
