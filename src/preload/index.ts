@@ -61,6 +61,28 @@ const api: QQPetApi = {
   },
   lanSend: (toId, body) => ipcRenderer.invoke(IPC.lanSend, toId, body),
   lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
+  voiceAudio: (samples) => ipcRenderer.send(IPC.voiceAudio, samples),
+  voicePart: (samples) => ipcRenderer.send(IPC.voicePart, samples),
+  onVoicePartial: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.voicePartial)
+    ipcRenderer.on(IPC.voicePartial, (_e, text) => listener(text))
+  },
+  onVoiceStart: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.voiceStart)
+    ipcRenderer.on(IPC.voiceStart, () => listener())
+  },
+  onVoiceStop: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.voiceStop)
+    ipcRenderer.on(IPC.voiceStop, () => listener())
+  },
+  onVoiceText: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.voiceText)
+    ipcRenderer.on(IPC.voiceText, (_e, text) => listener(text))
+  },
+  onVoiceError: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.voiceError)
+    ipcRenderer.on(IPC.voiceError, (_e, message) => listener(message))
+  },
 }
 
 contextBridge.exposeInMainWorld('qqpet', api)

@@ -43,6 +43,13 @@ export const IPC = {
   lanMessage: 'lan:message',
   lanSend: 'lan:send',
   lanPeers: 'lan:peers',
+  voiceStart: 'voice:start',
+  voiceStop: 'voice:stop',
+  voiceText: 'voice:text',
+  voiceError: 'voice:error',
+  voiceAudio: 'voice:audio',
+  voicePart: 'voice:part',
+  voicePartial: 'voice:partial',
 } as const
 
 export interface Point {
@@ -229,4 +236,17 @@ export interface QQPetApi {
   lanSend?(toId: string, body: unknown): Promise<'sent' | 'queued'>
   /** Peers already online; events fired before the renderer loaded are missed otherwise. */
   lanPeers?(): Promise<LanPeer[]>
+  /** Push one recorded utterance (16 kHz mono, -1..1) for transcription. */
+  voiceAudio?(samples: Float32Array): void
+  /** The talk key went down: start recording. */
+  onVoiceStart?(listener: () => void): void
+  /** The talk key came up: stop and send what was recorded. */
+  onVoiceStop?(listener: () => void): void
+  /** Transcript of the last utterance; '' means nothing was heard. */
+  onVoiceText?(listener: (text: string) => void): void
+  onVoiceError?(listener: (message: string) => void): void
+  /** Audio so far, for the live transcript shown while the key is held. */
+  voicePart?(samples: Float32Array): void
+  /** What has been heard so far; keeps changing until the final transcript. */
+  onVoicePartial?(listener: (text: string) => void): void
 }

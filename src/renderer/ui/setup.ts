@@ -1,5 +1,6 @@
 import { description } from '../../../package.json'
 import { APP_VERSION } from '../../shared/version'
+import { DEFAULT_HOTKEY, hotkeyLabel } from '../../shared/hotkey'
 import { allGoods, type GoodType } from '../pet/data/goods'
 import { give } from '../pet/items'
 import { applyPetSound, speak } from '../pet/pet'
@@ -258,6 +259,14 @@ const TABS: { label: string; options: Option[] }[] = [
           on: () => s.lan,
           run: () => update('settings', { lan: !s.lan }),
         },
+        {
+          type: 'radio',
+          label: '语音对话',
+          title: '松开后本地识别（Paraformer 模型随包，全程离线），识别结果当作聊天内容走同一套对话。',
+          on: () => s.voice,
+          run: () => update('settings', { voice: !s.voice }),
+        },
+        { type: 'see', label: '说话键', value: `${hotkeyLabel(DEFAULT_HOTKEY)}后按住说话` },
         {
           type: 'radio',
           label: '开启宠物音效（贴边探头、点脸逗它）',

@@ -113,6 +113,8 @@ export interface Settings {
   roam: boolean
   /** Friend LAN presence and visits; off by default. */
   lan: boolean
+  /** The talk key (double-tap left Alt, then hold) feeds local speech-to-text. */
+  voice: boolean
   /** Pressing the pet shows the action bar. On by default. */
   petBar: boolean
   /** Chat cheats (元宝+N, 不要死, ...) are recognised. On by default. */
