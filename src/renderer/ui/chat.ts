@@ -94,6 +94,28 @@ const SILLY = [
 const history: AiMessage[] = []
 const TURNS = 12
 
+/**
+ * One line through the whole pipeline — the chat box and the talk key share it:
+ * cheat codes, canned lines when AI is off, then the model's reply with its
+ * action (LETTER included). Returns the line the pet shows.
+ */
+export async function talkToPet(content: string): Promise<string> {
+  const said: AiMessage = { role: 'user', content }
+  const canned = (save.settings.chatCheat ? cheat(content) : null) ?? (aiOn() ? null : SILLY[Math.floor(Math.random() * SILLY.length)](info.name, info.host))
+  if (canned) {
+    speak({ s: canned, now: true, ai: false }, 'speak')
+    return canned
+  }
+  const reply = await ask([...history.slice(-TURNS), said], doPrompt())
+  const { act, arg, say } = parse(reply ?? '')
+  const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
+  // The model keeps to the action protocol only while its own earlier replies show it.
+  if (reply) history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
+  note('刚和主人聊过天')
+  if (reply) doAct(act, line, arg)
+  return line
+}
+
 let close: (() => void) | null = null
 
 /** Chat with the pet; replies also come in its speech bubble. The window keeps keyboard focus while this is open. */
@@ -112,22 +134,8 @@ export function openChat(): void {
     if (!content || input.disabled) return
     input.value = ''
     input.disabled = true
-    const said: AiMessage = { role: 'user', content }
-    show(said)
-    const canned = (save.settings.chatCheat ? cheat(content) : null) ?? (aiOn() ? null : SILLY[Math.floor(Math.random() * SILLY.length)](info.name, info.host))
-    if (canned) {
-      show({ role: 'assistant', content: canned })
-      speak({ s: canned, now: true, ai: false }, 'speak')
-    } else {
-      const reply = await ask([...history.slice(-TURNS), said], doPrompt())
-      const { act, arg, say } = parse(reply ?? '')
-      const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
-      // The model keeps to the action protocol only while its own earlier replies show it.
-      if (reply) history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
-      show({ role: 'assistant', content: line })
-      note('刚和主人聊过天')
-      if (reply) doAct(act, line, arg)
-    }
+    show({ role: 'user', content })
+    show({ role: 'assistant', content: await talkToPet(content) })
     input.disabled = false
     input.focus()
   }

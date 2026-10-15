@@ -17,6 +17,8 @@ import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
 import { VisitQueue } from './visit-queue'
+import { DEFAULT_HOTKEY, parseHotkey, watchHotkey, type KeyWatcher } from './hotkey'
+import { preloadAsr, transcribe } from './asr'
 
 // A test sidecar (QQPET_USER_DATA) runs beside the real pet: own save, own id, own lock.
 if (process.env.QQPET_USER_DATA) app.setPath('userData', process.env.QQPET_USER_DATA)
@@ -45,6 +47,8 @@ app.whenReady().then(() => {
   handleScheme()
   app.dock?.hide()
   loadSave()
+  // The talk key records locally; nothing else asks for permissions here.
+  session.defaultSession.setPermissionRequestHandler((_e, permission, cb) => cb(permission === 'media' || permission === 'clipboard-read'))
   // CSS keeps decoded images per stylesheet, so @2x bitmaps follow the hd setting as of launch only.
   if (getSave().settings.hd) {
     session.defaultSession.webRequest.onBeforeSendHeaders((d, cb) => cb({ requestHeaders: { ...d.requestHeaders, 'X-HD': '1' } }))
@@ -88,6 +92,30 @@ app.whenReady().then(() => {
     return 'sent' as const
   })
   ipcMain.handle(IPC.lanPeers, () => lan.peersList())
+  // 语音：说话键（双击左Alt后按住）→ 渲染层录音 → 本地识别 → 聊天管线
+  ipcMain.on(IPC.voiceAudio, (_e, samples: Float32Array) => {
+    void transcribe(samples)
+      .then((text) => win.webContents.send(IPC.voiceText, text))
+      .catch((e: unknown) => win.webContents.send(IPC.voiceError, String((e as Error).message)))
+  })
+  let talkKey: KeyWatcher | undefined
+  const startVoice = (): void => {
+    if (talkKey) return
+    const hot = parseHotkey(DEFAULT_HOTKEY)
+    if (!hot) return
+    void watchHotkey(hot, (down) => {
+      if (!win.isDestroyed()) win.webContents.send(down ? IPC.voiceStart : IPC.voiceStop)
+    }).then((w) => {
+      if (typeof w === 'string') return console.error('[voice]', w)
+      talkKey = w
+      preloadAsr()
+    })
+  }
+  const stopVoice = (): void => {
+    talkKey?.stop()
+    talkKey = undefined
+  }
+  if (getSave().settings.voice) startVoice()
   let lanOn = false
   const startLan = (): void => {
     if (lanOn || !getSave().settings.lan || !getSave().havePet) return
@@ -139,6 +167,7 @@ app.whenReady().then(() => {
         lanOn = false
       }
     }
+    if (patch.settings?.voice !== undefined) (patch.settings.voice ? startVoice : stopVoice)()
   })
   ipcMain.on(IPC.resetPet, (_e, sex?: Sex) => {
     resetSave(sex)

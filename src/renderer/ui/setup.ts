@@ -260,6 +260,13 @@ const TABS: { label: string; options: Option[] }[] = [
         },
         {
           type: 'radio',
+          label: '语音对话（双击左Alt后按住说话）',
+          title: '松开后本地识别（Paraformer 模型随包，全程离线），识别结果当作聊天内容走同一套对话。',
+          on: () => s.voice,
+          run: () => update('settings', { voice: !s.voice }),
+        },
+        {
+          type: 'radio',
           label: '开启宠物音效（贴边探头、点脸逗它）',
           title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
           on: () => s.sound,
