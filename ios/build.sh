@@ -112,14 +112,14 @@ for source in "$ios_root"/native/*.m "$ios_root"/vendor/TrollSpeed/KIF/*.m; do
     "$cc" "${common[@]}" -c "$source" -o "$object"
   fi
 done
-printf '%s\n' "$signature" > "$build_root/compile-signature"
 link_args=("${common[@]}" "-fuse-ld=$ld" "${objects[@]}")
 if [[ -n "${QQPET_IOS_CLANG_RT:-}" ]]; then
   [[ -f "$QQPET_IOS_CLANG_RT" ]] || fail "Missing iOS compiler-rt archive: $QQPET_IOS_CLANG_RT"
   link_args+=("$(absolute_path "$QQPET_IOS_CLANG_RT")")
 fi
 "$cc" "${link_args[@]}" -Wl,-adhoc_codesign -o "$bundle_dir/QQPetIOS" \
-  -framework Foundation -framework UIKit -framework WebKit -framework QuartzCore -framework CoreGraphics -framework CoreFoundation
+  -framework Foundation -framework UIKit -framework WebKit -framework QuartzCore -framework CoreGraphics -framework CoreFoundation -framework AudioToolbox -framework AVFoundation
+printf '%s\n' "$signature" > "$build_root/compile-signature"
 "$node" "$repo_root/scripts/version.mjs" --plist "$ios_root/Info.plist" --output "$bundle_dir/Info.plist"
 cp "$ios_root"/icons/*.png "$bundle_dir/"
 cp "$ios_root/audio-policy.js" "$bundle_dir/"

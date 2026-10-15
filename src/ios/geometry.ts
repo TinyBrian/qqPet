@@ -1,8 +1,9 @@
-import { cover, resetCoverage, type Box } from '../mobile/overlay'
+import { cover, hitCover, coverageTiming, resetCoverage, type Box } from '../mobile/overlay'
 import type { IOSRPC } from './rpc'
 
 export interface Rect { x: number; y: number; width: number; height: number }
 export interface PetPointer { phase: 'begin' | 'move' | 'end' | 'cancel'; id: number; x: number; y: number; time?: number }
+interface GeometryTiming { framesPerSecond: number; lastFrameAgoMs: number | null; maxFrameGapMs: number; readbackFailures: number; lastReadbackMs: number | null }
 
 const rect = (box: Box): Rect => ({ x: box.left, y: box.top, width: box.right - box.left, height: box.bottom - box.top })
 const visible = (element: Element): boolean => {
@@ -16,7 +17,7 @@ const visible = (element: Element): boolean => {
 }
 
 /** Full page CSS coordinates remain fixed while the native surface is cropped. */
-export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; pause(paused: boolean): void; stop(): void; bounds(): Rect } {
+export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; pause(paused: boolean): void; stop(): void; bounds(): Rect; timing(): GeometryTiming } {
   const presses = new Map<number, { x: number; y: number }>()
   let dragging = false
   let stopped = false
@@ -24,6 +25,11 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
   let frame = 0
   let previous = ''
   let bounds: Rect = { x: 0, y: 0, width: 0, height: 0 }
+  let lastFrame: number | null = null
+  let sampleStart = performance.now()
+  let sampleFrames = 0
+  let framesPerSecond = 0
+  let maxFrameGapMs = 0
 
   const pointer = (input: PetPointer): void => {
     if (input.phase === 'cancel' && input.id === -1) { presses.clear(); dragging = false }
@@ -44,12 +50,29 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
     if (stopped) return
     frame = requestAnimationFrame(track)
     if (paused) return
+    const now = performance.now()
+    if (lastFrame !== null) maxFrameGapMs = Math.max(maxFrameGapMs, now - lastFrame)
+    lastFrame = now
+    sampleFrames++
+    if (now - sampleStart >= 1000) {
+      framesPerSecond = Math.round(sampleFrames * 10000 / (now - sampleStart)) / 10
+      sampleStart = now
+      sampleFrames = 0
+    }
     let left = innerWidth, top = innerHeight, right = 0, bottom = 0
+    const dragRegions: Rect[] = []
     for (const element of document.body.querySelectorAll('*')) {
       let box: Box | null
       try { box = cover(element) } catch {
         // An unreadable WebGL buffer keeps a conservative rectangle, never disables the host.
         box = visible(element) ? element.getBoundingClientRect() : null
+      }
+      // Only the front/back pet movies and its equipped background are drag
+      // targets. Decorative mood movies must not turn their blank box into one.
+      if (element.id === 'pet' || (element.tagName === 'RUFFLE-PLAYER' && element.parentElement?.id === 'pet')) {
+        let hit: Box | null = null
+        try { hit = hitCover(element) } catch { /* A retiring renderer is not an input target. */ }
+        if (hit) dragRegions.push(rect(hit))
       }
       if (!box) continue
       left = Math.min(left, box.left); top = Math.min(top, box.top)
@@ -61,8 +84,6 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
       width: Math.max(Math.min(Math.ceil(right), innerWidth) - x, 0),
       height: Math.max(Math.min(Math.ceil(bottom), innerHeight) - y, 0),
     }
-    const pet = document.getElementById('pet')
-    const dragRegions = pet && visible(pet) ? [rect(pet.getBoundingClientRect())] : []
     const interactiveRegions: Rect[] = []
     // A hit root may be a zero-sized anchor with visible, overflowing children
     // (the pet toolbar). Those controls must also bypass the native drag plane.
@@ -82,8 +103,16 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
   return {
     pointer,
     bounds: () => bounds,
+    timing: () => ({ framesPerSecond, lastFrameAgoMs: lastFrame === null ? null : Math.round(performance.now() - lastFrame), maxFrameGapMs: Math.round(maxFrameGapMs), ...coverageTiming() }),
     pause(value) {
-      if (paused !== value) resetCoverage()
+      if (paused !== value) {
+        resetCoverage()
+        lastFrame = null
+        sampleStart = performance.now()
+        sampleFrames = 0
+        framesPerSecond = 0
+        maxFrameGapMs = 0
+      }
       paused = value
       if (paused) pointer({ phase: 'cancel', id: -1, x: 0, y: 0 })
     },
