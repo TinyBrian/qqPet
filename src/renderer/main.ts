@@ -10,7 +10,7 @@ import { catchDiudiule, releaseDiudiule } from './ui/diudiule'
 import { scheduleHide, showControl } from './ui/control'
 import { div, pageX, pageY, touch } from './ui/dom'
 import './ui/background'
-import './ui/face'
+import { clearFacePoints, showFacePoints } from './ui/face'
 import { closeMenu, openMenu } from './ui/menu'
 import { closeState, openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
@@ -37,6 +37,7 @@ window.addEventListener('qqpet-platform-error', (event) => {
 const petEl = document.getElementById('pet')!
 const HOLD_MS = 500
 let dragging = false
+let dragLifted = false
 let desktopOffset = { x: 0, y: 0 }
 let desktopSequence = 0
 let dragMove: ((point: DesktopCursor) => void) | null = null
@@ -127,7 +128,12 @@ window.API = {
   GetWindowRect: () => `${info.lastX},${info.lastY},${size},${size}`,
   // No PetEden.ini: every key reads as its default, as the Windows call does for a missing file.
   GetPrivateProfileString: (_section, _key, fallback) => fallback,
+  // Release positioning and flings belong to the host. An outgoing movie may
+  // still run its drop frames while the replacement loads.
+  MoveBy: () => {},
 }
+// The newer drag movies loop their nested timeline while this value is 1.
+window.DataCenter_ReadInt32 = (key) => key === 'drag' && dragLifted ? 1 : 0
 
 // The window is click-through except while the cursor is over a [data-hit]
 // element (or a drag is in progress).
@@ -230,13 +236,18 @@ const petInput = createPetInput({
   cancelFrame: cancelAnimationFrame,
   position: () => ({ x: info.lastX, y: info.lastY, size }),
   begin: () => {
+    clearFacePoints()
     closeMenu()
     if (save.settings.petBar) showControl()
     catchDiudiule()
   },
-  active: (on) => { dragging = on; if (!on) releaseDomInput() },
+  active: (on) => {
+    dragging = on
+    if (!on) { dragLifted = false; releaseDomInput() }
+  },
   hold: (x, y) => openMenu({ x, y, pet: true }, adoptPet),
   lift: (s, align) => {
+    dragLifted = true
     if (stage() === 'Adult') {
       // Hold the upper-right rim of the head, so the finger lifts it from the side.
       // Keep following the original grab until the double-buffered SWF is on screen.
@@ -261,6 +272,7 @@ const petInput = createPetInput({
     } else if (edge) machine.play({ a: edge })
     else if (lifted || machine.pose.a === 'hideleft' || machine.pose.a === 'hideright') machine.play({ a: 'normal' })
     scheduleHide()
+    if (touch && !lifted && !cancelled) showFacePoints()
   },
 }, touch ? HOLD_MS : 0)
 

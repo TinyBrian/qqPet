@@ -114,7 +114,8 @@ for (const stage of ['Egg', 'Kid', 'Adult']) test(`${stage} drag keeps its hold 
   const smallSize = 144 * 1280 / 1920
   assert.ok(Math.abs(app.info.lastX - (p.x - anchorX * smallSize)) < 1e-8)
   assert.ok(Math.abs(app.info.lastY - (p.y - anchorY * smallSize)) < 1e-8)
-  assert.equal(app.poses[0].opt?.url, stage === 'Adult' ? 'pet/Action/drag.swf' : undefined)
+  if (stage === 'Adult') assert.equal(app.poses[0].opt.url, 'pet/Action/drag.swf')
+  else assert.equal(app.poses[0].opt, undefined, 'younger stages use their own artwork')
   assert.equal(app.save.settings.petDisplayId, 2)
   d.move({ x: 600, y: -600 })
   const top = position(true)

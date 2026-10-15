@@ -54,7 +54,7 @@ function common(o: { enter?: Range; eat?: Range; exit?: Range; clean?: Range; si
 function moodActions(play: number, speak: Range = { notNum: true }): Table {
   return {
     normal: { name: 'Stand' },
-    // The shared drag.swf is adult-only; younger pets hold their standing pose while dragged.
+    // Keep the pet's own appearance when no matching drag artwork is available.
     drag: { name: 'Stand' },
     play: { name: 'play/P', start: 1, end: play },
     speak: { name: 'Speak', start: 1, end: speak.end ?? 1, notNum: speak.notNum },
@@ -104,7 +104,8 @@ const looks = (): Record<string, string[]> => ({
 export const ACTIONS: Record<Sex, ActionData> = {
   // GG has the newer client's extra clips (#25).
   GG: {
-    play: { egg: 47, kid: 127, peaceful: 127 },
+    // Imported Egg P30..47 and Kid P112..127 draw adult GG despite their directories.
+    play: { egg: 29, kid: 111, peaceful: 127 },
     variants: {
       Egg: {
         // motion/drag*101213 and motion/hide_*130906 under Egg/Kid draw the adult (hide_right130906 is the Adult
@@ -122,14 +123,11 @@ export const ACTIONS: Record<Sex, ActionData> = {
       Adult: { ...walks(3), hideright: ['Hide_right1', 'motion/hide_right130906'], ...looks() },
     },
     extraPlay: {
-      Egg: [{ clip: 'motion/003', single: true }, { clip: 'turn/ctoe' }],
+      // Imported Egg extras draw adult GG and have no age-dependent initialization.
       Adult: [{ clip: 'motion/005', single: true }, { clip: 'motion/009', single: true }, { clip: 'motion/017' }, { clip: 'motion/021' }],
     },
     rest: {
-      // ctoj (21 frames) lies down; frozen one frame short of the end so the machine holds it.
-      Egg: { lying: 'turn/ctoj', freeze: 19 },
-      // jtoe (20 frames) gets up from lying; its first frame is the lying pose.
-      Kid: { lying: 'turn/jtoe', freeze: 1, up: 'turn/jtoe' },
+      // The imported Egg/Kid turn clips also draw adult GG.
       Adult: { down: 'Etoj', lying: 'prostrate/Stand', up: 'Jtoc' },
     },
   },
@@ -174,8 +172,8 @@ export function route(sex: Sex, stage: Stage, action: string, mood: Mood): Targe
     const extra = extraPlay(sex, stage, r.end ?? 0)
     if (extra) return { url: `pet/Action/${sex}/${stage}/${extra.clip}.swf`, opt: { ...r, opt: extra.single ? { holdMs: SINGLE_FRAME_HOLD } : undefined } }
   }
-  const alt = stage === 'Adult' && BY_MOOD.includes(action) ? null : variant(sex, stage, action)
-  if (alt) return { url: `${dir}${alt}.swf`, opt: r }
+  const alt = stage === 'Adult' && BY_MOOD.includes(action) && action !== 'drag' ? null : variant(sex, stage, action)
+  if (alt) return { url: `pet/Action/${sex}/${stage}/${alt}.swf`, opt: r }
   const n = r.start && r.end && !r.notNum ? Math.trunc(Math.random() * r.end + r.start) : ''
   return { url: `${dir}${r.name}${n}.swf`, opt: r }
 }
