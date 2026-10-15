@@ -14,9 +14,9 @@ function pinCursor(el: HTMLElement): void {
 
 /**
  * Pet action player. Ruffle tears down its instance on every load(), which
- * blanks the pet for a few frames, so actions alternate between two stacked
- * players: the next action loads in the hidden one and is swapped in once it
- * has painted.
+ * blanks the pet for a few frames, so the next action loads in a hidden back
+ * player and is swapped in once it has painted. Retire the previous instance
+ * after the swap; an empty back element needs no renderer, font or audio state.
  */
 export class PetSwf {
   front: SwfPlayer
@@ -25,13 +25,13 @@ export class PetSwf {
 
   constructor(parent: HTMLElement) {
     this.parent = parent
-    this.front = new SwfPlayer(parent)
+    this.front = new SwfPlayer(parent, { recoverContext: true })
     this.back = this.createBack()
     pinCursor(this.front.el)
   }
 
   private createBack(): SwfPlayer {
-    const back = new SwfPlayer(this.parent)
+    const back = new SwfPlayer(this.parent, { recoverContext: true })
     // Keep the upcoming canvas paintable on older WebKit, without accepting its input.
     back.el.style.opacity = '0'
     back.el.style.pointerEvents = 'none'
@@ -69,11 +69,10 @@ export class PetSwf {
     }
     next.el.style.opacity = '1'
     next.el.style.pointerEvents = 'auto'
-    this.front.el.style.opacity = '0'
-    this.front.el.style.pointerEvents = 'none'
-    this.front.stop()
-    this.back = this.front
+    const previous = this.front
     this.front = next
+    previous.destroy()
+    this.back = this.createBack()
     return true
   }
 }

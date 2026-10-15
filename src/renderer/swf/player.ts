@@ -1,3 +1,5 @@
+import { isFatalRufflePanic, readPlayerPanic } from '../../shared/ruffle-panic'
+
 const FONT = 'HappyZcool-2016'
 // SWFs resolve relative URLs (configs, sub-movies) against the page, exactly
 // like the original <embed> inside dist/index.html did.
@@ -19,10 +21,71 @@ const CONFIG = {
   logLevel: 'error',
 }
 
+interface GlobalListener {
+  target: EventTarget
+  type: string
+  listener: EventListenerOrEventListenerObject
+  capture: boolean
+  remove: EventTarget['removeEventListener']
+}
+let constructingListeners: GlobalListener[] | null = null
+
+/** Ruffle 0.6's constructor leaves document listeners behind when its element disconnects. */
+function createRuffleElement(parent: HTMLElement): { el: RufflePlayerElement; cleanup: () => void } {
+  const document = parent.ownerDocument
+  const listeners: GlobalListener[] = []
+  const restore: (() => void)[] = []
+  const previous = constructingListeners
+  const cleanup = (): void => {
+    for (const entry of listeners.splice(0)) entry.remove.call(entry.target, entry.type, entry.listener, entry.capture)
+  }
+  let el: RufflePlayerElement | undefined
+  constructingListeners = listeners
+  try {
+    for (const target of new Set<EventTarget | null>([document, document.documentElement, document.defaultView])) {
+      if (!target || typeof target.addEventListener !== 'function') continue
+      const descriptor = Object.getOwnPropertyDescriptor(target, 'addEventListener')
+      const add = target.addEventListener
+      const remove = target.removeEventListener
+      const wrapped: EventTarget['addEventListener'] = function (this: EventTarget, type, listener, options) {
+        add.call(this, type, listener, options)
+        if (this === target && listener && constructingListeners === listeners)
+          listeners.push({ target, type, listener, capture: typeof options === 'boolean' ? options : Boolean(options?.capture), remove })
+      }
+      Object.defineProperty(target, 'addEventListener', { configurable: true, writable: true, value: wrapped })
+      restore.push(() => {
+        if (descriptor) Object.defineProperty(target, 'addEventListener', descriptor)
+        else Reflect.deleteProperty(target, 'addEventListener')
+      })
+    }
+    el = document.defaultView!.RufflePlayer.newest().createPlayer()
+    el.style.width = '100%'
+    el.style.height = '100%'
+    parent.appendChild(el)
+    safari14Styles(el)
+    return { el, cleanup }
+  } catch (error) {
+    cleanup()
+    el?.remove()
+    throw error
+  } finally {
+    for (const undo of restore.reverse()) undo()
+    constructingListeners = previous
+  }
+}
+
 const players = new Set<SwfPlayer>()
 const LOAD_MS = 30_000
 const CALLBACK_MS = 10_000
+const RECOVERY_WINDOW_MS = 30_000
+const RECOVERY_LIMIT = 3
 let hostPaused = Boolean(window.__qqpetHostPaused)
+
+export interface SwfFailure {
+  url: string
+  message: string
+  terminal?: 'context-recovery-failed' | 'context-recovery-exhausted'
+}
 
 /** Display lifecycle is independent from the user's paused-growth setting. */
 export function setHostPaused(paused: boolean): void {
@@ -64,6 +127,18 @@ function releaseRetiredCanvas(canvas: HTMLCanvasElement | null | undefined): voi
   } catch { /* A disposed canvas may already have lost its context. */ }
 }
 
+/** Ruffle removes its canvas synchronously on disconnect, before outer DOM observers run. */
+function releaseRemovedCanvases(records: MutationRecord[] = []): void {
+  for (const record of records) {
+    for (const node of record.removedNodes) {
+      if (node.nodeType !== 1) continue
+      const element = node as Element
+      if (element.tagName === 'CANVAS') releaseRetiredCanvas(element as HTMLCanvasElement)
+      for (const canvas of element.querySelectorAll<HTMLCanvasElement>('canvas')) releaseRetiredCanvas(canvas)
+    }
+  }
+}
+
 /** A detached generation can finish building after its original DOM disconnect. */
 function disposeDetached(el: RufflePlayerElement): void {
   const canvas = el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
@@ -96,35 +171,155 @@ export class SwfPlayer {
   private loading = false
   private pausedAt: number | null = null
   private pending = new Set<(error: Error) => void>()
+  private globalCleanup = (): void => {}
   private keyboardCleanup = (): void => {}
+  private panicObserver: MutationObserver | null = null
+  private reportedPanic = false
+  private canvas: HTMLCanvasElement | null = null
+  private readonly recoverContext: boolean
+  private contextCleanup = (): void => {}
+  private lastLoad: { url: string; base: string; options: Record<string, unknown> } | null = null
+  private callbackArgs = new Map<string, unknown[]>()
+  private movie = 0
+  private recovering = false
+  private recovery = 0
+  private recoveryTimes: number[] = []
+  private resumeWaiters = new Set<() => void>()
 
   /** The SWF's ExternalInterface calls go to the globals of the window that owns `parent`. */
-  constructor(parent: HTMLElement) {
-    this.el = parent.ownerDocument.defaultView!.RufflePlayer.newest().createPlayer()
-    this.el.style.width = '100%'
-    this.el.style.height = '100%'
-    parent.appendChild(this.el)
-    safari14Styles(this.el)
-    players.add(this)
-    // Ruffle types into text fields from a hidden <input> it empties on every input event, which breaks IME
-    // composition (Chinese). Keep the composing keystrokes from it and hand it the committed text at once.
-    const keyboard = this.el.shadowRoot?.getElementById('virtual-keyboard')
-    const composing = (e: Event): void => {
-      if ((e as InputEvent).isComposing) e.stopImmediatePropagation()
-    }
-    if (keyboard) {
-      const committed = (): void => { keyboard.dispatchEvent(new Event('input')) }
-      for (const type of ['input', 'keydown', 'keyup']) keyboard.addEventListener(type, composing, true)
-      keyboard.addEventListener('compositionend', committed)
-      this.keyboardCleanup = () => {
-        for (const type of ['input', 'keydown', 'keyup']) keyboard.removeEventListener(type, composing, true)
-        keyboard.removeEventListener('compositionend', committed)
+  constructor(parent: HTMLElement, { recoverContext = false }: { recoverContext?: boolean } = {}) {
+    this.recoverContext = recoverContext
+    const created = createRuffleElement(parent)
+    this.el = created.el
+    this.globalCleanup = created.cleanup
+    try {
+      players.add(this)
+      if (this.el.shadowRoot) {
+        if (recoverContext) {
+          const root = this.el.shadowRoot
+          const lost = (event: Event): void => this.contextLost(event)
+          // Capture before Ruffle's target listener, which leaves small instance
+          // counts running on a lost context. suspend() alone still renders.
+          root.addEventListener('webglcontextlost', lost, true)
+          this.contextCleanup = () => root.removeEventListener('webglcontextlost', lost, true)
+        }
+        this.panicObserver = new MutationObserver((records) => {
+          this.publishPanic()
+          releaseRemovedCanvases(records)
+        })
+        this.panicObserver.observe(this.el.shadowRoot, { childList: true, subtree: true, characterData: true })
       }
+      // Ruffle types into text fields from a hidden <input> it empties on every input event, which breaks IME
+      // composition (Chinese). Keep the composing keystrokes from it and hand it the committed text at once.
+      const keyboard = this.el.shadowRoot?.getElementById('virtual-keyboard')
+      const composing = (e: Event): void => {
+        if ((e as InputEvent).isComposing) e.stopImmediatePropagation()
+      }
+      if (keyboard) {
+        const committed = (): void => { keyboard.dispatchEvent(new Event('input')) }
+        for (const type of ['input', 'keydown', 'keyup']) keyboard.addEventListener(type, composing, true)
+        keyboard.addEventListener('compositionend', committed)
+        this.keyboardCleanup = () => {
+          for (const type of ['input', 'keydown', 'keyup']) keyboard.removeEventListener(type, composing, true)
+          keyboard.removeEventListener('compositionend', committed)
+        }
+      }
+    } catch (error) {
+      this.destroy()
+      throw error
     }
   }
 
   private cancelPending(message: string): void {
     for (const cancel of [...this.pending]) cancel(new Error(message))
+  }
+
+  private failMovie(url: string, error: unknown, terminal?: SwfFailure['terminal']): void {
+    if (this.destroyed) return
+    const message = error instanceof Error ? error.message : String(error)
+    this.cancelPending(message)
+    this.destroy()
+    window.dispatchEvent(new CustomEvent<SwfFailure>('qqpet-swf-error', { detail: { url, message, ...(terminal ? { terminal } : {}) } }))
+  }
+
+  private contextLost(event: Event): void {
+    const canvas = event.target as HTMLCanvasElement | null
+    const frame = this.el.ownerDocument.defaultView?.frameElement
+    if (this.destroyed || !this.el.isConnected || (frame && !frame.isConnected) || !canvas?.isConnected ||
+      canvas !== this.el.shadowRoot?.querySelector('#container > canvas')) return
+    if (this.loading) {
+      // An incomplete builder cannot be reused or recovered. Removing the
+      // element synchronously destroys its Rust instance and cancels the load.
+      this.failMovie(this.el.dataset.swf ?? '', new Error('WebGL context was lost while loading'), this.recovering ? 'context-recovery-failed' : undefined)
+      return
+    }
+    if (!this.meta || !this.lastLoad || canvas !== this.canvas) return
+    const now = performance.now()
+    this.recoveryTimes = this.recoveryTimes.filter(at => now - at < RECOVERY_WINDOW_MS)
+    if (this.recoveryTimes.length >= RECOVERY_LIMIT) {
+      this.failMovie(this.lastLoad.url, new Error('WebGL context recovery limit exceeded'), 'context-recovery-exhausted')
+      return
+    }
+    this.recoveryTimes.push(now)
+    const recovery = ++this.recovery
+    this.recovering = true
+    // This async function reaches ruffle().load() before its first await. Its
+    // pinned implementation destroys the old Rust instance synchronously.
+    void this.restoreMovie(this.lastLoad, recovery)
+  }
+
+  private async waitForResume(): Promise<void> {
+    if (!hostPaused) return
+    await new Promise<void>((resolve, reject) => {
+      const finish = (): void => { this.pending.delete(cancel); this.resumeWaiters.delete(resume) }
+      const resume = (): void => { finish(); resolve() }
+      const cancel = (error: Error): void => { finish(); reject(error) }
+      this.pending.add(cancel)
+      this.resumeWaiters.add(resume)
+    })
+  }
+
+  private async restoreMovie(request: NonNullable<SwfPlayer['lastLoad']>, recovery: number): Promise<void> {
+    const current = (): boolean => !this.destroyed && this.recovery === recovery
+    try {
+      await this.loadMovie(request.url, request.base, request.options, true)
+      const replayed = new Map<string, unknown[]>()
+      while (current()) {
+        const next = [...this.callbackArgs].find(([name, args]) => replayed.get(name) !== args)
+        if (!next) break
+        const [name] = next
+        const host = this.el as unknown as Record<string, unknown>
+        const ready = await this.waitFor(() => {
+          if (typeof host[name] === 'function') return host[name] as (...args: unknown[]) => unknown
+          return hostPaused ? 'paused' : null
+        }, `SWF callback ${name}`, CALLBACK_MS)
+        if (!current()) return
+        if (ready === 'paused') { await this.waitForResume(); continue }
+        const args = this.callbackArgs.get(name)
+        if (!args) continue
+        this.callbacks.add(name)
+        ready.apply(this.el, args)
+        replayed.set(name, args)
+      }
+      if (!current()) return
+      this.recovering = false
+      if (this.stoppedAt !== null) this.el.ruffle().suspend()
+      this.pauseForHost(hostPaused)
+    } catch (error) {
+      if (current()) this.failMovie(request.url, error, 'context-recovery-failed')
+    } finally {
+      if (this.recovery === recovery) this.recovering = false
+    }
+  }
+
+  private publishPanic(): void {
+    if (this.destroyed || this.reportedPanic) return
+    const panic = readPlayerPanic(this.el)
+    if (!panic) return
+    this.reportedPanic = true
+    // Publish while its shadow DOM still exists. This also covers players in
+    // SWF iframes created by this module, whose events belong to this host page.
+    window.dispatchEvent(new CustomEvent('qqpet-ruffle-panic', { detail: { ...panic, fatal: isFatalRufflePanic(panic) } }))
   }
 
   private bounded<T>(operation: Promise<T>, label: string, milliseconds: number): Promise<T> {
@@ -134,6 +329,7 @@ export class SwfPlayer {
       const timer = setTimeout(() => cancel(new Error(`${label} timed out`)), milliseconds)
       this.pending.add(cancel)
       operation.then((value) => { finish(); resolve(value) }, cancel)
+      if (this.destroyed) cancel(new Error('SWF player was destroyed'))
     })
   }
 
@@ -168,6 +364,15 @@ export class SwfPlayer {
 
   /** `base` (relative to the page) resolves the SWF's own relative URLs; `options` override Ruffle's config. */
   async load(url: string, base = BASE, options: Record<string, unknown> = {}): Promise<RuffleMetadata> {
+    ++this.recovery
+    this.recovering = false
+    ++this.movie
+    this.lastLoad = null
+    this.callbackArgs.clear()
+    return this.loadMovie(url, base, options)
+  }
+
+  private async loadMovie(url: string, base: string, options: Record<string, unknown>, recovering = false): Promise<RuffleMetadata> {
     if (this.destroyed) throw new Error('SWF player was destroyed')
     // Ruffle does not cancel its async WASM/font builder. Never reuse an in-flight element.
     if (this.loading) {
@@ -186,7 +391,10 @@ export class SwfPlayer {
     this.loading = true
     const previousCanvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
     try {
-      const operation = this.el.ruffle().load({ ...CONFIG, ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href }).finally(() => {
+      const operation = this.el.ruffle().load({
+        ...CONFIG,
+        ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href,
+      }).finally(() => {
         releaseRetiredCanvas(previousCanvas)
         if (this.destroyed || revision !== this.revision) disposeDetached(this.el)
       })
@@ -201,9 +409,11 @@ export class SwfPlayer {
       const metadata = await this.waitFor(() => this.el.ruffle().metadata, 'SWF metadata', LOAD_MS)
       if (this.destroyed || revision !== this.revision) throw new Error('SWF load was cancelled')
       this.meta = metadata
+      this.canvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas') ?? null
       this.startedAt = performance.now()
-      this.stoppedAt = null
+      this.stoppedAt = recovering && this.stoppedAt !== null ? this.startedAt : null
       this.pausedAt = null
+      if (this.recoverContext) this.lastLoad = { url, base, options: { ...options } }
       this.pauseForHost(hostPaused)
       return this.meta
     } catch (error) {
@@ -212,7 +422,9 @@ export class SwfPlayer {
       this.destroy()
       if (!cancelled) {
         const message = error instanceof Error ? error.message : String(error)
-        window.dispatchEvent(new CustomEvent('qqpet-swf-error', { detail: { url, message } }))
+        // loadMovie owns this failure before destroy invalidates the outer
+        // recovery token. A cancelled generation must never report it twice.
+        window.dispatchEvent(new CustomEvent<SwfFailure>('qqpet-swf-error', { detail: { url, message, ...(recovering ? { terminal: 'context-recovery-failed' as const } : {}) } }))
       }
       throw error
     } finally {
@@ -232,11 +444,16 @@ export class SwfPlayer {
   }
 
   get isPlaying(): boolean {
-    return !hostPaused && this.stoppedAt === null && this.el.ruffle().isPlaying
+    return !this.recovering && !hostPaused && this.stoppedAt === null && this.el.ruffle().isPlaying
+  }
+
+  get isRecovering(): boolean {
+    return this.recovering
   }
 
   stop(): void {
-    this.el.ruffle().suspend()
+    // Recovery may still need the first frame to register its callbacks.
+    if (!this.recovering) this.el.ruffle().suspend()
     this.stoppedAt ??= this.pausedAt ?? performance.now()
   }
 
@@ -253,7 +470,8 @@ export class SwfPlayer {
         if (this.stoppedAt !== null) this.stoppedAt += elapsed
         this.pausedAt = null
       }
-      if (this.stoppedAt === null) this.el.ruffle().resume()
+      if (this.stoppedAt === null || this.recovering) this.el.ruffle().resume()
+      for (const resume of [...this.resumeWaiters]) resume()
     }
   }
 
@@ -277,20 +495,44 @@ export class SwfPlayer {
    */
   async callback(name: string): Promise<(...args: unknown[]) => unknown> {
     if (this.destroyed) throw new Error('SWF player was destroyed')
+    // The pond requests its initial callback before starting the first load.
+    const movie = this.movie || 1
     const host = this.el as unknown as Record<string, unknown>
-    const fn = await this.waitFor(() => typeof host[name] === 'function' ? host[name] as (...args: unknown[]) => unknown : null, `SWF callback ${name}`, CALLBACK_MS)
+    if (!this.recovering)
+      await this.waitFor(() => typeof host[name] === 'function' ? true : null, `SWF callback ${name}`, CALLBACK_MS)
+    if (this.destroyed || movie !== this.movie) throw new Error('SWF callback was replaced or destroyed')
     this.callbacks.add(name)
-    return fn.bind(this.el)
+    return (...args: unknown[]): unknown => {
+      if (this.destroyed || movie !== this.movie) throw new Error('SWF callback was replaced or destroyed')
+      if (this.recoverContext) this.callbackArgs.set(name, args)
+      if (this.recovering) return
+      const fn = host[name]
+      if (typeof fn !== 'function') throw new Error(`SWF callback ${name} is unavailable`)
+      return fn.apply(this.el, args)
+    }
   }
 
   destroy(): void {
     if (this.destroyed) return
+    this.publishPanic()
     this.destroyed = true
+    ++this.recovery
+    this.recovering = false
+    this.lastLoad = null
+    this.callbackArgs.clear()
+    this.recoveryTimes = []
+    this.contextCleanup()
+    // The document observer can run before the shadow observer. Drain its
+    // canvas-removal records before disconnect discards the pending records.
+    releaseRemovedCanvases(this.panicObserver?.takeRecords?.())
+    this.panicObserver?.disconnect()
+    this.globalCleanup()
     ++this.revision
     this.cancelPending('SWF player was destroyed')
     this.keyboardCleanup()
     players.delete(this)
-    const canvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
+    const canvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas') ?? this.canvas
+    this.canvas = null
     this.el.remove()
     releaseRetiredCanvas(canvas)
   }

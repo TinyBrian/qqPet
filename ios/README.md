@@ -46,7 +46,7 @@ Ruffle 0.6's fallback Wasm uses sign-extension instructions introduced by WebKit
 
 The compiler runs in a serial Node child with a 512 MiB JavaScript heap limit. Its cache is stored under `out/ruffle-safari14`. Shared Web API and style fallbacks target Safari 14.0; Electron retains its existing deployment requirements.
 
-Movie replacement explicitly releases retired WebGL contexts after Ruffle tears down their instances. Live and suspended players retain their contexts, including the pet's two animation layers; rendering backends and effects are unchanged.
+Movie replacement explicitly releases retired WebGL contexts after Ruffle tears down their instances. The next pet action still loads in a hidden layer until its first paint; after the swap the old movie is destroyed and replaced with an unloaded layer. The mood player loads on first use. This reduces retained Rust instances, fonts and audio destinations while preserving the animation transition.
 
 References: [WebKit Safari 14.1 release notes](https://webkit.org/blog/11648/new-webkit-features-in-safari-14-1/), [Binaryen SignExtLowering](https://github.com/WebAssembly/binaryen/blob/version_123/src/passes/SignExtLowering.cpp).
 
