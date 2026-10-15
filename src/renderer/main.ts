@@ -384,7 +384,7 @@ window.qqpet.onTrayClick((c) => {
     openMenu({ x, y, pet: false }, adoptPet)
   } else if (save.havePet) {
     closeMenu()
-    openState(x, y)
+    openState(x, y, c.autoClose)
   } else adoptPet()
 })
 
