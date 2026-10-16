@@ -28,6 +28,7 @@ function statePanel(focused = false) {
   }
   const body = element('body')
   body.appendChild = el => { body.children.push(el); el.parentElement = body }
+  const drags = []
   const source = stripTypeScriptTypes(readFileSync(new URL('../../src/renderer/ui/state.ts', import.meta.url), 'utf8'))
     .replace(/^import .*$/gm, '').replace(/^export /gm, '')
   const ui = runInNewContext(source + '\n;({ openState, closeState })', {
@@ -40,9 +41,10 @@ function statePanel(focused = false) {
     info: { health: 5 }, save: { settings: {}, petComputedlInfo: { level: 1 }, selfGoodUseOption: {} },
     activity: () => false, growthPerMinute: () => 1, onInfoChange() {},
     openPetInfo: () => profiles.push(focus.at(-1)),
+    touch: false, mouseDrag: (el, touch) => drags.push([el, touch]),
   })
   const elapse = () => { const due = [...timers.values()]; timers.clear(); for (const t of due) t.f() }
-  return { ...ui, body, focus, profiles, timers, elapse, move: (x, y) => cursor({ x, y }), blur: () => events.dispatchEvent(new Event('blur')) }
+  return { ...ui, body, drags, focus, profiles, timers, elapse, move: (x, y) => cursor({ x, y }), blur: () => events.dispatchEvent(new Event('blur')) }
 }
 
 test('the tray status panel takes focus and hides on window blur; closing is idempotent', () => {
@@ -125,4 +127,11 @@ test('only the Windows tray left click asks for auto-close', () => {
   const tray = readFileSync(new URL('../../src/main/tray.ts', import.meta.url), 'utf8')
   assert.match(tray, /tray\.on\('click'.*autoClose: process\.platform === 'win32'/)
   assert.doesNotMatch(tray.split('\n').find(l => l.includes("'right-click'")), /autoClose/)
+})
+
+test('the status panel can be dragged with the mouse like the pet info window (#53)', () => {
+  const ui = statePanel()
+  ui.openState(800, 0)
+  const panel = ui.body.children[0].children[0]
+  assert.deepEqual(ui.drags, [[panel, false]])
 })

@@ -7,7 +7,8 @@ import { addSweetHeart, openPinkDiamond } from '../pet/vip'
 import { openGoods } from './control'
 import './css/state.css'
 import { formatDate } from './date'
-import { button, div, img } from './dom'
+import { button, div, img, touch } from './dom'
+import { mouseDrag } from './drag'
 import { frame } from './frame'
 import { openPetInfo } from './petinfo'
 import { progress } from './progress'
@@ -201,6 +202,8 @@ export function openState(x: number, y: number, closesItself = false): void {
   if (y < innerHeight / 2) panel.style.top = `${Math.max(y, 0)}px`
   else panel.style.bottom = `${Math.max(innerHeight - y, 0)}px`
   document.body.appendChild(div('ui-state', panel))
+  // Dragged like the pet info window (#53).
+  mouseDrag(panel, touch)
   render()
   // Focus lets a click elsewhere blur the window and close the panel.
   if (!document.hasFocus()) {
