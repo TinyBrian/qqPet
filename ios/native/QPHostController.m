@@ -13,6 +13,43 @@
 - (BOOL)_isBackground;
 @end
 
+// Feature keys come from WebKit's UnifiedWebPreferences.yaml. Enumerate the
+// running WebKit rather than relying on private properties in a newer SDK.
+@interface WKPreferences (QPRenderingFeatures)
++ (NSArray *)_features;
++ (NSArray *)_experimentalFeatures;
+- (BOOL)_isEnabledForFeature:(id)feature;
+- (void)_setEnabled:(BOOL)enabled forFeature:(id)feature;
+@end
+@protocol QPRenderingFeature <NSObject>
+- (NSString *)key;
+@end
+static NSDictionary *QPConfigureRendering(WKPreferences *preferences) {
+    NSArray *features=nil;
+    if ([WKPreferences respondsToSelector:@selector(_features)]) features=[WKPreferences _features];
+    else if ([WKPreferences respondsToSelector:@selector(_experimentalFeatures)]) features=[WKPreferences _experimentalFeatures];
+    if (![features isKindOfClass:NSArray.class] || ![preferences respondsToSelector:@selector(_setEnabled:forFeature:)] || ![preferences respondsToSelector:@selector(_isEnabledForFeature:)]) return @{@"applied":@NO};
+    NSArray *keys=@[@"UseGPUProcessForCanvasRenderingEnabled",@"UseGPUProcessForDOMRenderingEnabled",@"UseGPUProcessForWebGLEnabled"];
+    NSMutableDictionary *matched=[NSMutableDictionary new];
+    for (id<QPRenderingFeature> feature in features) {
+        if (![feature respondsToSelector:@selector(key)]) continue;
+        NSString *key=feature.key;
+        if ([keys containsObject:key]) matched[key]=feature;
+    }
+    // The root HUD on iOS 16 reads empty remote ImageBuffers. Keep all drawing
+    // paths in WebContent: a remote WebGL context cannot paint to a local 2D
+    // destination in this WebKit implementation. WebGL itself stays enabled.
+    if (matched.count!=keys.count) return @{@"applied":@NO};
+    NSMutableDictionary *before=[NSMutableDictionary new], *result=[NSMutableDictionary new];
+    for (NSString *key in keys) before[key]=@([preferences _isEnabledForFeature:matched[key]]);
+    for (NSString *key in keys) [preferences _setEnabled:NO forFeature:matched[key]];
+    BOOL applied=YES;
+    for (NSString *key in keys) if ([preferences _isEnabledForFeature:matched[key]]) applied=NO;
+    if (!applied) for (NSString *key in keys) [preferences _setEnabled:[before[key] boolValue] forFeature:matched[key]];
+    for (NSString *key in keys) result[key]=@{@"before":before[key],@"after":@([preferences _isEnabledForFeature:matched[key]])};
+    return @{@"applied":@(applied),@"features":result};
+}
+
 static NSString *QPJSON(id value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:value ?: NSNull.null options:NSJSONWritingFragmentsAllowed error:NULL];
     return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"null";
@@ -86,6 +123,7 @@ static CGFloat QPOrientationAngle(UIInterfaceOrientation orientation) {
 @property(nonatomic, strong) NSMutableSet<NSString *> *deferredManagerRequests;
 @property(nonatomic, strong) QPMemoryPolicy *processPolicy;
 @property(nonatomic, strong) QPAudioOutput *audioOutput;
+@property(nonatomic, copy) NSDictionary *renderingPolicy;
 @property(nonatomic) NSUInteger audioGeneration;
 @property(nonatomic, copy) NSDictionary *lastProcessPolicy;
 @property(nonatomic, copy) NSString *currentPage;
@@ -130,6 +168,8 @@ static CGFloat QPOrientationAngle(UIInterfaceOrientation orientation) {
     self.viewport=[[UIView alloc] initWithFrame:CGRectMake(0,0,self.cssSize.width,self.cssSize.height)];
     [self.cropView addSubview:self.viewport];
     WKWebViewConfiguration *config=[WKWebViewConfiguration new];
+    if (NSProcessInfo.processInfo.operatingSystemVersion.majorVersion==16 && [self.role isEqual:@"pet"])
+        self.renderingPolicy=QPConfigureRendering(config.preferences);
     config.allowsInlineMediaPlayback=YES; config.mediaTypesRequiringUserActionForPlayback=WKAudiovisualMediaTypeNone;
     self.audioOutput=[QPAudioOutput new];
     [self.audioOutput setHostPaused:self.paused];
@@ -194,6 +234,7 @@ static CGFloat QPOrientationAngle(UIInterfaceOrientation orientation) {
 - (void)updateProcessPolicy {
     NSDictionary *policy=[self.processPolicy updateWithWebView:self.webView active:!self.paused&&!self.invalidated];
     NSMutableDictionary *status=[@{@"mediaAudioProcess":@"native-audioqueue",@"nativeAudio":self.audioOutput.status ?: @{}} mutableCopy];
+    if (self.renderingPolicy) status[@"renderingPolicy"]=self.renderingPolicy;
     if (policy) status[@"processPolicy"]=policy;
     BOOL supportsBackground=[self.webView respondsToSelector:@selector(_isBackground)];
     UIApplicationState applicationState=UIApplication.sharedApplication.applicationState;
