@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { crc32 } from 'node:zlib'
+import type { Fetch } from '../shared/ipc'
 
 /**
  * Content packs (#28): resources/pet shipped apart from the shell. A pack is a zip in store mode (SWFs are already
@@ -315,4 +316,103 @@ export function lookup(layers: Layer[], bundledRoot: string, path: string, cased
     if (l.manifest.deletes?.some((d) => d.toLowerCase() === path.toLowerCase())) return null
   }
   return join(bundledRoot, cased(bundledRoot, '/' + path).replace(/^\//, ''))
+}
+
+/*
+ * Lite installers (#28) ship without resources/pet: the first run downloads or imports a full content pack. Below are
+ * the parts of that flow that do not need Electron, so the tests can run them.
+ */
+
+/** Content version of a shell with nothing bundled: every full pack is newer, no incremental one sits on it. */
+export const NO_CONTENT = '0'
+
+/** The shell's own content version when it bundles resources/pet, null for a lite build. */
+export const bundledContent = (resourcesRoot: string, shell: string): string | null => (existsSync(join(resourcesRoot, 'pet')) ? shell : null)
+
+/**
+ * `url` through a download mirror. A mirror is a URL prefix in front of the GitHub URL (ghproxy style, e.g.
+ * https://ghfast.top/). Empty means GitHub itself. The pack is still checked against the sha256 in packs.json.
+ */
+export function mirrored(url: string, mirror = ''): string {
+  const m = mirror.trim()
+  if (!m) return url
+  if (!/^https?:\/\/[^\s]+$/i.test(m)) throw new Error('镜像地址需要以 http:// 或 https:// 开头')
+  return m.replace(/\/*$/, '/') + url
+}
+
+/** The newest full pack of an index that goes on `content` with this shell, or why none does. */
+export function pickFullPack(index: PackIndex, content: string, shell: string): PackIndexEntry | string {
+  const full = (index.packs ?? []).filter((p) => p.base === undefined).sort((a, b) => compareVersion(b.version, a.version))
+  if (!full.length) return '发布页上没有完整内容包'
+  return full.find((p) => !packBlocker(p, content, shell)) ?? packBlocker(full[0], content, shell)!
+}
+
+/** A network failure (DNS, refused, TLS, timeout...) as something a user can act on. */
+const unreachable = (e: unknown): Error => new Error(`连不上下载地址，请检查网络或换个镜像（${(e as Error)?.message ?? e}）`)
+
+export async function fetchIndex(fetch: Fetch, url: string): Promise<PackIndex> {
+  const r = await fetch(url, { signal: AbortSignal.timeout(20_000) }).catch((e) => {
+    throw unreachable(e)
+  })
+  if (!r.ok) throw new Error(`获取内容包列表失败：HTTP ${r.status}`)
+  const index = (await r.json()) as PackIndex
+  if (!Array.isArray(index?.packs)) throw new Error('内容包列表格式不对')
+  return index
+}
+
+export interface Progress {
+  received: number
+  total: number
+}
+
+/** No byte for this long fails the download, so a dead connection does not hang at some percent forever. */
+const STALL_MS = 30_000
+
+/**
+ * Streams `entry` (through `mirror`) into `file`, hashing on the way, so a 360 MB pack never sits in memory.
+ * Resolves once size and sha256 match packs.json; removes the file and rejects otherwise.
+ */
+export async function downloadTo(fetch: Fetch, entry: Pick<PackIndexEntry, 'url' | 'size' | 'sha256'>, file: string, opts: { mirror?: string; onProgress?: (p: Progress) => void; stallMs?: number } = {}): Promise<void> {
+  const abort = new AbortController()
+  let stall: ReturnType<typeof setTimeout> | undefined
+  const arm = (): void => {
+    clearTimeout(stall)
+    stall = setTimeout(() => abort.abort(new Error('下载长时间没有进度，已中断')), opts.stallMs ?? STALL_MS)
+  }
+  const fd = openSync(file, 'w')
+  const hash = createHash('sha256')
+  let received = 0
+  try {
+    arm()
+    const r = await fetch(mirrored(entry.url, opts.mirror), { signal: abort.signal }).catch((e) => {
+      throw abort.signal.aborted ? e : unreachable(e)
+    })
+    if (!r.ok || !r.body) throw new Error(`下载失败：HTTP ${r.status}`)
+    const reader = r.body.getReader()
+    let last = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      arm()
+      writeSync(fd, value)
+      hash.update(value)
+      received += value.length
+      if (received > entry.size) throw new Error('下载的内容包比预期大，已中断')
+      const now = Date.now()
+      if (now - last >= 200) {
+        last = now
+        opts.onProgress?.({ received, total: entry.size })
+      }
+    }
+    opts.onProgress?.({ received, total: entry.size })
+    if (received !== entry.size) throw new Error(`下载不完整（${received} / ${entry.size} 字节）`)
+    if (hash.digest('hex') !== entry.sha256) throw new Error('下载的内容包校验失败')
+  } catch (e) {
+    closeSync(fd)
+    rmSync(file, { force: true })
+    throw abort.signal.aborted && abort.signal.reason instanceof Error ? abort.signal.reason : e
+  } finally {
+    clearTimeout(stall)
+  }
+  closeSync(fd)
 }

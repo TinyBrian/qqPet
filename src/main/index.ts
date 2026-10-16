@@ -8,9 +8,9 @@ import { calendar } from '../shared/calendar'
 import { latestRelease } from '../shared/update'
 import { toShape, type ShapeRect } from '../shared/hit-shape'
 import { weather } from '../shared/weather'
-import { downloadPack, findPack, importPack, installedContent, resetPacks } from './content'
+import { contentMissing } from './content'
+import { openFirstRun, registerPackIpc } from './first-run'
 import { handleScheme, registerScheme } from './protocol'
-import { APP_VERSION } from '../shared/version'
 import { exportSave, getSave, importSave, loadSave, patchSave, resetSave } from './save'
 import { createPetTray } from './tray'
 import { frontName } from './front'
@@ -45,6 +45,9 @@ registerScheme()
 
 app.whenReady().then(() => {
   handleScheme()
+  registerPackIpc()
+  // A lite installer's first run: get the pet's content before there is a pet (#28).
+  if (contentMissing()) return void openFirstRun()
   app.dock?.hide()
   loadSave()
   // The talk key records locally; nothing else asks for permissions here.
@@ -213,15 +216,6 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.aiChat, (_e, c, messages) => aiChat(net.fetch, c, messages))
   ipcMain.handle(IPC.weather, (_e, city: string) => weather(net.fetch, city))
   ipcMain.handle(IPC.latestRelease, () => latestRelease(net.fetch))
-  ipcMain.handle(IPC.packInfo, () => ({ content: installedContent(), shell: APP_VERSION }))
-  ipcMain.handle(IPC.importPack, () => importPack(win))
-  ipcMain.handle(IPC.resetPacks, () => resetPacks())
-  ipcMain.handle(IPC.findPack, () => findPack(net.fetch))
-  ipcMain.handle(IPC.downloadPack, () => downloadPack(net.fetch))
-  ipcMain.on(IPC.relaunch, () => {
-    app.relaunch()
-    app.exit(0)
-  })
   // A focusable pet window holds a full panel (社区, 密室...) that would cover a normal game window.
   let panel = false
   ipcMain.on(IPC.openGame, (_e, swf: string) => {

@@ -31,7 +31,7 @@ export default defineConfig({
       target: 'safari14',
       cssTarget: 'safari14',
       copyPublicDir: false,
-      rollupOptions: { input: { index: resolve('src/renderer/index.html'), game: resolve('src/renderer/game.html'), swf: resolve('src/renderer/swf.html') } },
+      rollupOptions: { input: { index: resolve('src/renderer/index.html'), game: resolve('src/renderer/game.html'), swf: resolve('src/renderer/swf.html'), firstrun: resolve('src/renderer/firstrun.html') } },
     },
     plugins: [
       appVersion(),

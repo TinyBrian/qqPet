@@ -20,6 +20,8 @@ export const IPC = {
   resetPacks: 'pack:reset',
   findPack: 'pack:find',
   downloadPack: 'pack:download',
+  findFullPack: 'pack:find-full',
+  packProgress: 'pack:progress',
   relaunch: 'app:relaunch',
   quit: 'app:quit',
   copyText: 'app:copy-text',
@@ -132,25 +134,35 @@ export interface AiConfig {
 }
 
 /** What the network modules need from fetch: Electron's net.fetch in the main process, a native bridge on Android. */
-/** An incremental content pack of the latest release that applies on the installed content (#28). */
+/** A content pack of the latest release that applies on the installed content (#28); incremental ones name their base. */
 export interface PackOffer {
   version: string
-  base: string
+  base?: string
   size: number
+}
+
+/** Bytes of a pack download so far. */
+export interface PackProgress {
+  received: number
+  total: number
 }
 
 /** Desktop content packs (#28); absent on mobile shells, which keep their bundled content. */
 export interface PackApi {
-  /** Installed content version and the shell's own. */
-  info(): Promise<{ content: string; shell: string }>
+  /** Installed content version and the shell's own; `bundled` is false for a lite installer, whose content is all packs. */
+  info(): Promise<{ content: string; shell: string; bundled: boolean }>
   /** Picks and installs a .qqpetpack; the new content version, null when cancelled. Rejects with why it was refused. */
   importPack(): Promise<string | null>
   /** Removes every installed pack, back to the bundled content. */
   reset(): Promise<void>
   /** Rejects while offline. */
   find(): Promise<PackOffer | null>
-  /** Downloads and installs the pack find() offered; the new content version. */
-  download(): Promise<string>
+  /** The newest full pack of the latest release, for a lite installer's first run; rejects with why there is none. */
+  findFull(mirror?: string): Promise<PackOffer>
+  /** Downloads and installs the pack find() or findFull() offered, through `mirror` (a URL prefix) if given; the new content version. */
+  download(mirror?: string): Promise<string>
+  /** Download progress of the pack being installed. */
+  onProgress(listener: (p: PackProgress) => void): void
   relaunch(): void
 }
 

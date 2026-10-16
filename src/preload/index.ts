@@ -23,7 +23,12 @@ const api: QQPetApi = {
     importPack: () => ipcRenderer.invoke(IPC.importPack),
     reset: () => ipcRenderer.invoke(IPC.resetPacks),
     find: () => ipcRenderer.invoke(IPC.findPack),
-    download: () => ipcRenderer.invoke(IPC.downloadPack),
+    findFull: (mirror) => ipcRenderer.invoke(IPC.findFullPack, mirror),
+    download: (mirror) => ipcRenderer.invoke(IPC.downloadPack, mirror),
+    onProgress: (listener) => {
+      ipcRenderer.removeAllListeners(IPC.packProgress)
+      ipcRenderer.on(IPC.packProgress, (_e, p) => listener(p))
+    },
     relaunch: () => ipcRenderer.send(IPC.relaunch),
   },
   quit: send(IPC.quit),

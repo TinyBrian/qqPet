@@ -114,11 +114,16 @@ async function importPack(): Promise<void> {
 }
 
 function resetPacks(): void {
-  void window.qqpet.packs!.info().then(({ content, shell }) =>
+  void window.qqpet.packs!.info().then(({ content, shell, bundled }) =>
     windowView({
       title: '恢复内置内容',
-      msg: content === shell ? `当前就是程序自带的 v${shell} 内容~` : `将删除已安装的 v${content} 内容包，回到程序自带的 v${shell} 内容并重启，确定吗？`,
-      ok: content === shell ? undefined : () => void window.qqpet.packs!.reset().then(() => window.qqpet.packs!.relaunch()),
+      // A lite installer has no content of its own (#28): removing the packs brings back its first-run download.
+      msg: !bundled
+        ? `精简版程序不带宠物内容。将删除已安装的 v${content} 内容包并重启，之后需要重新下载或导入内容包，确定吗？`
+        : content === shell
+          ? `当前就是程序自带的 v${shell} 内容~`
+          : `将删除已安装的 v${content} 内容包，回到程序自带的 v${shell} 内容并重启，确定吗？`,
+      ok: bundled && content === shell ? undefined : () => void window.qqpet.packs!.reset().then(() => window.qqpet.packs!.relaunch()),
     }),
   )
 }
