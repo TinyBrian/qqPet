@@ -1,5 +1,3 @@
-import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { app, clipboard, dialog, ipcMain, net, powerMonitor, session, shell } from 'electron'
 import { IPC, type TrayMenuItem, type TrayState } from '../shared/ipc'
 import type { SavePatch, Sex } from '../shared/save'
@@ -10,6 +8,7 @@ import { toShape, type ShapeRect } from '../shared/hit-shape'
 import { weather } from '../shared/weather'
 import { contentMissing } from './content'
 import { openFirstRun, registerPackIpc } from './first-run'
+import { relaunch, spawnSelf } from './relaunch'
 import { handleScheme, registerScheme } from './protocol'
 import { exportSave, getSave, importSave, loadSave, patchSave, resetSave } from './save'
 import { createPetTray } from './tray'
@@ -26,18 +25,13 @@ if (process.env.QQPET_USER_DATA) app.setPath('userData', process.env.QQPET_USER_
 // A click-through window on Wayland never learns where the cursor is, and its input region cannot be shaped, so
 // nothing on the pet could ever be clicked (#45). Under XWayland, as on X11, an input shape does the hit testing.
 // Electron picks the platform (and records it as the ozone-platform switch) before this script runs, so the app
-// restarts itself with the switch before taking the single-instance lock. An AppImage restarts through its own file,
-// since its mount goes away with this process; app.relaunch() dies with that mount, hence a detached spawn.
-// A platform the user chose on the command line stays.
+// restarts itself with the switch before taking the single-instance lock (spawnSelf: an AppImage restarts through
+// its own file). A platform the user chose on the command line stays.
 const toX11 =
   process.platform === 'linux' && !!process.env.DISPLAY && app.commandLine.getSwitchValue('ozone-platform') === 'wayland' &&
   !process.argv.some((a) => a.startsWith('--ozone-platform'))
 if (toX11) {
-  const args = [process.env.APPIMAGE || process.execPath, ...process.argv.slice(1), '--ozone-platform=x11']
-  // Electron keeps app.asar, icudtl.dat... open across the spawn, which would pin the old AppImage mount; bash drops them.
-  const closeFds = 'for f in /proc/$$/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] && eval "exec $n<&-"; done 2>/dev/null; exec "$0" "$@"'
-  const [file, argv] = existsSync('/bin/bash') ? ['/bin/bash', ['-c', closeFds, ...args]] : [args[0], args.slice(1)]
-  spawn(file, argv, { detached: true, stdio: 'inherit' }).unref()
+  spawnSelf(['--ozone-platform=x11'])
   app.exit(0)
 } else if (!app.requestSingleInstanceLock()) app.exit(0)
 
@@ -194,8 +188,7 @@ app.whenReady().then(() => {
   })
   ipcMain.on(IPC.resetPet, (_e, sex?: Sex) => {
     resetSave(sex)
-    app.relaunch()
-    app.exit(0)
+    relaunch()
   })
   ipcMain.handle(IPC.exportSave, async () => {
     const day = new Date().toISOString().slice(0, 10)
@@ -208,8 +201,7 @@ app.whenReady().then(() => {
     const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'QQ宠物存档', extensions: ['json'] }] })
     if (r.canceled) return
     importSave(r.filePaths[0])
-    app.relaunch()
-    app.exit(0)
+    relaunch()
   })
   ipcMain.handle(IPC.calendar, () => calendar(net.fetch))
   ipcMain.handle(IPC.aiModels, (_e, c) => aiModels(net.fetch, c))

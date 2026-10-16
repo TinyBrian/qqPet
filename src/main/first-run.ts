@@ -1,9 +1,10 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, net } from 'electron'
+import { BrowserWindow, ipcMain, net } from 'electron'
 import { IPC } from '../shared/ipc'
 import { APP_VERSION } from '../shared/version'
 import { downloadPack, findFullPack, findPack, hasBundledContent, importPack, installedContent, resetPacks } from './content'
 import { APP_ORIGIN } from './protocol'
+import { relaunch } from './relaunch'
 
 const PAGES = process.env.ELECTRON_RENDERER_URL ?? APP_ORIGIN
 
@@ -17,10 +18,7 @@ export function registerPackIpc(): void {
   ipcMain.handle(IPC.downloadPack, (e, mirror?: string) =>
     downloadPack(net.fetch, mirror ?? '', (p) => e.sender.isDestroyed() || e.sender.send(IPC.packProgress, p)),
   )
-  ipcMain.on(IPC.relaunch, () => {
-    app.relaunch()
-    app.exit(0)
-  })
+  ipcMain.on(IPC.relaunch, () => relaunch())
 }
 
 /**
