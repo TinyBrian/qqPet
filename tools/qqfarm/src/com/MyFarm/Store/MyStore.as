@@ -177,7 +177,9 @@ package com.MyFarm.Store
          _loc2_ = myBox.tab1.y + myBox.tab1.height + margins;
          myBox.scrollBar.y = _loc2_;
          container.y = 0;
-         _loc3_ = uint(int((myBox.width - margins * 2) / (50 + interval)));
+         // The shop reopens from scale 0.2 (TitleControl.showShop) and refresh() lays it out on the first frame of that
+         // tween: count columns on the unscaled width, or the shrunken box fits none and every item lands on one row.
+         _loc3_ = uint(Math.max(1,int((myBox.width / (myBox.scaleX > 0 ? myBox.scaleX : 1) - margins * 2) / (50 + interval))));
          var order:Array = new Array();
          var gray:Array = [new ColorMatrixFilter([0.3,0.59,0.11,0,0,0.3,0.59,0.11,0,0,0.3,0.59,0.11,0,0,0,0,0,0.5,0])];
          var k:uint = 0;
@@ -287,6 +289,12 @@ package com.MyFarm.Store
          var _loc5_:MovieClip = null;
          // The item box is named after its index; a click may land on the box itself or anything nested in it.
          var hit:DisplayObject = param1.target as DisplayObject;
+         // The detail boxes are shared: a second click while one is still tweening in or out would measure it
+         // shrunken and leave an extra click-blocking backdrop behind.
+         if(showBox != null && showBox.busy)
+         {
+            return;
+         }
          while(hit != null && hit.parent != container)
          {
             hit = hit.parent;

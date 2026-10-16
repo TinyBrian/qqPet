@@ -37,10 +37,16 @@ package com.MyFarm.Store.view
       
       private var _y:Number;
       
+      /** True from beginShow until the closing tween has taken the box off the stage. */
+      public var busy:Boolean = false;
+      
       public function ShowBox(param1:MovieClip, param2:String, param3:String, param4:DisplayObject, param5:Object, param6:Function)
       {
          super();
          mc = param1;
+         // Always measure at full size: an earlier box may have been left scaled down.
+         mc.scaleX = 1;
+         mc.scaleY = 1;
          _width = mc.width;
          _height = mc.height;
          str = param2;
@@ -198,10 +204,17 @@ package com.MyFarm.Store.view
          {
             mc.removeChild(displayObject);
          }
-         mc.height *= 10;
-         mc.width *= 10;
-         mc.parent.removeChild(bg);
-         mc.parent.removeChild(mc);
+         mc.scaleX = 1;
+         mc.scaleY = 1;
+         if(bg != null && bg.parent != null)
+         {
+            bg.parent.removeChild(bg);
+         }
+         if(mc.parent != null)
+         {
+            mc.parent.removeChild(mc);
+         }
+         busy = false;
          release();
       }
       
@@ -232,6 +245,7 @@ package com.MyFarm.Store.view
       
       public function beginShow() : void
       {
+         busy = true;
          _x = mc.x;
          _y = mc.y;
          mc.width /= 10;
