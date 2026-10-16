@@ -70,7 +70,7 @@ test('tampered, traversing, symlinked, compressed or padded packs are refused', 
 test('installing gates on shell and content version and leaves nothing behind on failure', () => {
   assert.equal(packBlocker({ version: '0.7.0', minShell: '0.6.0' }, '0.6.6', '0.6.6'), null)
   assert.match(packBlocker({ version: '0.7.0', minShell: '0.7.0' }, '0.6.6', '0.6.6'), /需要 v0\.7\.0/)
-  assert.match(packBlocker({ version: '0.6.6', minShell: '0.6.0' }, '0.6.6', '0.6.6'), /已经是/)
+  assert.match(packBlocker({ version: '0.6.6', minShell: '0.6.0' }, '0.6.6', '0.6.6'), /当前内容已是 v0\.6\.6，不需要导入 v0\.6\.6/)
   assert.match(packBlocker({ version: '0.7.0', base: '0.6.5', minShell: '0.6.0' }, '0.6.6', '0.6.6'), /增量包/)
 
   const packs = dir()
@@ -131,4 +131,19 @@ test('lookup takes the top layer that has the file; deletes hide what is below',
   assert.equal(read('pet/d'), null)
   assert.equal(read('pet/zz'), null)
   assert.equal(lookup([], bundle, 'pet/a'), join(bundle, 'pet/a'))
+})
+
+test('a full pack from a newer release goes on any program that reads packs (#54)', async () => {
+  const { defaultMinShell, FIRST_PACK_SHELL } = await import('../../src/main/content-pack.ts')
+  assert.equal(FIRST_PACK_SHELL, '0.6.8')
+  // Full pack: not tied to the release that built it.
+  assert.equal(defaultMinShell(), '0.6.8')
+  assert.equal(packBlocker({ version: '0.6.9', minShell: defaultMinShell() }, '0.6.8', '0.6.8'), null)
+  // What v0.6.9 shipped (minShell = its own version) is what the reporter hit on v0.6.8.
+  assert.match(packBlocker({ version: '0.6.9', minShell: '0.6.9' }, '0.6.8', '0.6.8'), /需要 v0\.6\.9 或更新的程序（当前 v0\.6\.8）/)
+  // Incremental: any program holding its base; never below the first pack reader.
+  assert.equal(defaultMinShell('0.6.9'), '0.6.9')
+  assert.equal(defaultMinShell('0.6.7'), '0.6.8')
+  assert.equal(packBlocker({ version: '0.7.0', base: '0.6.9', minShell: defaultMinShell('0.6.9') }, '0.6.9', '0.6.9'), null)
+  assert.match(packBlocker({ version: '0.7.0', base: '0.6.9', minShell: defaultMinShell('0.6.9') }, '0.6.8', '0.6.9'), /增量包/)
 })

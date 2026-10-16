@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Builds content packs (#28) from resources/pet and the packs.json index that lists them.
 //   node --experimental-strip-types scripts/pack-content.mjs --version 0.6.7 [--base v0.6.6] [--min-shell 0.6.6]
+// --min-shell defaults to the first program that reads packs (or the incremental base, if newer): see defaultMinShell.
 //        [--out dist/packs] [--url-prefix https://github.com/AnkioTomas/qqpet/releases/download/v0.6.7/]
 // Without --base: the full "core" pack. With --base <tag>: only what changed in resources/pet since that tag, with
 // removed files listed as deletes. Both can be given in one run with --full; packs.json lists everything built.
@@ -8,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { MANIFEST, checkPath, parseManifest, readPack, sha256, writeZip } from '../src/main/content-pack.ts'
+import { MANIFEST, checkPath, defaultMinShell, parseManifest, readPack, sha256, writeZip } from '../src/main/content-pack.ts'
 
 const { values: a } = parseArgs({
   options: {
@@ -51,7 +52,7 @@ function build(name, paths, extra) {
 
 const tracked = (ref) => git('ls-tree', '-r', '--name-only', '-z', ref, '--', 'resources/pet').split('\0').filter(Boolean).map((p) => p.slice('resources/'.length))
 const packs = []
-if (!a.base || a.full) packs.push(build(`QQPet-content-${version}.qqpetpack`, tracked('HEAD'), { minShell: (a['min-shell'] ?? version).replace(/^v/, '') }))
+if (!a.base || a.full) packs.push(build(`QQPet-content-${version}.qqpetpack`, tracked('HEAD'), { minShell: (a['min-shell'] ?? defaultMinShell()).replace(/^v/, '') }))
 if (a.base) {
   const base = a.base.replace(/^v/, '')
   const changed = [], deletes = []
@@ -60,7 +61,7 @@ if (a.base) {
     ;(status === 'D' ? deletes : changed).push(path.slice('resources/'.length))
   }
   if (!changed.length && !deletes.length) console.log(`resources/pet unchanged since ${a.base}: no incremental pack`)
-  else packs.push(build(`QQPet-content-${base}-to-${version}.qqpetpack`, changed, { base, minShell: (a['min-shell'] ?? base).replace(/^v/, ''), deletes }))
+  else packs.push(build(`QQPet-content-${base}-to-${version}.qqpetpack`, changed, { base, minShell: (a['min-shell'] ?? defaultMinShell(base)).replace(/^v/, ''), deletes }))
 }
 writeFileSync(join(out, 'packs.json'), JSON.stringify({ schema: 1, packs }, null, 2) + '\n')
 console.log(`packs.json: ${packs.length} packs`)

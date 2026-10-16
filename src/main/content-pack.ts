@@ -260,10 +260,21 @@ export function installedLayers(packsDir: string, bundled: string, shell: string
 
 export const contentVersion = (layers: Layer[], bundled: string): string => layers[0]?.manifest.version ?? bundled
 
+/** The first program that reads content packs (v0.6.8, #28). */
+export const FIRST_PACK_SHELL = '0.6.8'
+
+/**
+ * The oldest program a pack is built for when the release does not say. Packs carry only resources/pet, which every
+ * program since packs exist reads the same way, so a full pack goes on any of them (#54) and an incremental one on any
+ * that can hold its base. A release whose content needs new program code passes --min-shell.
+ */
+export const defaultMinShell = (base?: string): string =>
+  base !== undefined && compareVersion(base, FIRST_PACK_SHELL) > 0 ? base : FIRST_PACK_SHELL
+
 /** Why the pack cannot go on the current content, or null when it can. */
 export function packBlocker(m: Pick<Manifest, 'version' | 'minShell' | 'base'>, content: string, shell: string): string | null {
   if (compareVersion(m.minShell, shell) > 0) return `需要 v${m.minShell} 或更新的程序（当前 v${shell}）`
-  if (compareVersion(m.version, content) <= 0) return `已经是 v${content} 内容，不需要 v${m.version}`
+  if (compareVersion(m.version, content) <= 0) return `当前内容已是 v${content}，不需要导入 v${m.version} 内容包`
   if (m.base !== undefined && m.base !== content) return `这是 v${m.base} → v${m.version} 的增量包，当前内容是 v${content}`
   return null
 }
