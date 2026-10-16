@@ -38,6 +38,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 
@@ -53,6 +54,9 @@ class PetService : Service() {
             private set
 
         private const val NOTIFICATION_ID = 1
+        /** A window move this far (px) is hidden until the page is drawn at the new origin. */
+        private const val JUMP_PX = 4
+        private const val REVEAL_MS = 200L
         private const val TRAY_ICON_PX = 96
     }
 
@@ -121,6 +125,7 @@ class PetService : Service() {
             root.getLocationOnScreen(at)
             if (web.translationX != -at[0].toFloat()) web.translationX = -at[0].toFloat()
             if (web.translationY != -at[1].toFloat()) web.translationY = -at[1].toFloat()
+            reveal?.let { if (it[0] == at[0] && it[1] == at[1]) { reveal = null; web.alpha = 1f } }
             true
         }
         wm.addView(root, params)
@@ -244,17 +249,45 @@ class PetService : Service() {
         val scale = web.layoutParams.width / viewport
         val nx = floor(x * scale).toInt()
         val ny = floor(y * scale).toInt()
-        // The window is never hidden while it moves: hiding until the next frame commit and showing it again
-        // with a second relayout blanked the pet for up to half a second on every tap or menu (#18).
-        // The frame drawn for this layout must already carry the new page offset, or the page lags the window by a frame.
-        web.translationX = -nx.toFloat()
-        web.translationY = -ny.toFloat()
-        params.x = nx
-        params.y = ny
-        params.width = maxOf(ceil(w * scale).toInt(), 1)
-        params.height = maxOf(ceil(h * scale).toInt(), 1)
-        params.flags = if (w == 0.0 || h == 0.0) params.flags or LayoutParams.FLAG_NOT_TOUCHABLE else params.flags and LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        val touchable = w != 0.0 && h != 0.0
+        val to = intArrayOf(nx, ny, maxOf(ceil(w * scale).toInt(), 1), maxOf(ceil(h * scale).toInt(), 1), if (touchable) 1 else 0)
+        // Until the app draws again the system shows the window's last frame at its new origin, so a far move showed
+        // the pet at a wrong place for a frame (#18: drag start and end, menus). The page itself is made transparent
+        // and drawn so first (no relayout, unlike the window alpha that blanked it for half a second), then the window
+        // moves, and the pre-draw listener shows the page again once the window really is there.
+        val far = abs(nx - params.x) > JUMP_PX || abs(ny - params.y) > JUMP_PX
+        if (target != null || far && web.alpha != 0f) {
+            val first = target == null
+            target = to
+            if (first) {
+                web.alpha = 0f
+                root.viewTreeObserver.registerFrameCommitCallback { web.post { target?.let { target = null; place(it, true) } } }
+                web.invalidate()
+            }
+            return
+        }
+        place(to, false)
+    }
+
+    /** Window origin awaiting the transparent frame; null when none. */
+    private var target: IntArray? = null
+    /** The origin the hidden page is shown again at. */
+    private var reveal: IntArray? = null
+
+    private fun place(to: IntArray, hidden: Boolean) {
+        web.translationX = -to[0].toFloat()
+        web.translationY = -to[1].toFloat()
+        params.x = to[0]
+        params.y = to[1]
+        params.width = to[2]
+        params.height = to[3]
+        params.flags = if (to[4] == 0) params.flags or LayoutParams.FLAG_NOT_TOUCHABLE else params.flags and LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         wm.updateViewLayout(root, params)
+        if (hidden) {
+            reveal = intArrayOf(to[0], to[1])
+            // The system may keep the window elsewhere than asked (pre-draw listener); never leave the pet hidden.
+            web.postDelayed({ if (reveal != null && target == null) { reveal = null; web.alpha = 1f } }, REVEAL_MS)
+        }
         // Chromium rasters only the visible rect; without this, static content uncovered by a bigger window stays blank.
         web.invalidate()
     }

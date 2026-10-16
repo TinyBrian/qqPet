@@ -5,6 +5,7 @@
 import { aiChat, aiModels } from '../shared/ai'
 import { calendar } from '../shared/calendar'
 import { abortReason, cloneJson } from '../shared/compat'
+import { nextBounds } from '../mobile/bounds'
 import { cover } from '../mobile/overlay'
 import type { Fetch, Point, QQPetApi, TrayClick, TrayState } from '../shared/ipc'
 import type { SaveData } from '../shared/save'
@@ -178,9 +179,7 @@ function track(): void {
       r = Math.max(r, box.right)
       b = Math.max(b, box.bottom)
     }
-  const next = { x: Math.max(Math.floor(x), 0), y: Math.max(Math.floor(y), 0), w: 0, h: 0 }
-  next.w = Math.max(Math.min(Math.ceil(r), innerWidth) - next.x, 0)
-  next.h = Math.max(Math.min(Math.ceil(b), innerHeight) - next.y, 0)
+  const next = nextBounds(bounds, r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null, innerWidth, innerHeight)
   if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) native.setBounds(next.x, next.y, next.w, next.h, innerWidth)
   bounds = next
 }
