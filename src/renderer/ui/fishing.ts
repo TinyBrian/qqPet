@@ -1,6 +1,7 @@
 import FRIES from '../pet/data/fries.json'
 import { pondCommand, pondRoom, pondState } from '../pet/fishing'
 import { info, save } from '../pet/store'
+import { patchSwfFetch } from '../swf/patch'
 import { SwfPlayer } from '../swf/player'
 import { openFrame } from './box'
 import './css/fishing.css'
@@ -18,6 +19,9 @@ function grade(): string {
   const l = save.petComputedlInfo.level
   return `1${l < 5 ? 1 : l < 8 ? 2 : 0}${info.sex === 'GG' ? 2 : 3}`
 }
+
+// 鱼苗商店的等级标签框只有 29.5px 宽且自动换行，用我们的字体画 “lv42” 会把末位挤到看不见的第二行 (#58)。
+patchSwfFetch('pet/fishing/main.swf', [{ text: '>lv99<', grow: 240 }])
 
 export function openFishing(): void {
   if (open) return
