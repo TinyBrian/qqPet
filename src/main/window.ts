@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { IPC } from '../shared/ipc'
 import { APP_ORIGIN } from './protocol'
-import { desktopCursor, petDisplay } from './desktop'
+import { desktopCursor, overlayArea, petDisplay } from './desktop'
 import { fullscreenGate } from './fullscreen-gate'
 import { getSave } from './save'
 
@@ -14,8 +14,9 @@ const PAGES = process.env.ELECTRON_RENDERER_URL ?? APP_ORIGIN
 /** Transparent, click-through overlay following the pet's active display. */
 export function createPetWindow(): BrowserWindow {
   const initialDisplay = petDisplay(screen, getSave().settings.petDisplayId)
+  const placement = (display: Parameters<typeof overlayArea>[0]) => overlayArea(display, process.platform === 'win32')
   const win = new BrowserWindow({
-    ...initialDisplay.workArea,
+    ...placement(initialDisplay),
     show: false,
     frame: false,
     transparent: true,
@@ -55,7 +56,7 @@ export function createPetWindow(): BrowserWindow {
   // Click-through windows receive no mouse events on Linux, so the renderer
   // cannot hit-test on hover. Pushing the cursor position from here works the
   // same on every platform.
-  const position = desktopCursor(win, screen, initialDisplay.id, () => getSave().settings.zoom)
+  const position = desktopCursor(win, screen, initialDisplay.id, () => getSave().settings.zoom, placement)
   let dragging = false
   ipcMain.handle(IPC.setDragging, (event, on: boolean) => {
     if (event.sender !== win.webContents) throw new Error('Unknown drag sender')

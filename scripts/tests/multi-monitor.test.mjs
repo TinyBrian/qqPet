@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import { desktopCursor, petDisplay } from '../../src/main/desktop.ts'
+import { desktopCursor, overlayArea, petDisplay } from '../../src/main/desktop.ts'
 import { startSave } from '../../src/shared/save-logic.ts'
 import { renderer } from './pet-drag.test.mjs'
 
@@ -193,4 +193,28 @@ test('a native cursor that disagrees with the DOM grab point keeps the pet under
   app.cursor(skewed(true))
   assert.equal(app.info.lastX, 600)
   assert.equal(app.info.lastY, 360)
+})
+
+test('an auto-hidden Windows taskbar keeps its screen edge free of the overlay (#37)', () => {
+  const screenRect = { x: 0, y: 0, width: 1680, height: 911 }
+  // Auto-hide: the work area is the whole screen, so every edge keeps one pixel free.
+  assert.deepEqual(overlayArea({ id: 1, workArea: screenRect, bounds: screenRect }, true), { x: 1, y: 1, width: 1678, height: 909 })
+  // A docked taskbar already lies outside the work area; only the other edges move in, the pet still sits on the taskbar.
+  assert.deepEqual(overlayArea({ id: 1, workArea: { x: 0, y: 0, width: 1680, height: 863 }, bounds: screenRect }, true), { x: 1, y: 1, width: 1678, height: 862 })
+  // Other platforms, and displays without bounds, use the work area as is.
+  assert.deepEqual(overlayArea({ id: 1, workArea: screenRect, bounds: screenRect }, false), screenRect)
+  assert.deepEqual(overlayArea({ id: 1, workArea: screenRect }, true), screenRect)
+})
+
+test('the overlay follows the placement across displays and reports the inset origin', () => {
+  const d = desktop()
+  const place = (display) => overlayArea({ ...display, bounds: display.workArea }, true)
+  const position = desktopCursor(d.win, d.screen, 1, () => 1, place)
+  let p = position(false)
+  assert.deepEqual(d.win.getBounds(), { x: 1, y: 1, width: 1918, height: 1038 })
+  assert.deepEqual([p.x, p.y], [549, 339])
+  d.move({ x: -600, y: 100 })
+  p = position(true)
+  assert.deepEqual(d.win.getBounds(), { x: -1279, y: -199, width: 1278, height: 982 })
+  assert.equal(p.desktop.id, 2)
 })
