@@ -82,9 +82,21 @@ export const attrs = (g: Good): string =>
     .map(([k, v]) => ` ${k}+${v}`)
     .join('')
 
+/** Attribute a nums good changes (by useId ?? id): [name, unit]. */
+const NUMS_ATTR: Record<string, [string, string]> = {
+  yb: ['元宝', '个'],
+  growth: ['成长值', '点'],
+  health: ['健康值', '点'],
+}
+
 /** Tooltip lines of a good, as in the original's item panels. */
 export function describe(g: Good): string[] {
-  if (g.type === 'nums') return [`获得${g.name}*${g.value}`, g.desc ?? '']
+  if (g.type === 'nums') {
+    const [noun, unit] = NUMS_ATTR[g.useId ?? g.id] ?? [g.name, '点']
+    const v = g.value ?? 0
+    const line = `每个${v < 0 ? '减少' : '增加'} ${Math.abs(v)} ${unit}${noun}`
+    return [line, g.desc].filter((l): l is string => Boolean(l))
+  }
   const a = attrs(g)
   const lines = [
     g.desc,
