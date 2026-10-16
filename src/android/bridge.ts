@@ -263,3 +263,14 @@ const api: QQPetApi = {
 }
 
 window.qqpet = api
+
+// Ruffle's "复制错误详情" calls navigator.clipboard.writeText and ticks without waiting for it; the overlay
+// WebView is not focused, so the web clipboard refuses and nothing is copied (#18). Copy natively instead.
+{
+  const writeText = (text: string): Promise<void> => {
+    native.copyText(String(text))
+    return Promise.resolve()
+  }
+  if (navigator.clipboard) Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: writeText })
+  else Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+}
