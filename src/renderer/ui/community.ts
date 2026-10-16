@@ -58,9 +58,30 @@ const game = (swf: string) => (): void => {
  * such a request opens whatever stands in for it, quietly when nothing does.
  */
 const GONE = 'img.pet.qq.com/swf/games/'
+/**
+ * 神器传说 (东郊荒地/天剑峰/昆仑顶) is all stubs under Data/Wilderness that fetch the real movie from Tencent's dead
+ * resource host and sit on "请稍等" forever (#56): the 风语广场 portal to 东郊荒地, the scene script's UI and every
+ * 神器传说 NPC. Fail them at once; the portals take the pet where they lead instead.
+ */
+const SHENQI = /Wilderness\/(main_\w+|qq_shenqi_ui)\.swf|resource\.pet\.qq\.com\/QQPenguin\//
+const SHENQI_PORTALS: Record<string, number> = {
+  main_shenqi_begin: 30,
+  main_csm_tj: 31,
+  main_sq_transfer_tj: 31,
+  main_csm_kl: 32,
+  main_sq_transfer_kl: 32,
+}
+/** Sends the pet to a scene of the open island; set by openCommunity. */
+let jump: ((scene: number) => void) | null = null
 const fetchNet = window.fetch
 window.fetch = (input, init) => {
   const url = String(input instanceof Request ? input.url : input)
+  const shenqi = SHENQI.exec(url)
+  if (shenqi) {
+    const to = SHENQI_PORTALS[shenqi[1] ?? '']
+    if (to) setTimeout(() => jump?.(to))
+    return Promise.resolve(new Response(null, { status: 404 }))
+  }
   if (!url.includes(GONE)) return fetchNet(input, init)
   setTimeout(() => visit(url))
   return Promise.resolve(new Response(null, { status: 404 }))
@@ -594,6 +615,7 @@ export function openCommunity(): void {
     return 1
   }
 
+  jump = (scene) => void goScene(scene)
   window.PSW = host({
     FLASHINITCOMPLETE: () => {
       void loadCatalog().then(() => enter())
@@ -723,6 +745,7 @@ export function openCommunity(): void {
       resFlush = 0
       busy = false
       window.qqpet.setFocusable(false)
+      jump = null
       open = false
     },
   })
