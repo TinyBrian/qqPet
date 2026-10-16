@@ -181,3 +181,6 @@ jobs:
         with:
           body_path: notes.md
           files: artifacts/*
+          # Tags with a hyphen (v0.7.0-beta.1) are pre-releases and never become "latest", so Lite first-run downloads skip them.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
