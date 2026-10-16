@@ -1,0 +1,41 @@
+# Lite ("精简版") installers (#28): the same program as electron-builder.yml without resources/pet. The first run
+# downloads the latest full content pack (QQPet-content-<version>.qqpetpack, listed in the release's packs.json) or
+# imports one.   electron-builder --config electron-builder.lite.yml
+# Kept standalone rather than `extends`: electron-builder concatenates extraResources across extended configs, which
+# would bring pet/** back. Keep the two files in step.
+# Same appId as the full installers: either one installs over the other, and both read the same content packs.
+appId: io.github.qqpet
+productName: QQPet
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - icons/**
+      - asr/**
+asar: true
+publish: []
+# Apart from the full installers' names (QQPet.Setup.<v>.exe, QQPet-<v>[-arm64].dmg, QQPet-<v>.AppImage, qqpet_<v>_amd64.deb).
+artifactName: QQPet-Lite-${version}-${arch}.${ext}
+
+win:
+  target: [nsis]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: QQPet-Lite-Setup-${version}-${arch}.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.games
+
+linux:
+  target: [AppImage, deb]
+  category: Game
+  maintainer: qqpet

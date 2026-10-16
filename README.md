@@ -94,6 +94,13 @@ GitHub Actions 打 `v*` 标签时产出未签名 HAP 并放进 Release。和桌�
 | HarmonyOS（5 及以上） | `QQPet-<版本>.hap` |
 | iOS（需 TrollStore 或越狱） | `QQPet-<版本>-ios.ipa` |
 
+桌面端有两种安装包：
+
+- **完整版**（上表的文件，约 450–520 MB）：自带宠物内容，装好即用。不确定选哪个就下这个。
+- **精简版**（文件名带 `Lite`，约 120–160 MB）：Windows `QQPet-Lite-Setup-<版本>-x64.exe`，macOS `QQPet-Lite-<版本>-arm64.dmg` / `QQPet-Lite-<版本>-x64.dmg`，Linux `QQPet-Lite-<版本>-x86_64.AppImage` / `QQPet-Lite-<版本>-amd64.deb`。不带宠物内容，首次启动会弹出窗口：直接下载最新的完整内容包（约 360 MB，可填 GitHub 加速镜像，下载后按发布页公布的 SHA-256 校验），或导入已经下载好的 `QQPet-content-<版本>.qqpetpack`，完成后自动启动宠物。适合网络不稳、想分开下载或已经有内容包的情况。
+
+两种安装包可以互相覆盖安装，导入/下载过的内容包会保留。以后升级程序时，宠物素材没有变化的话精简版不用重新下载内容。
+
 桌面安装包**没有代码签名**，系统会拦截首次运行。各平台安装方式：
 
 - **Windows**：SmartScreen 提示「Windows 已保护你的电脑」时，点「更多信息」→「仍要运行」。

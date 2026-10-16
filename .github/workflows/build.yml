@@ -26,6 +26,10 @@ jobs:
         env:
           # No Apple signing identity in CI: produce unsigned dmgs.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+      # Lite installers (#28): the same build output without resources/pet; only the packaging runs again.
+      - run: npx electron-builder --config electron-builder.lite.yml --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
         with:
           name: qqpet-${{ matrix.os }}
@@ -140,7 +144,7 @@ jobs:
           path: artifacts
           merge-multiple: true
       # Content packs (#28): the full core pack and the resources/pet changes since the previous tag, plus packs.json.
-      # The installers above still carry the full content; only this job needs the LFS files.
+      # The full installers above carry the content too; lite installers download this pack on first run.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -162,6 +166,12 @@ jobs:
             if [ -n "$lines" ]; then printf '## %s\n\n%s\n\n' "$1" "$lines"; fi
           }
           {
+            # Which installer to take: full ones carry the pet content, lite ones fetch it on first run (#28).
+            printf '%s\n\n' \
+              '## 下载哪个' \
+              '- **完整版**（约 450–520 MB，自带宠物内容，装好即用）：Windows `QQPet.Setup.*.exe`，macOS `QQPet-*-arm64.dmg`（Apple 芯片）/ `QQPet-*.dmg`（Intel），Linux `QQPet-*.AppImage` / `qqpet_*_amd64.deb`' \
+              '- **精简版**（约 120–160 MB，不带宠物内容）：文件名带 `Lite`。首次启动时在窗口里下载内容包（可填加速镜像），或导入已下载的 `QQPet-content-*.qqpetpack`' \
+              '- **内容包** `QQPet-content-*.qqpetpack`：给精简版首次使用，或在「设置 → 内容包」里导入；已经装了完整版不需要下载'
             section 新功能 ':sparkles:'
             section 修复 ':bug:|:ambulance:'
             section 优化 ':zap:|:lipstick:'
