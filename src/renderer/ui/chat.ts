@@ -17,7 +17,11 @@ const DO =
 /** The protocol plus who is online, so LETTER has a real name to pick. */
 function doPrompt(): string {
   const names = lanPeers().map((p) => p.name)
-  return `${DO}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}`
+  const memory =
+    save.settings.memory && facts.length
+      ? `\n【关于主人的记忆】\n${facts.slice(-20).join('\n')}\n（聊天时自然地用上这些，但不要生硬地报流水账）`
+      : ''
+  return `${DO}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}${memory}`
 }
 
 // Small models also put the action word after the line instead of before it.
@@ -94,6 +98,46 @@ const SILLY = [
 const history: AiMessage[] = []
 const TURNS = 12
 
+/** 长期记忆（memory.md 的行）与历史落盘节流；一切只存在本地。 */
+let facts: string[] = []
+let sinceMemo = 0
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+
+function persistHistory(): void {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => window.qqpet.memHistory?.(history), 1000)
+}
+
+/** L2+L3：把一段对话提炼成事实，存进记忆（旧片段由此浓缩后再丢弃）。 */
+const EXTRACT =
+  '从下面的对话中提取关于主人以及你们共同经历的、值得长期记住的事实（喜好、习惯、约定、发生过的重要事）。每条一行，以「- 」开头；只记事实，不记寒暄客套；没有值得记的就只输出 NONE。对话：'
+
+async function remember(turns: AiMessage[]): Promise<void> {
+  const text = turns.map((m) => `${m.role === 'user' ? '主人' : '我'}：${m.content}`).join('\n')
+  const out = await ask([{ role: 'user', content: `${EXTRACT}\n${text}` }], '你是记忆整理器，只按格式输出，不要解释。')
+  if (!out) return
+  const lines = out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('- '))
+  if (!lines.length) return
+  facts = [...facts, ...lines]
+  window.qqpet.memFacts?.(lines)
+}
+
+/** 启动时接上上次的记忆与话头（L1）。 */
+export function initMemory(): void {
+  void window.qqpet.memLoad?.().then(({ memory, history: old }) => {
+    facts = memory
+    if (old.length) history.push(...old.slice(-TURNS))
+  })
+}
+
+export function forgetMemory(): void {
+  facts = []
+  window.qqpet.memClear?.()
+}
+
 /**
  * One line through the whole pipeline — the chat box and the talk key share it:
  * cheat codes, canned lines when AI is off, then the model's reply with its
@@ -110,7 +154,22 @@ export async function talkToPet(content: string): Promise<string> {
   const { act, arg, say } = parse(reply ?? '')
   const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
   // The model keeps to the action protocol only while its own earlier replies show it.
-  if (reply) history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
+  if (reply) {
+    history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
+    persistHistory()
+    if (save.settings.memory) {
+      // L2：每 5 个来回提炼一次记忆；L3：历史过长就把最老一段交接进记忆后丢弃
+      if (++sinceMemo >= 5) {
+        sinceMemo = 0
+        void remember(history.slice(-12))
+      }
+      if (history.length > 48) {
+        const old = history.splice(0, 24)
+        persistHistory()
+        void remember(old)
+      }
+    }
+  }
   note('刚和主人聊过天')
   if (reply) doAct(act, line, arg)
   return line
