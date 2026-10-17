@@ -175,7 +175,7 @@ async function remember(turns: AiMessage[], evs: string[] = []): Promise<void> {
 }
 
 /** 记忆压缩：超过阈值时把旧事实合并成摘要，保留最近 20 条。 */
-const MEMORY_MAX = 30
+const MEMORY_MAX = 50
 const KEEP_RECENT = 20
 
 async function compressMemory(): Promise<void> {
