@@ -16,14 +16,30 @@ import { setHidden } from './menu'
 const DO =
   '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、STUDY、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，STUDY=去上学/学习，HIDE=隐身，QUIET=免打扰（再说一次就取消免打扰，主人嫌你太安静时用它解除）。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你学习时写成：STUDY:科目 台词 —— 科目只能是 数学、语文、政治、音乐、艺术、礼仪、体育、劳技、武术 之一，不确定科目就写 STUDY 台词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
 
+/** 粗略相关度：去掉常见字后，事实里的字在问题里出现 ≥2 个算相关（中文无词边界，用字符共现近似）。 */
+function relevantTo(question: string, fact: string): boolean {
+  const stop = /[，。！？~～·…的主人你我他她它啊呀嘛呢吗了吧得了在是很会要]/g
+  const q = question.replace(stop, '')
+  const f = fact.replace(/- /g, '').replace(stop, '')
+  if (!q || !f) return false
+  let hit = 0
+  for (const ch of f) if (q.includes(ch)) hit++
+  return hit >= 2
+}
+
+/** 注入记忆：挑跟当前话题相关的事实；都不相关就退回最近 20 条。 */
+function injectMemory(question: string): string {
+  if (!save.settings.memory || !facts.length) return ''
+  const relevant = facts.filter((f) => relevantTo(question, f))
+  const chosen = (relevant.length ? relevant : facts.slice(-20)).slice(0, 20)
+  return `\n【关于主人的记忆】\n${chosen.join('\n')}\n（聊天时自然地用上这些，但不要生硬地报流水账）`
+}
+
 /** The protocol plus who is online, so LETTER has a real name to pick. */
-function doPrompt(): string {
+function doPrompt(question = ''): string {
   const names = lanPeers().map((p) => p.name)
   const search = save.settings.search ? ' SEARCH=联网搜索。主人问你需要查证、实时或你不知道的事时，写成 SEARCH:关键词（只写关键词，我会先联网搜，再把结果给你据实回答）。' : ''
-  const memory =
-    save.settings.memory && facts.length
-      ? `\n【关于主人的记忆】\n${facts.slice(-20).join('\n')}\n（聊天时自然地用上这些，但不要生硬地报流水账）`
-      : ''
+  const memory = injectMemory(question)
   return `${DO}${search}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}${memory}`
 }
 
@@ -225,7 +241,7 @@ export async function talkToPet(content: string): Promise<string> {
     speak({ s: canned, now: true, ai: false }, 'speak')
     return canned
   }
-  let reply = await ask([...history.slice(-TURNS), said], doPrompt())
+  let reply = await ask([...history.slice(-TURNS), said], doPrompt(content))
   let { act, arg, say } = parse(reply ?? '')
   // SEARCH：像 Hermes 的 web_search——先联网查，再把结果喂回去据实回答（单轮工具调用）
   if (act === 'SEARCH' && arg.name && save.settings.search) {
