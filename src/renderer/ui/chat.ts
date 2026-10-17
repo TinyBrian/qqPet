@@ -13,7 +13,7 @@ import { button, div } from './dom'
 import { setHidden } from './menu'
 
 const DO =
-  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，HIDE=隐身，QUIET=免打扰。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
+  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，HIDE=隐身，QUIET=免打扰（再说一次就取消免打扰，主人嫌你太安静时用它解除）。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
 
 /** The protocol plus who is online, so LETTER has a real name to pick. */
 function doPrompt(): string {
@@ -54,8 +54,14 @@ function doAct(act: string, say: string, arg: { name: string; text: string }): v
   } else if (act === 'HIDE' && !save.settings.hidden) {
     speak({ s: say, now: true, ai: false }, 'hide', { end: () => setHidden(true) })
     return
-  } else if (act === 'QUIET' && !save.settings.quiet) {
-    speak({ s: say, now: true, ai: false }, 'speak', { start: () => update('settings', { quiet: true }) })
+  } else if (act === 'QUIET') {
+    // 免打扰是开关：它自己开的，它自己也关得了；先恢复再说话，取消的那句才听得见
+    if (save.settings.quiet) {
+      update('settings', { quiet: false })
+      speak({ s: say, now: true, ai: false }, 'speak')
+    } else {
+      speak({ s: say, now: true, ai: false }, 'speak', { start: () => update('settings', { quiet: true }) })
+    }
     return
   }
   speak({ s: say, now: true, ai: false }, 'speak')
