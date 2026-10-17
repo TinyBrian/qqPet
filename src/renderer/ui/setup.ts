@@ -282,6 +282,13 @@ const TABS: { label: string; options: Option[] }[] = [
         },
         {
           type: 'radio',
+          label: '台词润色（关 = 原版台词原汁原味）',
+          title: '开启时闲置闲聊由 AI 发挥、日常台词经 AI 润色；关闭后全部念原版台词库。聊天对话不受影响。',
+          on: () => s.polish,
+          run: () => update('settings', { polish: !s.polish }),
+        },
+        {
+          type: 'radio',
           label: '开启宠物音效（贴边探头、点脸逗它）',
           title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
           on: () => s.sound,

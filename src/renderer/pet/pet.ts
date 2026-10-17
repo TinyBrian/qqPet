@@ -1,7 +1,7 @@
 import { PetSwf } from '../swf/pet-swf'
 import { openEmail } from '../ui/email'
 import { floatMood } from '../ui/float'
-import { retell, say } from '../ui/talk'
+import { say } from '../ui/talk'
 import { emitSaid } from './said'
 import { DEAD, illOf } from './data/ills'
 import { TALK, type Line } from './data/talk'
@@ -247,13 +247,15 @@ export function speak(t: Say, action?: string, hooks: { start?: () => void; end?
   const onOk = hooks.ok ? [hooks.ok] : []
   const show = (): void => {
     if (!save.settings.quiet) {
-      // 它说出口的每句话都进对话历史（气泡真正显示时才算数）
-      emitSaid(text)
-      if (t.ai === IDLE) void rephrase(text, t.ai).then((s) => void say(s ?? text, [button], onOk))
-      else {
-        const said = say(text, [button], onOk)
-        if (t.ai !== false) void Promise.all([rephrase(text, t.ai), said]).then(([s]) => s && void retell(text, s))
+      // 「台词润色」关 = 原版台词原样念；开 = 等 AI 生成/润色完再开口（动作已先播，只有气泡等）
+      const polish = save.settings.polish && t.ai !== false
+      const blurt = (s: string): void => {
+        // 入账的是它真正说出口的那句
+        emitSaid(s)
+        void say(s, [button], onOk)
       }
+      if (!polish) blurt(text)
+      else void rephrase(text, t.ai || undefined).then((s) => blurt(s ?? text))
     }
     hooks.start?.()
   }
