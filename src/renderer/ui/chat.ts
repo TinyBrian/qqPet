@@ -3,6 +3,7 @@ import { aiOn, ask, note } from '../pet/ai'
 import { listGoods } from '../pet/goods'
 import { useItem } from '../pet/items'
 import { work, workGoods } from '../pet/jobs'
+import { onSaid } from '../pet/said'
 import { speak } from '../pet/pet'
 import { addInfo, info, save, setInfo, update } from '../pet/store'
 import { sendLetterTo, lanPeers } from './lan-visit'
@@ -101,6 +102,7 @@ const TURNS = 12
 /** 长期记忆（memory.md 的行）与历史落盘节流；一切只存在本地。 */
 let facts: string[] = []
 let sinceMemo = 0
+let lastChatLine = ''
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 function persistHistory(): void {
@@ -131,6 +133,13 @@ export function initMemory(): void {
     facts = memory
     if (old.length) history.push(...old.slice(-TURNS))
   })
+  // 宠物的自言自语（闲聊/问候/事件反应）也入账，这样"你刚才说的啥"答得上来；
+  // 聊天回复本身已在账上，不重复记
+  onSaid((text) => {
+    if (!save.settings.memory || !text || text === lastChatLine) return
+    history.push({ role: 'assistant', content: `NONE ${text}` })
+    persistHistory()
+  })
 }
 
 export function forgetMemory(): void {
@@ -153,6 +162,7 @@ export async function talkToPet(content: string): Promise<string> {
   const reply = await ask([...history.slice(-TURNS), said], doPrompt())
   const { act, arg, say } = parse(reply ?? '')
   const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
+  lastChatLine = line
   // The model keeps to the action protocol only while its own earlier replies show it.
   if (reply) {
     history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
