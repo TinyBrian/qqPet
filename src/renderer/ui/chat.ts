@@ -152,7 +152,11 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 function persistHistory(): void {
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => window.qqpet.memHistory?.(history), 1000)
+  saveTimer = setTimeout(() => {
+    window.qqpet.memHistory?.(history)
+    // 未提炼完的对话缓冲 + 计数也一起落盘，重启接着攒，不丢
+    window.qqpet.memDialogueSave?.({ dialogue, sinceMemo })
+  }, 1000)
 }
 
 /** L2+L3：把一段对话提炼成事实，存进记忆（旧片段由此浓缩后再丢弃）。 */
@@ -198,6 +202,11 @@ export function initMemory(): void {
   void window.qqpet.memLoad?.().then(({ memory, history: old }) => {
     facts = memory
     if (old.length) history.push(...old.slice(-TURNS))
+  })
+  // 恢复"未提炼完"的对话缓冲与计数（重启接着攒，不丢）
+  void window.qqpet.memDialogueLoad?.().then((state) => {
+    if (state?.dialogue.length) dialogue.push(...state.dialogue)
+    sinceMemo = state?.sinceMemo ?? 0
   })
   // 宠物的自言自语（闲聊/问候/事件反应）也入账，这样"你刚才说的啥"答得上来；
   // 聊天回复本身已在账上，不重复记

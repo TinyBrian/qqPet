@@ -17,7 +17,7 @@ import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
 import { VisitQueue } from './visit-queue'
-import { addFacts, clearMemory, loadHistory, loadMemory, rewriteFacts, saveHistory, type HistoryTurn } from './memory'
+import { addFacts, clearMemory, loadDialogueState, loadHistory, loadMemory, rewriteFacts, saveDialogueState, saveHistory, type HistoryTurn } from './memory'
 import { DEFAULT_HOTKEY, parseHotkey, watchHotkey, type KeyWatcher } from './hotkey'
 import { preloadAsr, transcribe } from './asr'
 
@@ -104,6 +104,10 @@ app.whenReady().then(() => {
   })
   ipcMain.on(IPC.memRewrite, (_e, lines: string[]) => {
     if (Array.isArray(lines)) rewriteFacts(lines)
+  })
+  ipcMain.handle(IPC.memDialogueLoad, () => loadDialogueState())
+  ipcMain.on(IPC.memDialogueSave, (_e, state) => {
+    if (state && Array.isArray(state.dialogue)) saveDialogueState(state)
   })
   ipcMain.on(IPC.memHistory, (_e, turns: HistoryTurn[]) => {
     if (Array.isArray(turns)) saveHistory(turns)
