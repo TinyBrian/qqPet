@@ -2,7 +2,7 @@ import type { AiMessage } from '../../shared/ipc'
 import { aiOn, ask, note } from '../pet/ai'
 import { listGoods } from '../pet/goods'
 import { useItem } from '../pet/items'
-import { work, workGoods } from '../pet/jobs'
+import { study, studyGoods, work, workGoods } from '../pet/jobs'
 import { noteUserSpoke } from '../pet/calendar'
 import { onEvent, onReply, onSaid } from '../pet/said'
 import { speak } from '../pet/pet'
@@ -14,7 +14,7 @@ import { button, div } from './dom'
 import { setHidden } from './menu'
 
 const DO =
-  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，HIDE=隐身，QUIET=免打扰（再说一次就取消免打扰，主人嫌你太安静时用它解除）。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
+  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、STUDY、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，STUDY=去上学/学习，HIDE=隐身，QUIET=免打扰（再说一次就取消免打扰，主人嫌你太安静时用它解除）。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你学习时写成：STUDY:科目 台词 —— 科目只能是 数学、语文、政治、音乐、艺术、礼仪、体育、劳技、武术 之一，不确定科目就写 STUDY 台词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
 
 /** The protocol plus who is online, so LETTER has a real name to pick. */
 function doPrompt(): string {
@@ -28,13 +28,20 @@ function doPrompt(): string {
 }
 
 // Small models also put the action word after the line instead of before it.
-const ACT = /\b(FEED|CLEAN|WORK|HIDE|QUIET|NONE)\b[:：]?/i
+const ACT = /\b(FEED|CLEAN|WORK|STUDY|HIDE|QUIET|NONE)\b[:：]?/i
 const LETTER = /^\s*LETTER[:：]\s*([^:：]+?)[:：]\s*(?:「([^」]*)」)?\s*/i
 const SEARCH = /^\s*SEARCH[:：]\s*(.+)$/i
+const STUDY = /^\s*STUDY[:：]\s*(.+)$/i
 
 function parse(text: string): { act: string; arg: { name: string; text: string }; say: string } {
   const s = text.match(SEARCH)
   if (s) return { act: 'SEARCH', arg: { name: s[1].trim(), text: '' }, say: '' }
+  const st = text.match(STUDY)
+  if (st) {
+    // STUDY:科目 台词 —— 第一个词是科目，其余是台词
+    const sp = st[1].trim().match(/^(\S+)\s*(.*)$/)
+    return { act: 'STUDY', arg: { name: sp?.[1] ?? '', text: '' }, say: sp?.[2]?.trim() ?? '' }
+  }
   const l = text.match(LETTER)
   if (l) return { act: 'LETTER', arg: { name: l[1].trim(), text: (l[2] ?? '').trim() }, say: text.replace(LETTER, '').replace(/\s+/g, ' ').trim() }
   const m = text.match(ACT)
@@ -56,6 +63,12 @@ function doAct(act: string, say: string, arg: { name: string; text: string }): v
     const g = workGoods()[0]
     // A refusal (ill, busy, level too low) is spoken by work itself; the AI's "off to work" would contradict it.
     if (g) return void work(g)
+  } else if (act === 'STUDY') {
+    // 去上学：科目匹配（数学/语文/...），不确定就随机挑一门；study 自己说台词
+    const goods = studyGoods()
+    const wanted = arg.name
+    const g = wanted ? goods.find((x) => x.name.includes(wanted)) : goods[Math.floor(Math.random() * goods.length)]
+    if (g) return void study(g)
   } else if (act === 'HIDE' && !save.settings.hidden) {
     speak({ s: say, now: true, ai: false }, 'hide', { end: () => setHidden(true) })
     return
