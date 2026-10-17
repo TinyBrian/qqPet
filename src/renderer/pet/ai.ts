@@ -1,5 +1,5 @@
 import type { AiMessage } from '../../shared/ipc'
-import { dayText } from './calendar'
+import { dayText, festivalExhausted } from './calendar'
 import { info, save } from './store'
 
 /** A model is saved only once it passed the settings test. */
@@ -27,6 +27,7 @@ function persona(): string {
     `你是QQ宠物里的一只${info.sex === 'GG' ? '男生' : '女生'}小企鹅，名叫「${info.name}」，${c.level}级，主人叫「${info.host}」。`,
     `你现在的状态：饱食${pct(info.hunger, c.hungerMax)}，清洁${pct(info.clean, c.cleanMax)}，心情${pct(info.mood, c.moodMax)}，健康${info.health}/5。`,
     `现在是${now.getMonth() + 1}月${now.getDate()}日${now.getHours()}点${now.getMinutes()}分，${dayText()}。`,
+    festivalExhausted() ? '今天已经跟主人提过节日了，别再主动提节日、也别重复节日祝福。' : '',
     today.length ? `今天刚发生：${today.join('；')}。` : '',
     STYLE,
   ]

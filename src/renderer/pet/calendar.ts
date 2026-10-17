@@ -48,6 +48,11 @@ export function noteUserSpoke(): void {
   saveThrottle()
 }
 
+/** 节日提醒是否已提满——供 AI 提示词用：提满后闲聊别再主动提节日，否则 AI 凭"农历九月初九"自己又编一堆重阳。 */
+export function festivalExhausted(): boolean {
+  return festivalSaid >= (userAnswered ? 2 : 3)
+}
+
 export function festival(): string | null {
   const [d, tomorrow] = days
   const now = new Date()
