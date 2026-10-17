@@ -162,6 +162,7 @@ let ownsFocus = false
 const AUTO_CLOSE_MS = 500
 let autoClose = false
 let hovered = false
+let entered = false
 let closing: ReturnType<typeof setTimeout> | undefined
 const countdown = (): void => {
   clearTimeout(closing)
@@ -175,14 +176,22 @@ window.qqpet.onCursor?.((p) => {
   const inside = p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom
   if (inside === hovered) return
   hovered = inside
-  if (inside) clearTimeout(closing)
-  else countdown()
+  if (inside) {
+    entered = true
+    clearTimeout(closing)
+  } else if (entered) countdown()
+})
+
+// 悬停托盘离开时开始计时；鼠标已进档案则交给档案自身的离开逻辑
+window.qqpet.onTrayHoverLeave?.(() => {
+  if (!panel || !autoClose) return
+  if (!hovered) countdown()
 })
 
 export function closeState(): void {
   clearTimeout(closing)
   closing = undefined
-  autoClose = hovered = false
+  autoClose = hovered = entered = false
   if (!panel) return
   panel.parentElement!.remove()
   panel = null
@@ -211,7 +220,7 @@ export function openState(x: number, y: number, closesItself = false): void {
     window.qqpet.setFocusable(true)
   }
   autoClose = closesItself
-  if (autoClose) countdown()
+  entered = false
 }
 
 let queued = 0

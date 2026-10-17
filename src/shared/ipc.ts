@@ -38,6 +38,7 @@ export const IPC = {
   cursor: 'win:cursor',
   setDragging: 'win:set-dragging',
   trayClick: 'tray:click',
+  trayHoverLeave: 'tray:hover-leave',
   trayMenu: 'tray:menu',
   trayMenuAction: 'tray:menu-action',
   lanOnline: 'lan:online',
@@ -234,6 +235,8 @@ export interface QQPetApi {
   /** Cursor position in window coordinates, pushed ~30 times per second. */
   onCursor(listener: (p: DesktopCursor) => void): void
   onTrayClick(listener: (e: TrayClick) => void): void
+  /** 托盘悬浮结束（鼠标离开托盘图标）；档案据此开始收起倒计时。 */
+  onTrayHoverLeave?(listener: () => void): void
   /** A game window closed after `minutes` of play. */
   onGamePlayed(listener: (minutes: number) => void): void
   /** New clipboard text, while the clip setting is on. */

@@ -154,6 +154,8 @@ app.whenReady().then(() => {
     const b = win.getBounds()
     const z = getSave().settings.zoom
     win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: (click.x - b.x) / z, y: (click.y! - b.y) / z })
+  }, () => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.trayHoverLeave)
   })
   app.on('before-quit', () => {
     tray.destroy()
