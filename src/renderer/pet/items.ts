@@ -51,6 +51,15 @@ const HAPPENED: Record<string, (n: string) => string> = {
 }
 const happened = (g: Good): void => emitEvent((HAPPENED[g.type] ?? ((n: string) => `主人给你用了${n}`))(g.name))
 
+/** Uses a food/clean/toy good without any words, for time the pet spent unattended. */
+export function useItemQuietly(g: Good): void {
+  const d = DAILY[g.type as TimedType]
+  if (!takeGood(g)) return
+  if (g.useTimeing) startTimed(g as Good & { type: TimedType })
+  apply(g, d.extra)
+  if (d.task) addCount(d.task)
+}
+
 /**
  * Uses one of a good. `free` skips the inventory (the doctor already charged
  * for it). The good is taken when its animation starts, so a use that is
