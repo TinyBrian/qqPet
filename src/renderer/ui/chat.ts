@@ -106,6 +106,11 @@ const SILLY = [
 const history: AiMessage[] = []
 const TURNS = 12
 
+/** 纯对话（user + assistant 回复），供提炼——自言自语与事件旁白不混进来，避免稀释对话窗口。 */
+const dialogue: AiMessage[] = []
+/** 待提炼的事件旁白缓冲，搭下一次真实对话触发的提炼的车。 */
+const events: string[] = []
+
 /** 长期记忆（memory.md 的行）与历史落盘节流；一切只存在本地。 */
 let facts: string[] = []
 let sinceMemo = 0
@@ -121,17 +126,19 @@ function persistHistory(): void {
 const EXTRACT =
   '从下面的对话中提取关于主人以及你们共同经历的、值得长期记住的事实（喜好、习惯、约定、发生过的重要事）。每条一行，以「- 」开头；只记事实，不记寒暄客套；没有值得记的就只输出 NONE。对话：'
 
-async function remember(turns: AiMessage[]): Promise<void> {
-  const text = turns.map((m) => `${m.role === 'user' ? '主人' : m.role === 'system' ? '（旁白）' : '我'}：${m.content}`).join('\n')
+async function remember(turns: AiMessage[], evs: string[] = []): Promise<void> {
+  const lines = turns.map((m) => `${m.role === 'user' ? '主人' : '我'}：${m.content}`)
+  if (evs.length) lines.push(`（旁白）${evs.join('；')}`)
+  const text = lines.join('\n')
   const out = await ask([{ role: 'user', content: `${EXTRACT}\n${text}` }], '你是记忆整理器，只按格式输出，不要解释。')
   if (!out) return
-  const lines = out
+  const extracted = out
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.startsWith('- '))
-  if (!lines.length) return
-  facts = [...facts, ...lines]
-  window.qqpet.memFacts?.(lines)
+  if (!extracted.length) return
+  facts = [...facts, ...extracted]
+  window.qqpet.memFacts?.(extracted)
 }
 
 /** 启动时接上上次的记忆与话头（L1）。 */
@@ -151,6 +158,7 @@ export function initMemory(): void {
   onEvent((text) => {
     if (!save.settings.memory || !text) return
     history.push({ role: 'system', content: `[事件] ${text}` })
+    events.push(text)
     persistHistory()
   })
   // 点气泡按钮 = 主人开口回话（"好的"也算理它了）
@@ -158,6 +166,7 @@ export function initMemory(): void {
     if (!save.settings.memory || !text) return
     noteUserSpoke()
     history.push({ role: 'user', content: text })
+    dialogue.push({ role: 'user', content: text })
     persistHistory()
   })
 }
@@ -186,16 +195,18 @@ export async function talkToPet(content: string): Promise<string> {
   lastChatLine = line
   // The model keeps to the action protocol only while its own earlier replies show it.
   if (reply) {
-    history.push(said, { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` })
+    const asst: AiMessage = { role: 'assistant', content: act === 'LETTER' ? `LETTER:${arg.name}:「${arg.text}」 ${line}` : `${act} ${line}` }
+    history.push(said, asst)
+    dialogue.push(said, asst)
     persistHistory()
     if (save.settings.memory) {
-      // L2：每 5 个来回提炼一次记忆；L3：历史过长就把最老一段交接进记忆后丢弃
+      // L2：每 5 个真实来回提炼一次（纯对话窗口 + 积攒的事件旁白搭车）；L3：对话过长把最老一段交接进记忆后丢弃
       if (++sinceMemo >= 5) {
         sinceMemo = 0
-        void remember(history.slice(-12))
+        void remember(dialogue.slice(-12), events.splice(0))
       }
-      if (history.length > 48) {
-        const old = history.splice(0, 24)
+      if (dialogue.length > 48) {
+        const old = dialogue.splice(0, 24)
         persistHistory()
         void remember(old)
       }
@@ -267,6 +278,8 @@ export function openChat(): void {
     },
   )
   window.qqpet.setFocusable(true)
+  // 记录渲染进 DOM 后才滚到底部（初始 forEach 时 log 还没挂载，scrollHeight 为 0）
+  requestAnimationFrame(() => { log.scrollTop = log.scrollHeight })
   const into = (): void => input.focus()
   window.addEventListener('focus', into, { once: true })
   setTimeout(into, 50)
