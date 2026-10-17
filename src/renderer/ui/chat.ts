@@ -19,18 +19,22 @@ const DO =
 /** The protocol plus who is online, so LETTER has a real name to pick. */
 function doPrompt(): string {
   const names = lanPeers().map((p) => p.name)
+  const search = save.settings.search ? ' SEARCH=联网搜索。主人问你需要查证、实时或你不知道的事时，写成 SEARCH:关键词（只写关键词，我会先联网搜，再把结果给你据实回答）。' : ''
   const memory =
     save.settings.memory && facts.length
       ? `\n【关于主人的记忆】\n${facts.slice(-20).join('\n')}\n（聊天时自然地用上这些，但不要生硬地报流水账）`
       : ''
-  return `${DO}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}${memory}`
+  return `${DO}${search}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}${memory}`
 }
 
 // Small models also put the action word after the line instead of before it.
 const ACT = /\b(FEED|CLEAN|WORK|HIDE|QUIET|NONE)\b[:：]?/i
 const LETTER = /^\s*LETTER[:：]\s*([^:：]+?)[:：]\s*(?:「([^」]*)」)?\s*/i
+const SEARCH = /^\s*SEARCH[:：]\s*(.+)$/i
 
 function parse(text: string): { act: string; arg: { name: string; text: string }; say: string } {
+  const s = text.match(SEARCH)
+  if (s) return { act: 'SEARCH', arg: { name: s[1].trim(), text: '' }, say: '' }
   const l = text.match(LETTER)
   if (l) return { act: 'LETTER', arg: { name: l[1].trim(), text: (l[2] ?? '').trim() }, say: text.replace(LETTER, '').replace(/\s+/g, ' ').trim() }
   const m = text.match(ACT)
@@ -189,8 +193,27 @@ export async function talkToPet(content: string): Promise<string> {
     speak({ s: canned, now: true, ai: false }, 'speak')
     return canned
   }
-  const reply = await ask([...history.slice(-TURNS), said], doPrompt())
-  const { act, arg, say } = parse(reply ?? '')
+  let reply = await ask([...history.slice(-TURNS), said], doPrompt())
+  let { act, arg, say } = parse(reply ?? '')
+  // SEARCH：像 Hermes 的 web_search——先联网查，再把结果喂回去据实回答（单轮工具调用）
+  if (act === 'SEARCH' && arg.name && save.settings.search) {
+    const hits = await window.qqpet.webSearch(arg.name)
+    if (hits.length) {
+      const brief = hits.map((h, i) => `${i + 1}. ${h.title}：${h.description}`).join('\n')
+      const again = await ask([...history.slice(-TURNS), said], `主人让你联网查「${arg.name}」，下面是刚搜到的结果。用你自己的口吻、据实回答主人，不要编造结果里没有的内容，一两句话即可，不要用动作词：\n${brief}`)
+      if (again) {
+        const p2 = parse(again)
+        say = p2.say || again
+        act = 'NONE'
+      } else {
+        say = '呜…我搜到了点东西，但一时说不上来~'
+        act = 'NONE'
+      }
+    } else {
+      say = `呜…我试了联网搜「${arg.name}」，但没搜到，网络可能不太给力~`
+      act = 'NONE'
+    }
+  }
   const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
   lastChatLine = line
   // The model keeps to the action protocol only while its own earlier replies show it.

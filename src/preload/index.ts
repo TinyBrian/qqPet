@@ -16,6 +16,7 @@ const api: QQPetApi = {
   calendar: () => ipcRenderer.invoke(IPC.calendar),
   aiModels: (c) => ipcRenderer.invoke(IPC.aiModels, c),
   aiChat: (c, messages) => ipcRenderer.invoke(IPC.aiChat, c, messages),
+  webSearch: (query) => ipcRenderer.invoke(IPC.webSearch, query),
   weather: (city) => ipcRenderer.invoke(IPC.weather, city),
   latestRelease: () => ipcRenderer.invoke(IPC.latestRelease),
   packs: {

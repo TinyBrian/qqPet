@@ -2,6 +2,7 @@ import { app, clipboard, dialog, ipcMain, net, powerMonitor, session, shell } fr
 import { IPC, type TrayMenuItem, type TrayState } from '../shared/ipc'
 import type { SavePatch, Sex } from '../shared/save'
 import { aiChat, aiModels } from '../shared/ai'
+import { webSearch } from '../shared/websearch'
 import { calendar } from '../shared/calendar'
 import { latestRelease } from '../shared/update'
 import { toShape, type ShapeRect } from '../shared/hit-shape'
@@ -218,6 +219,7 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.calendar, () => calendar(net.fetch))
   ipcMain.handle(IPC.aiModels, (_e, c) => aiModels(net.fetch, c))
   ipcMain.handle(IPC.aiChat, (_e, c, messages) => aiChat(net.fetch, c, messages))
+  ipcMain.handle(IPC.webSearch, (_e, query: string) => webSearch(net.fetch, query))
   ipcMain.handle(IPC.weather, (_e, city: string) => weather(net.fetch, city))
   ipcMain.handle(IPC.latestRelease, () => latestRelease(net.fetch))
   // A focusable pet window holds a full panel (社区, 密室...) that would cover a normal game window.

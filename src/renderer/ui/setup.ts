@@ -293,6 +293,13 @@ const TABS: { label: string; options: Option[] }[] = [
         },
         {
           type: 'radio',
+          label: '联网搜索（问它"查一下"时联网搜，免 key）',
+          title: '聊天时它需要查证或实时信息，会先联网搜（DuckDuckGo 优先、失败回退 Bing 中国版，均免 key）再据实回答；都搜不到就老实说没搜到。',
+          on: () => s.search,
+          run: () => update('settings', { search: !s.search }),
+        },
+        {
+          type: 'radio',
           label: '开启宠物音效（贴边探头、点脸逗它）',
           title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
           on: () => s.sound,
