@@ -39,6 +39,11 @@ export function clearMemory(): void {
   atomicWrite(memFile(), '')
 }
 
+/** Replaces memory.md entirely with the given facts (used by memory compression). */
+export function rewriteFacts(lines: string[]): void {
+  atomicWrite(memFile(), lines.map((l) => `${l.trim()}\n`).join(''))
+}
+
 export function loadHistory(): HistoryTurn[] {
   try {
     if (!existsSync(histFile())) return []

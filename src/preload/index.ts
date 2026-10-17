@@ -73,6 +73,7 @@ const api: QQPetApi = {
   lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
   memLoad: () => ipcRenderer.invoke(IPC.memLoad),
   memFacts: (lines) => ipcRenderer.send(IPC.memFacts, lines),
+  memRewrite: (lines) => ipcRenderer.send(IPC.memRewrite, lines),
   memHistory: (turns) => ipcRenderer.send(IPC.memHistory, turns),
   memClear: () => ipcRenderer.send(IPC.memClear),
   voiceAudio: (samples) => ipcRenderer.send(IPC.voiceAudio, samples),

@@ -51,6 +51,7 @@ export const IPC = {
   memFacts: 'mem:facts',
   memHistory: 'mem:history',
   memClear: 'mem:clear',
+  memRewrite: 'mem:rewrite',
   voiceStart: 'voice:start',
   voiceStop: 'voice:stop',
   voiceText: 'voice:text',
@@ -276,6 +277,7 @@ export interface QQPetApi {
   memFacts?(lines: string[]): void
   memHistory?(turns: { role: 'user' | 'assistant' | 'system'; content: string }[]): void
   memClear?(): void
+  memRewrite?(lines: string[]): void
   /** Push one recorded utterance (16 kHz mono, -1..1) for transcription. */
   voiceAudio?(samples: Float32Array): void
   /** The talk key went down: start recording. */

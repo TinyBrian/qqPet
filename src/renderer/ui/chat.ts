@@ -158,6 +158,25 @@ async function remember(turns: AiMessage[], evs: string[] = []): Promise<void> {
   window.qqpet.memFacts?.(extracted)
 }
 
+/** 记忆压缩：超过阈值时把旧事实合并成摘要，保留最近 20 条。 */
+const MEMORY_MAX = 30
+const KEEP_RECENT = 20
+
+async function compressMemory(): Promise<void> {
+  if (facts.length <= MEMORY_MAX) return
+  const old = facts.slice(0, facts.length - KEEP_RECENT)
+  const recent = facts.slice(-KEEP_RECENT)
+  const out = await askClean('你是记忆整理器。把下面这些关于主人的旧记忆合并成更少的条目：同类合并成一条、去掉过时/重复/琐碎的内容、只保留值得长期记住的核心事实。每条一行，以「- 」开头。只输出合并后的记忆，不要解释。', [{ role: 'user', content: old.join('\n') }])
+  if (!out) return
+  const merged = out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('- '))
+  if (!merged.length) return
+  facts = [...merged, ...recent]
+  window.qqpet.memRewrite?.(facts)
+}
+
 /** 启动时接上上次的记忆与话头（L1）。 */
 export function initMemory(): void {
   void window.qqpet.memLoad?.().then(({ memory, history: old }) => {
@@ -239,7 +258,7 @@ export async function talkToPet(content: string): Promise<string> {
       // L2：每 5 个真实来回提炼一次（纯对话窗口 + 积攒的事件旁白搭车）；L3：对话过长把最老一段交接进记忆后丢弃
       if (++sinceMemo >= 5) {
         sinceMemo = 0
-        void remember(dialogue.slice(-12), events.splice(0))
+        void remember(dialogue.slice(-12), events.splice(0)).then(() => void compressMemory())
       }
       if (dialogue.length > 48) {
         const old = dialogue.splice(0, 24)

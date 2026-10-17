@@ -17,7 +17,7 @@ import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
 import { VisitQueue } from './visit-queue'
-import { addFacts, clearMemory, loadHistory, loadMemory, saveHistory, type HistoryTurn } from './memory'
+import { addFacts, clearMemory, loadHistory, loadMemory, rewriteFacts, saveHistory, type HistoryTurn } from './memory'
 import { DEFAULT_HOTKEY, parseHotkey, watchHotkey, type KeyWatcher } from './hotkey'
 import { preloadAsr, transcribe } from './asr'
 
@@ -101,6 +101,9 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.memLoad, () => ({ memory: loadMemory(), history: loadHistory() }))
   ipcMain.on(IPC.memFacts, (_e, lines: string[]) => {
     if (Array.isArray(lines)) addFacts(lines)
+  })
+  ipcMain.on(IPC.memRewrite, (_e, lines: string[]) => {
+    if (Array.isArray(lines)) rewriteFacts(lines)
   })
   ipcMain.on(IPC.memHistory, (_e, turns: HistoryTurn[]) => {
     if (Array.isArray(turns)) saveHistory(turns)
