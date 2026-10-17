@@ -1,5 +1,5 @@
 import type { AiMessage } from '../../shared/ipc'
-import { aiOn, ask, note } from '../pet/ai'
+import { aiOn, ask, askClean, note } from '../pet/ai'
 import { listGoods } from '../pet/goods'
 import { useItem } from '../pet/items'
 import { study, studyGoods, work, workGoods } from '../pet/jobs'
@@ -147,7 +147,7 @@ async function remember(turns: AiMessage[], evs: string[] = []): Promise<void> {
   const lines = turns.map((m) => `${m.role === 'user' ? '主人' : '我'}：${m.content}`)
   if (evs.length) lines.push(`（旁白）${evs.join('；')}`)
   const text = lines.join('\n')
-  const out = await ask([{ role: 'user', content: `${EXTRACT}\n${text}` }], '你是记忆整理器，只按格式输出，不要解释。')
+  const out = await askClean('你是记忆整理器，只按格式输出，不要解释。', [{ role: 'user', content: `${EXTRACT}\n${text}` }])
   if (!out) return
   const extracted = out
     .split('\n')
