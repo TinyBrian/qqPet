@@ -159,7 +159,7 @@ function render(): void {
 let ownsFocus = false
 
 /** A panel opened from the Windows tray closes this long after the cursor last left it, or never came (#41). */
-const AUTO_CLOSE_MS = 3000
+const AUTO_CLOSE_MS = 500
 let autoClose = false
 let hovered = false
 let closing: ReturnType<typeof setTimeout> | undefined

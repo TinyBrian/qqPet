@@ -29,6 +29,8 @@ export function createPetTray(onClick: (e: TrayClick) => void) {
     )
   } else {
     tray.on('click', () => { if (!poppingMenu) onClick({ kind: 'state', ...screen.getCursorScreenPoint(), autoClose: process.platform === 'win32' }) })
+    // 悬浮即展开档案；收起交给档案的 autoClose（鼠标不在档案上就关），不用托盘 leave——免得鼠标移进档案的半路误关
+    tray.on('mouse-enter', () => { if (!poppingMenu) onClick({ kind: 'state', ...screen.getCursorScreenPoint(), autoClose: true }) })
     // macOS uses a native popup. Windows keeps the HTML menu at the cursor, including in the overflow flyout.
     tray.on('right-click', () => onClick({ kind: 'menu', ...(process.platform !== 'darwin' && screen.getCursorScreenPoint()) }))
   }
