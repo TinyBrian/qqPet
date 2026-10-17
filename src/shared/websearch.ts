@@ -79,11 +79,39 @@ async function bingSearch(fetch: Fetch, query: string, max: number): Promise<Sea
   return out
 }
 
+/** Tavily 搜索 API：正规、稳定、带 AI 摘要，需自填 key。 */
+async function tavilySearch(fetch: Fetch, query: string, key: string, max: number): Promise<SearchResult[]> {
+  const r = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: key, query, max_results: max, search_depth: 'basic' }),
+  })
+  if (!r.ok) return []
+  const j = (await r.json()) as { results?: { title?: string; url?: string; content?: string }[] }
+  return (j.results ?? []).map((x) => ({ title: x.title ?? '', url: x.url ?? '', description: x.content ?? '' }))
+}
+
+/** Brave 搜索 API：需自填 key。 */
+async function braveSearch(fetch: Fetch, query: string, key: string, max: number): Promise<SearchResult[]> {
+  const r = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${max}`, {
+    headers: { 'X-Subscription-Token': key, Accept: 'application/json' },
+  })
+  if (!r.ok) return []
+  const j = (await r.json()) as { web?: { results?: { title?: string; url?: string; description?: string }[] } }
+  return (j.web?.results ?? []).map((x) => ({ title: x.title ?? '', url: x.url ?? '', description: x.description ?? '' }))
+}
+
 /**
- * 免 key 网页搜索：先试 DuckDuckGo（结果质量高），被墙/失败则回退 Bing 中国版
- * （国内裸连可用）。全程不需要任何 API key，失败时返回 []，调用方据此优雅降级。
+ * 网页搜索：自填 key 时走 Tavily/Brave 正规 API，否则免 key（DDG 优先、Bing 回退）。
+ * 全程优雅降级，失败时返回 []，调用方据实告知没搜到。
  */
-export async function webSearch(fetch: Fetch, query: string, max = 6): Promise<SearchResult[]> {
+export async function webSearch(fetch: Fetch, query: string, max = 6, backend: 'auto' | 'tavily' | 'brave' = 'auto', key = ''): Promise<SearchResult[]> {
+  if (backend === 'tavily' && key) {
+    try { return await tavilySearch(fetch, query, key, max) } catch { /* 回退免 key */ }
+  }
+  if (backend === 'brave' && key) {
+    try { return await braveSearch(fetch, query, key, max) } catch { /* 回退免 key */ }
+  }
   try {
     const ddg = await ddgSearch(fetch, query, max)
     if (ddg.length) return ddg
