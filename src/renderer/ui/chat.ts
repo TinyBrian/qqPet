@@ -3,7 +3,7 @@ import { aiOn, ask, note } from '../pet/ai'
 import { listGoods } from '../pet/goods'
 import { useItem } from '../pet/items'
 import { work, workGoods } from '../pet/jobs'
-import { onSaid } from '../pet/said'
+import { onEvent, onReply, onSaid } from '../pet/said'
 import { speak } from '../pet/pet'
 import { addInfo, info, save, setInfo, update } from '../pet/store'
 import { sendLetterTo, lanPeers } from './lan-visit'
@@ -121,7 +121,7 @@ const EXTRACT =
   '从下面的对话中提取关于主人以及你们共同经历的、值得长期记住的事实（喜好、习惯、约定、发生过的重要事）。每条一行，以「- 」开头；只记事实，不记寒暄客套；没有值得记的就只输出 NONE。对话：'
 
 async function remember(turns: AiMessage[]): Promise<void> {
-  const text = turns.map((m) => `${m.role === 'user' ? '主人' : '我'}：${m.content}`).join('\n')
+  const text = turns.map((m) => `${m.role === 'user' ? '主人' : m.role === 'system' ? '（旁白）' : '我'}：${m.content}`).join('\n')
   const out = await ask([{ role: 'user', content: `${EXTRACT}\n${text}` }], '你是记忆整理器，只按格式输出，不要解释。')
   if (!out) return
   const lines = out
@@ -144,6 +144,18 @@ export function initMemory(): void {
   onSaid((text) => {
     if (!save.settings.memory || !text || text === lastChatLine) return
     history.push({ role: 'assistant', content: `NONE ${text}` })
+    persistHistory()
+  })
+  // 发生在它身上的事以旁白入账：它才"知道"自己刚洗过澡、吃过药
+  onEvent((text) => {
+    if (!save.settings.memory || !text) return
+    history.push({ role: 'system', content: `[事件] ${text}` })
+    persistHistory()
+  })
+  // 点气泡按钮 = 主人开口回话（"好的"也算理它了）
+  onReply((text) => {
+    if (!save.settings.memory || !text) return
+    history.push({ role: 'user', content: text })
     persistHistory()
   })
 }

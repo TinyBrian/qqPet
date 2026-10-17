@@ -11,3 +11,25 @@ export const onSaid = (fn: (text: string) => void): void => {
 export const emitSaid = (text: string): void => {
   sink?.(text)
 }
+
+/** 主人点了气泡按钮（相当于主人开口回了一句）。 */
+let replySink: ((text: string) => void) | null = null
+
+export const onReply = (fn: (text: string) => void): void => {
+  replySink = fn
+}
+
+export const emitReply = (text: string): void => {
+  replySink?.(text)
+}
+
+/** 发生在宠物身上的事（喂食/洗澡/喂药…），旁白式入账。 */
+let eventSink: ((text: string) => void) | null = null
+
+export const onEvent = (fn: (text: string) => void): void => {
+  eventSink = fn
+}
+
+export const emitEvent = (text: string): void => {
+  eventSink?.(text)
+}
