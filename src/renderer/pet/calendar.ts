@@ -32,6 +32,16 @@ export function greeting(): Line {
 }
 
 /** What the pet says about today's holiday, festival, make-up working day or solar term; only solar festivals while offline. */
+// 节日提醒节流：没回应最多提 3 次，主人回应后只再提 1 次
+let festivalSaid = 0
+let userAnswered = false
+let lastLunar = ''
+
+/** 主人说了话（聊天/语音/点按钮）——节日提醒只再提一次就打住。 */
+export function noteUserSpoke(): void {
+  userAnswered = true
+}
+
 export function festival(): string | null {
   const [d, tomorrow] = days
   const now = new Date()
@@ -49,12 +59,21 @@ export function festival(): string | null {
 export function dateTalk(): string | null {
   const [today] = days
   if (!today) return null
+  if (today.lunar !== lastLunar) {
+    lastLunar = today.lunar
+    festivalSaid = 0
+    userAnswered = false
+  }
   const now = new Date()
   const lines = [`[host]，今天是农历${today.lunar}，星期${WEEK[now.getDay()]}~`]
   const i = days.findIndex((d, i) => i > 0 && d.holiday?.off && d.holiday.name !== today.holiday?.name)
   if (i > 0) lines.push(`[host]，再过${i}天就是${days[i].holiday!.name}啦，放假有什么计划吗？`)
   if ((now.getDay() === 0 || now.getDay() === 6) && !today.holiday) lines.push('周末啦，[host]今天好好休息一下吧~')
-  const f = festival()
+  // 节日提醒节流：第一句总要提醒；没回应最多再提两次，回应过后只再提一次
+  const cap = userAnswered ? 2 : 3
+  const f = festivalSaid < cap ? festival() : null
   if (f) lines.push(f)
-  return pick(lines)
+  const chosen = pick(lines)
+  if (f && chosen === f) festivalSaid++
+  return chosen
 }

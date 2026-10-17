@@ -3,6 +3,7 @@ import { aiOn, ask, note } from '../pet/ai'
 import { listGoods } from '../pet/goods'
 import { useItem } from '../pet/items'
 import { work, workGoods } from '../pet/jobs'
+import { noteUserSpoke } from '../pet/calendar'
 import { onEvent, onReply, onSaid } from '../pet/said'
 import { speak } from '../pet/pet'
 import { addInfo, info, save, setInfo, update } from '../pet/store'
@@ -155,6 +156,7 @@ export function initMemory(): void {
   // 点气泡按钮 = 主人开口回话（"好的"也算理它了）
   onReply((text) => {
     if (!save.settings.memory || !text) return
+    noteUserSpoke()
     history.push({ role: 'user', content: text })
     persistHistory()
   })
@@ -172,6 +174,7 @@ export function forgetMemory(): void {
  */
 export async function talkToPet(content: string): Promise<string> {
   const said: AiMessage = { role: 'user', content }
+  noteUserSpoke()
   const canned = (save.settings.chatCheat ? cheat(content) : null) ?? (aiOn() ? null : SILLY[Math.floor(Math.random() * SILLY.length)](info.name, info.host))
   if (canned) {
     speak({ s: canned, now: true, ai: false }, 'speak')
