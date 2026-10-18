@@ -1,4 +1,4 @@
-import { avatar, info, onSaveFlush, save, setInfo, update } from '../pet/store'
+import { avatar, info, onSaveFlush, save, scaleYb, setInfo, update } from '../pet/store'
 import { SwfPlayer } from '../swf/player'
 import { readSol, writeSol, type Sol } from '../swf/sol'
 import { openBox } from './box'
@@ -68,7 +68,8 @@ export function openFarm(): void {
     const user = readSol(KEY)!.user as Sol
     const w = Number(user.wealth)
     // The SWF only knows the yb it started with; spending elsewhere meanwhile can overdraw.
-    setInfo('yb', Math.max(0, info.yb + w - last))
+    const d = w - last
+    setInfo('yb', Math.max(0, info.yb + (d > 0 ? scaleYb(d) : d)))
     last = w
     update('saveJsonData', { farm: JSON.stringify(user) })
   }

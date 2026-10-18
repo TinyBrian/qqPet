@@ -129,6 +129,8 @@ export interface Settings {
   searchKey: string
   /** Pressing the pet shows the action bar. On by default. */
   petBar: boolean
+  /** easy: 元宝 income as is (default); standard: income scaled down (see `earnYb`). */
+  difficulty: 'easy' | 'standard'
   /** Chat cheats (元宝+N, 不要死, ...) are recognised. On by default. */
   chatCheat: boolean
   /** The settings' 作弊 tab is shown; tapping the version 5 times toggles it. Off by default. */

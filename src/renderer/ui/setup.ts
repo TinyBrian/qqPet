@@ -259,6 +259,13 @@ const TABS: { label: string; options: Option[] }[] = [
           run: () => setFaceClick(s.faceClick ? 0 : 1),
         },
         { type: 'radio', label: '是否开启互动动作指示器', title: FACE_TIP, on: () => s.faceClick === 2, run: () => setFaceClick(s.faceClick === 2 ? 1 : 2) },
+        {
+          type: 'radio',
+          label: '标准难度（元宝收入降为 40%，默认关=轻松）',
+          title: '轻松：保持现有的元宝收入；标准：打工、小游戏、钓鱼、农场、邮件礼物等收入只有 40%（至少 1），物价不变。作弊获得的不受影响。',
+          on: () => s.difficulty === 'standard',
+          run: () => update('settings', { difficulty: s.difficulty === 'standard' ? 'easy' : 'standard' }),
+        },
         { type: 'radio', label: '开启免打扰模式', on: () => s.quiet, run: () => update('settings', { quiet: !s.quiet }) },
         {
           type: 'radio',
