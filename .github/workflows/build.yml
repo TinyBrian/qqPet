@@ -152,13 +152,17 @@ jobs:
         run: |
           git lfs install --local
           git lfs pull --include "resources/pet/**"
-          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          # A stable tag compares against the previous stable one: its own betas would equal it.
+          case "$GITHUB_REF_NAME" in *-*) skip="" ;; *) skip="--exclude=*-*" ;; esac
+          prev=$(git describe --tags --abbrev=0 $skip "$GITHUB_REF_NAME^" 2>/dev/null || true)
           node --experimental-strip-types scripts/pack-content.mjs --version "${GITHUB_REF_NAME#v}" --full ${prev:+--base "$prev"} \
             --out artifacts --url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
       # Commit subjects since the previous tag, grouped by gitmoji; docs, CI and refactors are left out.
       - name: Release notes
         run: |
-          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          # A stable tag compares against the previous stable one: its own betas would equal it.
+          case "$GITHUB_REF_NAME" in *-*) skip="" ;; *) skip="--exclude=*-*" ;; esac
+          prev=$(git describe --tags --abbrev=0 $skip "$GITHUB_REF_NAME^" 2>/dev/null || true)
           range=${prev:+$prev..}$GITHUB_REF_NAME
           section() {
             local lines
