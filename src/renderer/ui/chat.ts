@@ -2,7 +2,7 @@ import type { AiMessage } from '../../shared/ipc'
 import { aiOn, ask, askClean, note } from '../pet/ai'
 import { listGoods } from '../pet/goods'
 import { useItem } from '../pet/items'
-import { work, workGoods } from '../pet/jobs'
+import { study, studyGoods, work, workGoods } from '../pet/jobs'
 import { noteUserSpoke } from '../pet/calendar'
 import { onEvent, onReply, onSaid } from '../pet/said'
 import { speak } from '../pet/pet'
@@ -14,23 +14,50 @@ import { button, div } from './dom'
 import { setHidden } from './menu'
 
 const DO =
-  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，HIDE=隐身，QUIET=免打扰（再说一次就取消免打扰，主人嫌你太安静时用它解除）。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
+  '回复写成：动作 台词。动作只能是 FEED、CLEAN、WORK、STUDY、HIDE、QUIET、LETTER 或 NONE。FEED=吃背包食物，CLEAN=用清洁用品，WORK=去打工，STUDY=去上学/学习，HIDE=隐身，QUIET=免打扰（再说一次就取消免打扰，主人嫌你太安静时用它解除）。不是办事就写 NONE。台词必须写在动作后面，不要只回动作词。主人让你学习时写成：STUDY:科目 台词 —— 科目只能是 数学、语文、政治、音乐、艺术、礼仪、体育、劳技、武术 之一，不确定科目就写 STUDY 台词。主人让你去送信/串门时写成：LETTER:好友名:「口信」台词 —— 好友名只能用在线好友名单里的名字，口信是要带的话（可以为空），台词照常写在后面。'
+
+/** 粗略相关度：去掉常见字后，事实里的字在问题里出现 ≥2 个算相关（中文无词边界，用字符共现近似）。 */
+function relevantTo(question: string, fact: string): boolean {
+  const stop = /[，。！？~～·…的主人你我他她它啊呀嘛呢吗了吧得了在是很会要]/g
+  const q = question.replace(stop, '')
+  const f = fact.replace(/- /g, '').replace(stop, '')
+  if (!q || !f) return false
+  let hit = 0
+  for (const ch of f) if (q.includes(ch)) hit++
+  return hit >= 2
+}
+
+/** 注入记忆：挑跟当前话题相关的事实；都不相关就退回最近 20 条。 */
+function injectMemory(question: string): string {
+  if (!save.settings.memory || !facts.length) return ''
+  const relevant = facts.filter((f) => relevantTo(question, f))
+  const chosen = (relevant.length ? relevant : facts.slice(-20)).slice(0, 20)
+  return `\n【关于主人的记忆】\n${chosen.join('\n')}\n（聊天时自然地用上这些，但不要生硬地报流水账）`
+}
 
 /** The protocol plus who is online, so LETTER has a real name to pick. */
-function doPrompt(): string {
+function doPrompt(question = ''): string {
   const names = lanPeers().map((p) => p.name)
-  const memory =
-    save.settings.memory && facts.length
-      ? `\n【关于主人的记忆】\n${facts.slice(-20).join('\n')}\n（聊天时自然地用上这些，但不要生硬地报流水账）`
-      : ''
-  return `${DO}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}${memory}`
+  const search = save.settings.search ? ' SEARCH=联网搜索。主人问你需要查证、实时或你不知道的事时，写成 SEARCH:关键词（只写关键词，我会先联网搜，再把结果给你据实回答）。' : ''
+  const memory = injectMemory(question)
+  return `${DO}${search}\n${names.length ? `当前在线好友：${names.join('、')}。` : '当前没有好友在线。'}${memory}`
 }
 
 // Small models also put the action word after the line instead of before it.
-const ACT = /\b(FEED|CLEAN|WORK|HIDE|QUIET|NONE)\b[:：]?/i
+const ACT = /\b(FEED|CLEAN|WORK|STUDY|HIDE|QUIET|NONE)\b[:：]?/i
 const LETTER = /^\s*LETTER[:：]\s*([^:：]+?)[:：]\s*(?:「([^」]*)」)?\s*/i
+const SEARCH = /^\s*SEARCH[:：]\s*(.+)$/i
+const STUDY = /^\s*STUDY[:：]\s*(.+)$/i
 
 function parse(text: string): { act: string; arg: { name: string; text: string }; say: string } {
+  const s = text.match(SEARCH)
+  if (s) return { act: 'SEARCH', arg: { name: s[1].trim(), text: '' }, say: '' }
+  const st = text.match(STUDY)
+  if (st) {
+    // STUDY:科目 台词 —— 第一个词是科目，其余是台词
+    const sp = st[1].trim().match(/^(\S+)\s*(.*)$/)
+    return { act: 'STUDY', arg: { name: sp?.[1] ?? '', text: '' }, say: sp?.[2]?.trim() ?? '' }
+  }
   const l = text.match(LETTER)
   if (l) return { act: 'LETTER', arg: { name: l[1].trim(), text: (l[2] ?? '').trim() }, say: text.replace(LETTER, '').replace(/\s+/g, ' ').trim() }
   const m = text.match(ACT)
@@ -52,6 +79,12 @@ function doAct(act: string, say: string, arg: { name: string; text: string }): v
     const g = workGoods()[0]
     // A refusal (ill, busy, level too low) is spoken by work itself; the AI's "off to work" would contradict it.
     if (g) return void work(g)
+  } else if (act === 'STUDY') {
+    // 去上学：科目匹配（数学/语文/...），不确定就随机挑一门；study 自己说台词
+    const goods = studyGoods()
+    const wanted = arg.name
+    const g = wanted ? goods.find((x) => x.name.includes(wanted)) : goods[Math.floor(Math.random() * goods.length)]
+    if (g) return void study(g)
   } else if (act === 'HIDE' && !save.settings.hidden) {
     speak({ s: say, now: true, ai: false }, 'hide', { end: () => setHidden(true) })
     return
@@ -119,7 +152,11 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 function persistHistory(): void {
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => window.qqpet.memHistory?.(history), 1000)
+  saveTimer = setTimeout(() => {
+    window.qqpet.memHistory?.(history)
+    // 未提炼完的对话缓冲 + 计数也一起落盘，重启接着攒，不丢
+    window.qqpet.memDialogueSave?.({ dialogue, sinceMemo })
+  }, 1000)
 }
 
 /** L2+L3：把一段对话提炼成事实，存进记忆（旧片段由此浓缩后再丢弃）。 */
@@ -141,11 +178,35 @@ async function remember(turns: AiMessage[], evs: string[] = []): Promise<void> {
   window.qqpet.memFacts?.(extracted)
 }
 
+/** 记忆压缩：超过阈值时把旧事实合并成摘要，保留最近 20 条。 */
+const MEMORY_MAX = 50
+const KEEP_RECENT = 20
+
+async function compressMemory(): Promise<void> {
+  if (facts.length <= MEMORY_MAX) return
+  const old = facts.slice(0, facts.length - KEEP_RECENT)
+  const recent = facts.slice(-KEEP_RECENT)
+  const out = await askClean('你是记忆整理器。把下面这些关于主人的旧记忆合并成更少的条目：同类合并成一条、去掉过时/重复/琐碎的内容、只保留值得长期记住的核心事实。每条一行，以「- 」开头。只输出合并后的记忆，不要解释。', [{ role: 'user', content: old.join('\n') }])
+  if (!out) return
+  const merged = out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('- '))
+  if (!merged.length) return
+  facts = [...merged, ...recent]
+  window.qqpet.memRewrite?.(facts)
+}
+
 /** 启动时接上上次的记忆与话头（L1）。 */
 export function initMemory(): void {
   void window.qqpet.memLoad?.().then(({ memory, history: old }) => {
     facts = memory
     if (old.length) history.push(...old.slice(-TURNS))
+  })
+  // 恢复"未提炼完"的对话缓冲与计数（重启接着攒，不丢）
+  void window.qqpet.memDialogueLoad?.().then((state) => {
+    if (state?.dialogue.length) dialogue.push(...state.dialogue)
+    sinceMemo = state?.sinceMemo ?? 0
   })
   // 宠物的自言自语（闲聊/问候/事件反应）也入账，这样"你刚才说的啥"答得上来；
   // 聊天回复本身已在账上，不重复记
@@ -189,8 +250,27 @@ export async function talkToPet(content: string): Promise<string> {
     speak({ s: canned, now: true, ai: false }, 'speak')
     return canned
   }
-  const reply = await ask([...history.slice(-TURNS), said], doPrompt())
-  const { act, arg, say } = parse(reply ?? '')
+  let reply = await ask([...history.slice(-TURNS), said], doPrompt(content))
+  let { act, arg, say } = parse(reply ?? '')
+  // SEARCH：像 Hermes 的 web_search——先联网查，再把结果喂回去据实回答（单轮工具调用）
+  if (act === 'SEARCH' && arg.name && save.settings.search) {
+    const hits = await window.qqpet.webSearch(arg.name)
+    if (hits.length) {
+      const brief = hits.map((h, i) => `${i + 1}. ${h.title}：${h.description}`).join('\n')
+      const again = await ask([...history.slice(-TURNS), said], `主人让你联网查「${arg.name}」，下面是刚搜到的结果。用你自己的口吻、据实回答主人，不要编造结果里没有的内容，一两句话即可，不要用动作词：\n${brief}`)
+      if (again) {
+        const p2 = parse(again)
+        say = p2.say || again
+        act = 'NONE'
+      } else {
+        say = '呜…我搜到了点东西，但一时说不上来~'
+        act = 'NONE'
+      }
+    } else {
+      say = `呜…我试了联网搜「${arg.name}」，但没搜到，网络可能不太给力~`
+      act = 'NONE'
+    }
+  }
   const line = reply ? say || '……' : '呜…我现在脑袋转不动，等会儿再聊吧~'
   lastChatLine = line
   // The model keeps to the action protocol only while its own earlier replies show it.
@@ -203,7 +283,7 @@ export async function talkToPet(content: string): Promise<string> {
       // L2：每 5 个真实来回提炼一次（纯对话窗口 + 积攒的事件旁白搭车）；L3：对话过长把最老一段交接进记忆后丢弃
       if (++sinceMemo >= 5) {
         sinceMemo = 0
-        void remember(dialogue.slice(-12), events.splice(0))
+        void remember(dialogue.slice(-12), events.splice(0)).then(() => void compressMemory())
       }
       if (dialogue.length > 48) {
         const old = dialogue.splice(0, 24)

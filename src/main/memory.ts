@@ -39,6 +39,11 @@ export function clearMemory(): void {
   atomicWrite(memFile(), '')
 }
 
+/** Replaces memory.md entirely with the given facts (used by memory compression). */
+export function rewriteFacts(lines: string[]): void {
+  atomicWrite(memFile(), lines.map((l) => `${l.trim()}\n`).join(''))
+}
+
 export function loadHistory(): HistoryTurn[] {
   try {
     if (!existsSync(histFile())) return []
@@ -51,4 +56,29 @@ export function loadHistory(): HistoryTurn[] {
 
 export function saveHistory(turns: HistoryTurn[]): void {
   atomicWrite(histFile(), JSON.stringify(turns))
+}
+
+const dialogueFile = (): string => join(app.getPath('userData'), 'dialogue-state.json')
+
+export interface DialogueState {
+  dialogue: HistoryTurn[]
+  sinceMemo: number
+}
+
+/** 未提炼完的对话缓冲 + 计数：重启后接着攒，不丢。 */
+export function loadDialogueState(): DialogueState {
+  try {
+    if (!existsSync(dialogueFile())) return { dialogue: [], sinceMemo: 0 }
+    const v = JSON.parse(readFileSync(dialogueFile(), 'utf8')) as Partial<DialogueState>
+    return {
+      dialogue: Array.isArray(v.dialogue) ? v.dialogue : [],
+      sinceMemo: typeof v.sinceMemo === 'number' ? v.sinceMemo : 0,
+    }
+  } catch {
+    return { dialogue: [], sinceMemo: 0 }
+  }
+}
+
+export function saveDialogueState(state: DialogueState): void {
+  atomicWrite(dialogueFile(), JSON.stringify({ dialogue: state.dialogue, sinceMemo: state.sinceMemo }))
 }

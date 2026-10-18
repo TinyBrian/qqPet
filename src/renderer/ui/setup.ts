@@ -221,6 +221,12 @@ const aiOptions = (): Option[] => [
   ...models.map((m): Option => ({ type: 'radio', label: m, on: () => s.aiModel === m, run: () => void testModel(m) })),
   { type: 'see', label: '状态', value: aiStatus || (s.aiModel ? `已启用：${s.aiModel}` : '未启用') },
   ...(s.aiModel ? [{ type: 'button' as const, label: '关闭 AI', run: closeAi }] : []),
+  // 联网搜索是 AI 能力的一部分，放 AI 设置里
+  { type: 'radio', label: '联网搜索（问它"查一下"时联网搜）', title: '聊天时它需要查证或实时信息，会先联网搜再据实回答；都搜不到就老实说没搜到。', on: () => s.search, run: () => update('settings', { search: !s.search }) },
+  { type: 'radio', label: '搜索后端：免 key（DuckDuckGo→Bing 兜底）', title: '不需要任何 key，开箱即用；但可能被限流、结果质量一般。', on: () => s.searchBackend === 'auto', run: () => update('settings', { searchBackend: 'auto' }) },
+  { type: 'radio', label: '搜索后端：Tavily', title: '正规搜索 API，质量高、稳定，需在下方填 API Key。', on: () => s.searchBackend === 'tavily', run: () => update('settings', { searchBackend: 'tavily' }) },
+  { type: 'radio', label: '搜索后端：Brave', title: 'Brave 搜索 API，需在下方填 API Key。', on: () => s.searchBackend === 'brave', run: () => update('settings', { searchBackend: 'brave' }) },
+  { type: 'input', label: '搜索 API Key（免 key 模式留空）', value: () => s.searchKey, set: (v) => update('settings', { searchKey: v.trim() }) },
 ]
 
 const FACE_TIP = '使用互动动作：鼠标放入宠物范围0.3s后（手机上点一下宠物），开启点位可进行点击~'

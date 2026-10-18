@@ -2,6 +2,7 @@ import { app, clipboard, dialog, ipcMain, net, powerMonitor, session, shell } fr
 import { IPC, type TrayMenuItem, type TrayState } from '../shared/ipc'
 import type { SavePatch, Sex } from '../shared/save'
 import { aiChat, aiModels } from '../shared/ai'
+import { webSearch } from '../shared/websearch'
 import { calendar } from '../shared/calendar'
 import { latestRelease } from '../shared/update'
 import { toShape, type ShapeRect } from '../shared/hit-shape'
@@ -16,7 +17,7 @@ import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
 import { VisitQueue } from './visit-queue'
-import { addFacts, clearMemory, loadHistory, loadMemory, saveHistory, type HistoryTurn } from './memory'
+import { addFacts, clearMemory, loadDialogueState, loadHistory, loadMemory, rewriteFacts, saveDialogueState, saveHistory, type HistoryTurn } from './memory'
 import { DEFAULT_HOTKEY, parseHotkey, watchHotkey, type KeyWatcher } from './hotkey'
 import { preloadAsr, transcribe } from './asr'
 
@@ -100,6 +101,13 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.memLoad, () => ({ memory: loadMemory(), history: loadHistory() }))
   ipcMain.on(IPC.memFacts, (_e, lines: string[]) => {
     if (Array.isArray(lines)) addFacts(lines)
+  })
+  ipcMain.on(IPC.memRewrite, (_e, lines: string[]) => {
+    if (Array.isArray(lines)) rewriteFacts(lines)
+  })
+  ipcMain.handle(IPC.memDialogueLoad, () => loadDialogueState())
+  ipcMain.on(IPC.memDialogueSave, (_e, state) => {
+    if (state && Array.isArray(state.dialogue)) saveDialogueState(state)
   })
   ipcMain.on(IPC.memHistory, (_e, turns: HistoryTurn[]) => {
     if (Array.isArray(turns)) saveHistory(turns)
@@ -218,6 +226,7 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.calendar, () => calendar(net.fetch))
   ipcMain.handle(IPC.aiModels, (_e, c) => aiModels(net.fetch, c))
   ipcMain.handle(IPC.aiChat, (_e, c, messages) => aiChat(net.fetch, c, messages))
+  ipcMain.handle(IPC.webSearch, (_e, query: string) => webSearch(net.fetch, query, 6, getSave().settings.searchBackend, getSave().settings.searchKey))
   ipcMain.handle(IPC.weather, (_e, city: string) => weather(net.fetch, city))
   ipcMain.handle(IPC.latestRelease, () => latestRelease(net.fetch))
   // A focusable pet window holds a full panel (社区, 密室...) that would cover a normal game window.

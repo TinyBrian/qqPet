@@ -13,6 +13,7 @@ export const IPC = {
   gamePlayed: 'game:played',
   aiModels: 'ai:models',
   aiChat: 'ai:chat',
+  webSearch: 'web:search',
   weather: 'app:weather',
   latestRelease: 'app:latest-release',
   packInfo: 'pack:info',
@@ -50,6 +51,9 @@ export const IPC = {
   memFacts: 'mem:facts',
   memHistory: 'mem:history',
   memClear: 'mem:clear',
+  memRewrite: 'mem:rewrite',
+  memDialogueLoad: 'mem:dialogue-load',
+  memDialogueSave: 'mem:dialogue-save',
   voiceStart: 'voice:start',
   voiceStop: 'voice:stop',
   voiceText: 'voice:text',
@@ -173,6 +177,13 @@ export interface PackApi {
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
+/** One keyless web-search hit. */
+export interface SearchResult {
+  title: string
+  url: string
+  description: string
+}
+
 export interface AiMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -214,6 +225,8 @@ export interface QQPetApi {
   aiModels(c: Omit<AiConfig, 'model'>): Promise<string[]>
   /** The reply's text; rejects with the server's error. */
   aiChat(c: AiConfig, messages: AiMessage[]): Promise<string>
+  /** Keyless web search (DuckDuckGo); [] while offline or on failure. */
+  webSearch(query: string): Promise<SearchResult[]>
   /** An empty city locates by IP; rejects for an unknown city or while offline. */
   weather(city: string): Promise<Weather>
   /** Rejects while offline. */
@@ -266,6 +279,9 @@ export interface QQPetApi {
   memFacts?(lines: string[]): void
   memHistory?(turns: { role: 'user' | 'assistant' | 'system'; content: string }[]): void
   memClear?(): void
+  memRewrite?(lines: string[]): void
+  memDialogueLoad?(): Promise<{ dialogue: AiMessage[]; sinceMemo: number }>
+  memDialogueSave?(state: { dialogue: AiMessage[]; sinceMemo: number }): void
   /** Push one recorded utterance (16 kHz mono, -1..1) for transcription. */
   voiceAudio?(samples: Float32Array): void
   /** The talk key went down: start recording. */

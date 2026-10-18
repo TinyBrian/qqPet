@@ -16,6 +16,7 @@ const api: QQPetApi = {
   calendar: () => ipcRenderer.invoke(IPC.calendar),
   aiModels: (c) => ipcRenderer.invoke(IPC.aiModels, c),
   aiChat: (c, messages) => ipcRenderer.invoke(IPC.aiChat, c, messages),
+  webSearch: (query) => ipcRenderer.invoke(IPC.webSearch, query),
   weather: (city) => ipcRenderer.invoke(IPC.weather, city),
   latestRelease: () => ipcRenderer.invoke(IPC.latestRelease),
   packs: {
@@ -72,6 +73,9 @@ const api: QQPetApi = {
   lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
   memLoad: () => ipcRenderer.invoke(IPC.memLoad),
   memFacts: (lines) => ipcRenderer.send(IPC.memFacts, lines),
+  memRewrite: (lines) => ipcRenderer.send(IPC.memRewrite, lines),
+  memDialogueLoad: () => ipcRenderer.invoke(IPC.memDialogueLoad),
+  memDialogueSave: (state) => ipcRenderer.send(IPC.memDialogueSave, state),
   memHistory: (turns) => ipcRenderer.send(IPC.memHistory, turns),
   memClear: () => ipcRenderer.send(IPC.memClear),
   voiceAudio: (samples) => ipcRenderer.send(IPC.voiceAudio, samples),
