@@ -115,6 +115,11 @@ export interface Settings {
   roam: boolean
   /** Friend LAN presence and visits; off by default. */
   lan: boolean
+  /** Local webhook: external services POST to 127.0.0.1:webhookPort/hook?token=… and the pet speaks it. Desktop only; off by default. */
+  webhook: boolean
+  webhookPort: number
+  /** Shared secret of the webhook; made when the webhook is first switched on. */
+  webhookToken: string
   /** The talk key (double-tap left Alt, then hold) feeds local speech-to-text. */
   voice: boolean
   /** 对话记忆：跨重启记得主人说过的话，事实存本地 memory.md。 */

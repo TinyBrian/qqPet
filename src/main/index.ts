@@ -16,6 +16,7 @@ import { createPetTray } from './tray'
 import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
+import { WebhookServer } from './webhook'
 import { VisitQueue } from './visit-queue'
 import { addFacts, clearMemory, loadDialogueState, loadHistory, loadMemory, rewriteFacts, saveDialogueState, saveHistory, type HistoryTurn } from './memory'
 import { DEFAULT_HOTKEY, parseHotkey, watchHotkey, type KeyWatcher } from './hotkey'
@@ -158,6 +159,20 @@ app.whenReady().then(() => {
     void lan.start().catch((e) => console.error('lan start failed:', e))
   }
   startLan()
+  let webhookError: string | undefined
+  const webhook = new WebhookServer((m) => win.webContents.send(IPC.webhook, m))
+  const syncWebhook = (): void => {
+    const s = getSave().settings
+    webhook.stop()
+    webhookError = undefined
+    if (!s.webhook || !s.webhookToken || !getSave().havePet) return
+    webhook.start(s.webhookPort, s.webhookToken).catch((e: NodeJS.ErrnoException) => {
+      webhookError = e.code === 'EADDRINUSE' ? `端口 ${s.webhookPort} 已被占用` : String(e.message)
+      console.error('webhook start failed:', e)
+    })
+  }
+  syncWebhook()
+  ipcMain.handle(IPC.webhookState, () => ({ running: webhook.running, error: webhookError }))
   const tray = createPetTray((click) => {
     const b = win.getBounds()
     const z = getSave().settings.zoom
@@ -168,6 +183,7 @@ app.whenReady().then(() => {
   app.on('before-quit', () => {
     tray.destroy()
     lan.stop()
+    webhook.stop()
   })
   ipcMain.on(IPC.trayMenu, (event, items: TrayMenuItem[]) => {
     if (event.sender !== win.webContents) return
@@ -204,6 +220,8 @@ app.whenReady().then(() => {
         lanOn = false
       }
     }
+    const hook = patch.settings
+    if (hook && (hook.webhook !== undefined || hook.webhookPort !== undefined || hook.webhookToken !== undefined)) syncWebhook()
     if (patch.settings?.voice !== undefined) (patch.settings.voice ? startVoice : stopVoice)()
   })
   ipcMain.on(IPC.resetPet, (_e, sex?: Sex) => {

@@ -69,6 +69,11 @@ const api: QQPetApi = {
     ipcRenderer.removeAllListeners(IPC.lanMessage)
     ipcRenderer.on(IPC.lanMessage, (_e, fromId, body) => listener(fromId, body))
   },
+  onWebhook: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.webhook)
+    ipcRenderer.on(IPC.webhook, (_e, m) => listener(m))
+  },
+  webhookState: () => ipcRenderer.invoke(IPC.webhookState),
   lanSend: (toId, body) => ipcRenderer.invoke(IPC.lanSend, toId, body),
   lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
   memLoad: () => ipcRenderer.invoke(IPC.memLoad),
