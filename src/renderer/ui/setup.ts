@@ -1,6 +1,7 @@
 import { description } from '../../../package.json'
 import { APP_VERSION } from '../../shared/version'
 import { DEFAULT_HOTKEY, hotkeyLabel } from '../../shared/hotkey'
+import { forgetMemory } from './chat'
 import { allGoods, type GoodType } from '../pet/data/goods'
 import { give } from '../pet/items'
 import { applyPetSound, speak } from '../pet/pet'
@@ -278,6 +279,20 @@ const TABS: { label: string; options: Option[] }[] = [
         { type: 'see', label: '说话键', value: `${hotkeyLabel(DEFAULT_HOTKEY)}后按住说话` },
         {
           type: 'radio',
+          label: '对话记忆（重启后仍记得你说过的话）',
+          title: '记忆存在本地 memory.md 与 chat-history.json，可随时清除；关闭后既不学习也不使用记忆。',
+          on: () => s.memory,
+          run: () => update('settings', { memory: !s.memory }),
+        },
+        {
+          type: 'radio',
+          label: '台词润色（关 = 原版台词原汁原味）',
+          title: '开启时闲置闲聊由 AI 发挥、日常台词经 AI 润色；关闭后全部念原版台词库。聊天对话不受影响。',
+          on: () => s.polish,
+          run: () => update('settings', { polish: !s.polish }),
+        },
+        {
+          type: 'radio',
           label: '开启宠物音效（贴边探头、点脸逗它）',
           title: '关掉只是宠物不出声：贴边探头的「嘿嘿嘿」、点脸逗它的语音等。企鹅岛社区的背景音乐不受影响，游戏窗口自己的音效也不受影响。',
           on: () => s.sound,
@@ -302,6 +317,16 @@ const TABS: { label: string; options: Option[] }[] = [
     options: [
       { type: 'button', label: '导出存档', title: '把当前宠物保存成一个文件，可用于备份或换电脑', run: exportSave },
       { type: 'button', label: '导入存档（支持原版 config.json）', title: '用存档文件替换当前宠物，导入后自动重启', run: importSave },
+      {
+        type: 'button',
+        label: '清除宠物的记忆',
+        title: '清空 memory.md 里的长期记忆；对话历史一并清除',
+        run: () => {
+          forgetMemory()
+          void window.qqpet.memHistory?.([])
+          speak({ s: '[host]，我把以前的事都忘掉啦~', now: true, ai: false }, 'speak')
+        },
+      },
     ],
   },
   ...(window.qqpet.packs

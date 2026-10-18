@@ -117,6 +117,10 @@ export interface Settings {
   lan: boolean
   /** The talk key (double-tap left Alt, then hold) feeds local speech-to-text. */
   voice: boolean
+  /** 对话记忆：跨重启记得主人说过的话，事实存本地 memory.md。 */
+  memory: boolean
+  /** 台词润色：闲聊/问候经 AI 改写；关闭则原版台词原样念。 */
+  polish: boolean
   /** Pressing the pet shows the action bar. On by default. */
   petBar: boolean
   /** Chat cheats (元宝+N, 不要死, ...) are recognised. On by default. */

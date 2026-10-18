@@ -16,6 +16,7 @@ import { frontName } from './front'
 import { createPetWindow, openGameWindow } from './window'
 import { LanNode, persistedLanId } from './lan'
 import { VisitQueue } from './visit-queue'
+import { addFacts, clearMemory, loadHistory, loadMemory, saveHistory, type HistoryTurn } from './memory'
 import { DEFAULT_HOTKEY, parseHotkey, watchHotkey, type KeyWatcher } from './hotkey'
 import { preloadAsr, transcribe } from './asr'
 
@@ -95,6 +96,15 @@ app.whenReady().then(() => {
     return 'sent' as const
   })
   ipcMain.handle(IPC.lanPeers, () => lan.peersList())
+  // 对话记忆：渲染层的模型负责提炼，这里只当忠实的本地保管员
+  ipcMain.handle(IPC.memLoad, () => ({ memory: loadMemory(), history: loadHistory() }))
+  ipcMain.on(IPC.memFacts, (_e, lines: string[]) => {
+    if (Array.isArray(lines)) addFacts(lines)
+  })
+  ipcMain.on(IPC.memHistory, (_e, turns: HistoryTurn[]) => {
+    if (Array.isArray(turns)) saveHistory(turns)
+  })
+  ipcMain.on(IPC.memClear, () => clearMemory())
   // 语音：说话键（双击左Alt后按住）→ 渲染层录音 → 本地识别 → 聊天管线
   ipcMain.on(IPC.voiceAudio, (_e, samples: Float32Array) => {
     void transcribe(samples)
@@ -144,6 +154,8 @@ app.whenReady().then(() => {
     const b = win.getBounds()
     const z = getSave().settings.zoom
     win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: (click.x - b.x) / z, y: (click.y! - b.y) / z })
+  }, () => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.trayHoverLeave)
   })
   app.on('before-quit', () => {
     tray.destroy()

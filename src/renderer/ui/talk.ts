@@ -1,4 +1,5 @@
 import { info, petSize, save } from '../pet/store'
+import { emitReply } from '../pet/said'
 import { SwfPlayer } from '../swf/player'
 
 const W = 261
@@ -40,7 +41,10 @@ const expire = (): void => {
 /** Called by talk.swf; button i runs actions[i]. */
 window.BubbleAPI = {
   OnButtonClick: (i) => {
+    // 点按钮 = 主人开口回话，入账成对话里的用户发言
+    const label = labels[i] ?? ''
     hide()
+    if (label) emitReply(label)
     actions[i]?.()
   },
 }

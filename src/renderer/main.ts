@@ -16,6 +16,7 @@ import { closeState, openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
 import { windowView } from './ui/window-view'
 import { initLanVisit } from './ui/lan-visit'
+import { initMemory } from './ui/chat'
 import { initVoice } from './ui/voice'
 import { resizePetPosition } from '../shared/layout'
 import { hitCover, type Box } from '../mobile/overlay'
@@ -456,6 +457,7 @@ window.qqpet.onClipboard((text) => {
 
 // Friend LAN presence moved into initLanVisit (one registration per channel).
 initLanVisit()
+initMemory()
 initVoice()
 
 window.qqpet.onPresence((gone) => {

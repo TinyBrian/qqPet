@@ -38,6 +38,7 @@ export const IPC = {
   cursor: 'win:cursor',
   setDragging: 'win:set-dragging',
   trayClick: 'tray:click',
+  trayHoverLeave: 'tray:hover-leave',
   trayMenu: 'tray:menu',
   trayMenuAction: 'tray:menu-action',
   lanOnline: 'lan:online',
@@ -45,6 +46,10 @@ export const IPC = {
   lanMessage: 'lan:message',
   lanSend: 'lan:send',
   lanPeers: 'lan:peers',
+  memLoad: 'mem:load',
+  memFacts: 'mem:facts',
+  memHistory: 'mem:history',
+  memClear: 'mem:clear',
   voiceStart: 'voice:start',
   voiceStop: 'voice:stop',
   voiceText: 'voice:text',
@@ -236,6 +241,8 @@ export interface QQPetApi {
   /** Cursor position in window coordinates, pushed ~30 times per second. */
   onCursor(listener: (p: DesktopCursor) => void): void
   onTrayClick(listener: (e: TrayClick) => void): void
+  /** 托盘悬浮结束（鼠标离开托盘图标）；档案据此开始收起倒计时。 */
+  onTrayHoverLeave?(listener: () => void): void
   /** A game window closed after `minutes` of play. */
   onGamePlayed(listener: (minutes: number) => void): void
   /** New clipboard text, while the clip setting is on. */
@@ -254,6 +261,11 @@ export interface QQPetApi {
   lanSend?(toId: string, body: unknown): Promise<'sent' | 'queued'>
   /** Peers already online; events fired before the renderer loaded are missed otherwise. */
   lanPeers?(): Promise<LanPeer[]>
+  /** 对话记忆三件套：读取 / 提炼事实 / 保存历史 / 清空。 */
+  memLoad?(): Promise<{ memory: string[]; history: { role: 'user' | 'assistant' | 'system'; content: string }[] }>
+  memFacts?(lines: string[]): void
+  memHistory?(turns: { role: 'user' | 'assistant' | 'system'; content: string }[]): void
+  memClear?(): void
   /** Push one recorded utterance (16 kHz mono, -1..1) for transcription. */
   voiceAudio?(samples: Float32Array): void
   /** The talk key went down: start recording. */

@@ -47,6 +47,10 @@ const api: QQPetApi = {
   setDragging: (on) => ipcRenderer.invoke(IPC.setDragging, on),
   onCursor: (listener) => ipcRenderer.on(IPC.cursor, (_e, p) => listener(p)),
   onTrayClick: (listener) => ipcRenderer.on(IPC.trayClick, (_e, c) => listener(c)),
+  onTrayHoverLeave: (listener) => {
+    ipcRenderer.removeAllListeners(IPC.trayHoverLeave)
+    ipcRenderer.on(IPC.trayHoverLeave, () => listener())
+  },
   onGamePlayed: (listener) => ipcRenderer.on(IPC.gamePlayed, (_e, m) => listener(m)),
   onClipboard: (listener) => ipcRenderer.on(IPC.clipboard, (_e, text) => listener(text)),
   onPresence: (listener) => ipcRenderer.on(IPC.presence, (_e, away) => listener(away)),
@@ -66,6 +70,10 @@ const api: QQPetApi = {
   },
   lanSend: (toId, body) => ipcRenderer.invoke(IPC.lanSend, toId, body),
   lanPeers: () => ipcRenderer.invoke(IPC.lanPeers),
+  memLoad: () => ipcRenderer.invoke(IPC.memLoad),
+  memFacts: (lines) => ipcRenderer.send(IPC.memFacts, lines),
+  memHistory: (turns) => ipcRenderer.send(IPC.memHistory, turns),
+  memClear: () => ipcRenderer.send(IPC.memClear),
   voiceAudio: (samples) => ipcRenderer.send(IPC.voiceAudio, samples),
   voicePart: (samples) => ipcRenderer.send(IPC.voicePart, samples),
   onVoicePartial: (listener) => {
