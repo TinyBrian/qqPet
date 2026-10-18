@@ -174,9 +174,16 @@ app.whenReady().then(() => {
   syncWebhook()
   ipcMain.handle(IPC.webhookState, () => ({ running: webhook.running, error: webhookError }))
   const tray = createPetTray((click) => {
+    let focusTaken = false
+    if (process.platform === 'win32' && click.kind === 'state' && getSave().havePet) {
+      focusTaken = !win.isFocusable()
+      if (focusTaken) win.setFocusable(true)
+      win.focus()
+    }
     const b = win.getBounds()
     const z = getSave().settings.zoom
-    win.webContents.send(IPC.trayClick, click.x === undefined ? click : { ...click, x: (click.x - b.x) / z, y: (click.y! - b.y) / z })
+    const message = { ...click, focusTaken }
+    win.webContents.send(IPC.trayClick, click.x === undefined ? message : { ...message, x: (click.x - b.x) / z, y: (click.y! - b.y) / z })
   }, () => {
     if (!win.isDestroyed()) win.webContents.send(IPC.trayHoverLeave)
   })

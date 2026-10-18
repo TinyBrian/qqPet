@@ -89,6 +89,20 @@ test('closing status keeps the focus another panel (chat, setup...) already hold
   assert.deepEqual(ui.focus, [])
 })
 
+test('Windows tray focus closes on blur even when DOM focus was already true', () => {
+  const ui = statePanel(true)
+  const app = renderer(144, undefined, null, 'Egg', { ui })
+  app.save.havePet = true
+  app.trayClick({ kind: 'state', x: 800, y: 0, autoClose: true, focusTaken: true })
+  assert.equal(ui.body.children.length, 1)
+  assert.deepEqual(ui.focus, [], 'native tray handler already activated the window')
+  app.trayClick({ kind: 'state', x: 800, y: 0, autoClose: true, focusTaken: false })
+  assert.equal(ui.body.children.length, 1)
+  ui.blur()
+  assert.equal(ui.body.children.length, 0)
+  assert.deepEqual(ui.focus, [false], 'the reopened panel still releases its native focus')
+})
+
 test('a Windows tray status panel closes 0.5s after the cursor leaves it (#41)', () => {
   const ui = statePanel()
   ui.openState(800, 0, true)

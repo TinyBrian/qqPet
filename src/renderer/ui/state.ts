@@ -202,7 +202,9 @@ export function closeState(): void {
 window.addEventListener('blur', closeState)
 
 /** Opens the status panel from tray point (x, y), toward the screen's middle. */
-export function openState(x: number, y: number, closesItself = false): void {
+export function openState(x: number, y: number, closesItself = false, focusTaken = false): void {
+  const keepFocus = ownsFocus
+  if (panel) ownsFocus = false
   closeState()
   panel = div('PetStateInfo focusPress')
   panel.dataset.hit = ''
@@ -214,8 +216,10 @@ export function openState(x: number, y: number, closesItself = false): void {
   // Dragged like the pet info window (#53).
   mouseDrag(panel, touch)
   render()
-  // Focus lets a click elsewhere blur the window and close the panel.
-  if (!document.hasFocus()) {
+  // Windows may report DOM focus even when the native overlay is unfocusable.
+  // The tray activates it first so an outside click can produce a real blur.
+  if (focusTaken || keepFocus) ownsFocus = true
+  else if (!document.hasFocus()) {
     ownsFocus = true
     window.qqpet.setFocusable(true)
   }
