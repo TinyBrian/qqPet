@@ -51,7 +51,7 @@ test('community applies saved volume, follows settings, and releases its subscri
   initialSave.settings.music = 0.5
   const window = {
     __qqpetInitialSave: initialSave,
-    qqpet: { onGamePlayed() {}, setFocusable() {}, save() {} },
+    qqpet: { onGamePlayed() {}, setFocusable() {}, setAlwaysOnTop() {}, save() {} },
     setTimeout: () => 1, clearTimeout() {},
   }
   const storeSource = source('../../src/renderer/pet/store.ts')
