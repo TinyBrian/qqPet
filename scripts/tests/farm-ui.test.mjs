@@ -6,6 +6,9 @@ import { runInNewContext } from 'node:vm'
 
 const view = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/view/InstallFace.as', import.meta.url), 'utf8')
 const tools = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/control/ToolsBarControl.as', import.meta.url), 'utf8')
+const shop = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/Store/view/ShowBox.as', import.meta.url), 'utf8')
+const store = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/Store/MyStore.as', import.meta.url), 'utf8')
+const scrollbar = readFileSync(new URL('../../tools/qqfarm/props-src/com/UIComponents/ScrollBar/SaltedFishScrollBar.as', import.meta.url), 'utf8')
 
 // Execute the patched AS3 methods; their display-list arithmetic also runs as TypeScript.
 function method(source, name, context) {
@@ -81,6 +84,94 @@ test('pack remains open through its own presses, selects late items, and closes 
   press({ target: { inside: false } })
   assert.equal(pack.visible, false)
   assert.doesNotMatch(tools, /addEventListener\(MouseEvent\.ROLL_OUT,mouseOutHandler/)
+})
+
+test('both shop tabs show five cards per row without clipping, including after reopening', () => {
+  for (const widths of [[52, 60, 64, 79, 86], Array(25).fill(52)]) {
+    const cards = widths.map((width, i) => ({ scaleX: 1, scaleY: 1,
+      get width() { return width * this.scaleX }, get height() { return (70 + i % 2 * 6) * this.scaleY } }))
+    const context = { margins: 20,
+      container: { numChildren: cards.length, getChildAt: i => cards[i] },
+      myBox: { width: 400, scaleX: 1, scrollBar: { x: 10, width: 380 } } }
+    const layout = method(store, 'layoutItems', context)
+    layout(74)
+    const positions = cards.map(card => [card.x, card.y])
+    for (const card of cards) {
+      assert.ok(card.x >= 20 && card.x + card.width <= 380, 'every icon and price fits inside the viewport')
+      assert.ok(card.y >= 74)
+    }
+    for (let row = 0; row < cards.length / 5; row++) {
+      const line = cards.slice(row * 5, row * 5 + 5)
+      assert.equal(new Set(line.map(card => card.y)).size, 1, 'all five cards share one row')
+      for (let i = 1; i < line.length; i++) assert.ok(line[i].x > line[i - 1].x + line[i - 1].width, 'prices do not overlap')
+      if (row) assert.ok(line[0].y > cards[(row - 1) * 5].y + cards[(row - 1) * 5].height)
+    }
+    for (const scale of [0.2, 1]) {
+      context.myBox.width = 600 * scale
+      context.myBox.scaleX = scale
+      layout(74)
+      assert.deepEqual(cards.map(card => [card.x, card.y]), positions, 'content bounds and opening scale cannot change the grid')
+    }
+  }
+})
+
+test('shop wheel scrolling clamps at both ends and stays in sync with a dragged thumb', () => {
+  const context = { target: { height: 900, y: 0 }, myMask: { height: 300 }, startY: 0,
+    bg: { height: 300 }, up_btn: { y: 0, height: 10 }, down_btn: { height: 10 }, handler: { height: 100, y: 10 } }
+  context.enterFrameHandler = method(scrollbar, 'enterFrameHandler', context)
+  const wheel = method(scrollbar, 'wheelHandler', context)
+  const roll = delta => wheel({ delta, stopPropagation() {} })
+  roll(-3); assert.equal(context.target.y, -90)
+  roll(3); assert.equal(context.target.y, 0)
+  roll(-100); assert.equal(context.target.y, -600)
+  roll(100); assert.equal(context.target.y, 0)
+  context.handler.y = 100
+  context.enterFrameHandler(null)
+  assert.equal(context.target.y, -300)
+  roll(3); assert.equal(context.target.y, -210)
+  context.target.height = 200
+  context.target.y = 0
+  roll(-3); assert.equal(context.target.y, 0, 'a list that fits must not scroll')
+})
+
+test('shop releases the shared purchase dialog even when closing interrupts its opening tween', () => {
+  for (const preview of ['img', 'displayObject']) {
+    for (const opened of [false, true]) {
+      const stage = {
+        children: [],
+        addChild(child) { this.children.push(child); child.parent = this },
+        removeChild(child) {
+          assert.equal(child.parent, this, 'only attached children can be removed')
+          this.children.splice(this.children.indexOf(child), 1)
+          child.parent = null
+        },
+      }
+      const mc = { ...stage, children: [], x: 200, y: 100, width: 300, height: 330 }
+      stage.addChild(mc)
+      const image = { parent: null }
+      if (opened) mc.addChild(image)
+      const bg = opened ? { parent: null } : null
+      if (bg) stage.addChild(bg)
+      const tweens = []
+      const context = {
+        mc, img: null, displayObject: null, [preview]: image, bg, busy: false,
+        _width: 300, _height: 330, _x: 200, _y: 100,
+        Tweener: { addTween(_target, tween) { tweens.push(tween) } },
+        beginComplete() {}, release() { context.released = true },
+      }
+      context.endComplete = method(shop, 'endComplete', context)
+      method(shop, 'beginShow', context)()
+      assert.equal(context.busy, true)
+      // Purchase and cancel both close the dialog, possibly before beginComplete runs.
+      method(shop, 'closeClick', context)()
+      tweens.at(-1).onComplete()
+      assert.equal(context.busy, false, `${preview}: the next product can be selected`)
+      assert.equal(context.released, true)
+      assert.equal(stage.children.length, 0, 'dialog and click-blocking backdrop are removed')
+      assert.equal(mc.scaleX, 1)
+      assert.equal(mc.scaleY, 1)
+    }
+  }
 })
 
 class Rectangle {
