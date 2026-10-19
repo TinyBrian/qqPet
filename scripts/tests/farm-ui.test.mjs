@@ -9,6 +9,8 @@ const tools = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/control/To
 const shop = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/Store/view/ShowBox.as', import.meta.url), 'utf8')
 const store = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/Store/MyStore.as', import.meta.url), 'utf8')
 const scrollbar = readFileSync(new URL('../../tools/qqfarm/props-src/com/UIComponents/ScrollBar/SaltedFishScrollBar.as', import.meta.url), 'utf8')
+const title = readFileSync(new URL('../../tools/qqfarm/src/com/MyFarm/control/TitleControl.as', import.meta.url), 'utf8')
+const itemCard = readFileSync(new URL('../../tools/qqfarm/props-src/ItemBg.as', import.meta.url), 'utf8')
 
 // Execute the patched AS3 methods; their display-list arithmetic also runs as TypeScript.
 function method(source, name, context) {
@@ -132,6 +134,78 @@ test('shop wheel scrolling clamps at both ends and stays in sync with a dragged 
   context.target.height = 200
   context.target.y = 0
   roll(-3); assert.equal(context.target.y, 0, 'a list that fits must not scroll')
+})
+
+test('warehouse and inventory cards leave enough text space for complete stock counts on one line', () => {
+  const counts = [9, 99, 124, 1673, 99999, 1000000000]
+  const warehouse = Object.assign(new Sprite(), { width: 500, worth_txt: {} })
+  const screen = display()
+  const context = { ...screen, _stage: { ...screen._stage, getChildByName: () => warehouse },
+    _user: { warehouse: counts.map(number => ({ fruit: 'RadishSeed', number, price: 18 })), burden: counts.map(number => ({ Items: 'RadishSeed', number })) },
+    createClip(name) {
+      if (name !== 'ItemBg') return screen.createClip(name)
+      const clip = new Sprite()
+      clip.txt = { value: '', get text() { return this.value }, set text(value) { this.value = String(value) },
+        wordWrap: true, multiline: true, get textWidth() { return this.text.length * 6 },
+        get width() { return !this.wordWrap && this.autoSize === 'right' ? this.textWidth + 4 : 14 } }
+      method(itemCard.replace('super();', ''), 'ItemBg', { txt: clip.txt })()
+      return clip
+    } }
+  method(view, 'showWarehouse', context)()
+  method(view, 'showBurden', context)()
+  for (const cards of [warehouse.getChildByName('container').children, screen.pack.getChildByName('container').children]) {
+    for (const [i, card] of cards.entries()) {
+      assert.equal(card.txt.text, String(counts[i]))
+      assert.ok(card.txt.width >= card.txt.textWidth, 'all digits fit instead of clipping to two')
+      assert.equal(card.txt.multiline, false, 'the count stays on a single line')
+    }
+  }
+})
+
+function warehouseSale(stock) {
+  const control = { addEventListener() {}, removeEventListener() {} }
+  const stepper = { maximum: 99, minimum: 1, textField: { ...control, text: '1' }, _value: 1,
+    set value(v) { this._value = Math.max(this.minimum, Math.min(this.maximum, v)); this.textField.text = String(this._value) },
+    get value() { return this._value }, ...control }
+  const dialog = { ...control, x: 0, y: 0, width: 300, height: 250, stepper, price_txt: {}, total_txt: {}, txt: {}, title_txt: {},
+    define: control, cancel: control, close_btn: control }
+  const tip = { num_txt: {}, price_txt: {}, name_txt: {}, define: control, close_btn: control }
+  const context = { num: 0, Event: { CHANGE: 'change' }, TextEvent: { TEXT_INPUT: 'textInput' }, MouseEvent: { CLICK: 'click' },
+    face: { _user: { wealth: '16000', warehouse: [{ number: stock, price: 18, name: '白萝卜', fruit: 'RadishSeed' }] },
+      _stage: new Sprite(), _warehouse: { x: 100, y: 100, width: 500, height: 300, ask_btn: {} },
+      getChild: name => name === 'box' ? dialog : name === 'Tips' ? tip : { width: 50, height: 50 },
+      showWarehouse() {}, changeExp() {} },
+    stepperInputHandler() {}, stepperEnterFrame() {}, tipsCloseHandler() {},
+    showBoxClose() { context.showBox = null } }
+  dialog.addChild = () => {}
+  context.saleQuantity = method(title, 'saleQuantity', context)
+  context.stepperChange = method(title, 'stepperChange', context)
+  context.soldHandler = method(title, 'soldHandler', context)
+  method(title, 'warehouseClickHandler', context)({ target: { name: 'bg0' } })
+  return { context, dialog, tip }
+}
+
+test('warehouse sale opens at the actual stock count and settles the selected quantity, independently of displayed totals', () => {
+  for (const stock of [1, 99, 124, 1673, 99999]) {
+    const { dialog } = warehouseSale(stock)
+    assert.equal(dialog.stepper.value, stock, 'initial value must not be clamped to the symbol default of 99')
+    assert.equal(dialog.stepper.textField.text, String(stock))
+    assert.ok(dialog.stepper.textField.maxChars >= String(stock).length, 'manual entry accepts the full stock count')
+    assert.equal(dialog.total_txt.text, `${stock * 18}元宝`)
+  }
+  for (const [input, quantity] of [['99', 99], ['1000', 1000], ['100000', 1673], ['9999999999', 1673], ['', 1], ['0', 1], ['-1', 1], ['invalid', 1]]) {
+    const { context, dialog, tip } = warehouseSale(1673)
+    dialog.stepper.textField.text = input
+    context.stepperChange(null)
+    assert.equal(dialog.total_txt.text, `${quantity * 18}元宝`)
+    // Even a stale or altered label cannot change what is sold.
+    dialog.total_txt.text = '30114元宝'
+    context.soldHandler(null)
+    assert.equal(Number(context.face._user.wealth), 16000 + quantity * 18)
+    assert.equal(context.face._user.warehouse[0]?.number ?? 0, 1673 - quantity)
+    assert.equal(tip.num_txt.text, String(quantity))
+    assert.equal(tip.price_txt.text, quantity * 18)
+  }
 })
 
 test('shop releases the shared purchase dialog even when closing interrupts its opening tween', () => {
