@@ -596,6 +596,7 @@ export function openCommunity(): void {
     if ('music' in change) player?.setVolume(save.settings.music)
   })
   window.qqpet.setFocusable(true)
+  window.qqpet.setAlwaysOnTop(false)
   // Panels opened from the island (钓鱼, 档案, 设置...) make the window unfocusable again when they close.
   stage.addEventListener('pointerdown', () => window.qqpet.setFocusable(true), true)
   const route = (_id: unknown, x1: unknown, y1: unknown, x2: unknown, y2: unknown): { x: number; y: number }[] =>
@@ -750,6 +751,7 @@ export function openCommunity(): void {
       clearTimeout(resFlush)
       resFlush = 0
       busy = false
+      window.qqpet.setAlwaysOnTop(true)
       window.qqpet.setFocusable(false)
       jump = null
       open = false
