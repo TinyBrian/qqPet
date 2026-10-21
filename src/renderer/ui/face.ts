@@ -66,10 +66,18 @@ if (!touch) petEl.addEventListener('pointerenter', () => {
 export function showFacePointsAfterClick(): void {
   showFacePoints()
 }
+const inside = (e: PointerEvent): boolean => {
+  if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return false
+  const r = petEl.getBoundingClientRect()
+  return e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom
+}
 // Touch taps are handled by the shared pet gesture path, including native hosts.
 for (const ev of touch ? (['pointerdown'] as const) : (['pointerleave', 'pointerdown'] as const)) {
   petEl.addEventListener(ev, (e) => {
     if (layer.contains(e.target as Node)) return
+    // On Windows a click ends with a pointerleave while the cursor is still on the pet (the window's hit test
+    // changing under it); only a leave that is really off the pet hides the spots (#113).
+    if (e.type === 'pointerleave' && inside(e as PointerEvent)) return
     clearFacePoints()
   })
 }
