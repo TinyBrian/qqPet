@@ -55,21 +55,16 @@ export function clearFacePoints(): void {
   clearTimeout(timer)
   layer.replaceChildren()
 }
-let hovered = false
-if (!touch) {
-  petEl.addEventListener('pointerenter', () => {
-    hovered = true
-    timer = window.setTimeout(showFacePoints, HOVER_MS)
-  })
-  petEl.addEventListener('pointerleave', () => void (hovered = false))
-}
+if (!touch) petEl.addEventListener('pointerenter', () => {
+  timer = window.setTimeout(showFacePoints, HOVER_MS)
+})
 /**
- * A click that did not lift the pet: touch shows the spots, a still-hovering mouse gets back the ones pointerdown hid (#113).
- * On Windows the desktop drag fires a pointerleave right after pointerdown while the cursor stays on the pet, and no
- * pointerenter follows, so :hover is the source of truth when it is available.
+ * A press on the pet that did not lift it is a click on the pet, so the cursor is still on it: bring back the spots
+ * pointerdown hid, on touch and desktop alike (#113). Hover events cannot tell: on Windows the desktop drag fires a
+ * pointerleave right after pointerdown although the cursor never left, and no pointerenter follows.
  */
 export function showFacePointsAfterClick(): void {
-  if (touch || hovered || petEl.matches?.(':hover')) showFacePoints()
+  showFacePoints()
 }
 // Touch taps are handled by the shared pet gesture path, including native hosts.
 for (const ev of touch ? (['pointerdown'] as const) : (['pointerleave', 'pointerdown'] as const)) {

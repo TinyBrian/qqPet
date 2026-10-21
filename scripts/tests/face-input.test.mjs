@@ -198,7 +198,7 @@ test('desktop hover still waits 300ms and leaving cancels or clears the points',
   f.advance(300)
   assert.equal(f.points().length, 0)
   f.tap('dom')
-  assert.equal(f.points().length, 0, 'a desktop tap does not replace hover with touch behavior')
+  assert.equal(f.points().length, 4, 'a desktop click on the pet brings the spots back for the next click (#113)')
 })
 
 test('a desktop click that did not lift brings back the hover points it hid (#113)', () => {
