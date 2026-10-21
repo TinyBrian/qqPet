@@ -144,6 +144,12 @@
   z-index: 1;
   transition: opacity 0.2s, visibility 0s;
 }
+/* Hovering another button drops a lingering submenu at once, no ghost of the previous one (#108). */
+.ui-control:has(.menuItem:hover) .menuItem:not(:hover) .childrenMenu {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
 .ui-control .childrenMenuItem {
   white-space: nowrap;
   background-image: url(/pet/control/icons/bk/30.svg);
