@@ -2,7 +2,6 @@ import EXAM from '../pet/data/exam.json'
 import { openFrame } from './box'
 import './css/exam.css'
 import { button, div } from './dom'
-import { windowView } from './window-view'
 
 const shuffle = <T>(a: T[]): T[] => {
   const b = [...a]
@@ -13,13 +12,13 @@ const shuffle = <T>(a: T[]): T[] => {
   return b
 }
 
-let open = false
+/** The exam on screen; a box removed by something else (closing all windows) no longer counts (#106). */
+let open: HTMLElement | undefined
 
 /** The promotion exam of study topic `topic`: three random questions of its bank, all must be right. */
 export function openExam(topic: string, pass: () => void): void {
   const bank = EXAM[topic as keyof typeof EXAM] as (typeof EXAM)[keyof typeof EXAM] | undefined
-  if (open || !bank?.length) return
-  open = true
+  if (open?.isConnected || !bank?.length) return
   // The bank lists most answers first.
   const questions = shuffle(bank)
     .slice(0, 3)
@@ -27,10 +26,11 @@ export function openExam(topic: string, pass: () => void): void {
   const picked = questions.map(() => -1)
   let at = 0
   const box = div('answerQuestions fC por')
+  open = box
   const remove = openFrame(div('ui-exam', box))
   const close = (): void => {
     remove()
-    open = false
+    open = undefined
   }
 
   const go = (d: number) => (): void => {
@@ -39,9 +39,24 @@ export function openExam(topic: string, pass: () => void): void {
   }
   const submit = (): void => {
     if (picked[at] < 0) return
-    close()
-    if (questions.every((q, i) => q.options[picked[i]] === q.answer)) pass()
-    else windowView({ title: '升学结果', msg: '抱歉未通过！' })
+    const wrong = questions.flatMap((q, i) => (q.options[picked[i]] === q.answer ? [] : [{ q, mine: q.options[picked[i]] }]))
+    if (!wrong.length) {
+      close()
+      return pass()
+    }
+    // 失败时在考卷里列出答错的题和正确答案，而不是只弹一句「未通过」(#114)
+    box.replaceChildren(
+      button('close', close),
+      div('a_title', `抱歉未通过！答错 ${wrong.length} 题：`),
+      div(
+        'a_Question fC f1',
+        div(
+          'aq_options fC f1 exam-review',
+          ...wrong.map(({ q, mine }) => div('aq_title', q.title, div('exam-yours', `你的答案：${mine}`), div('exam-right', `正确答案：${q.answer}`))),
+        ),
+        div('aq_buts fca', button('fcc wsnw aqb', close, ' 知道了 ')),
+      ),
+    )
   }
 
   function render(): void {

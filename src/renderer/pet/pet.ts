@@ -234,7 +234,7 @@ interface Say {
   ai?: string | false
 }
 
-/** Shows a bubble, optionally together with an action that it waits for. Do-not-disturb drops only the bubble. */
+/** Shows a bubble, optionally together with an action that it waits for. Do-not-disturb drops only the bubble, never one whose button the caller waits for. */
 export function speak(t: Say, action?: string, hooks: { start?: () => void; end?: () => void; ok?: () => void } = {}): void {
   let text = t.s ?? ''
   let button = t.b ?? '好的'
@@ -246,7 +246,8 @@ export function speak(t: Say, action?: string, hooks: { start?: () => void; end?
   text = text.replace(/\[host]/g, info.host)
   const onOk = hooks.ok ? [hooks.ok] : []
   const show = (): void => {
-    if (!save.settings.quiet) {
+    // 免打扰只挡闲聊；带确认回调的气泡（如升学考试「我要考试」）是唯一入口，必须显示 (#106)
+    if (!save.settings.quiet || hooks.ok) {
       // 「台词润色」关 = 原版台词原样念；开 = 等 AI 生成/润色完再开口（动作已先播，只有气泡等）
       const polish = save.settings.polish && t.ai !== false
       const blurt = (s: string): void => {
