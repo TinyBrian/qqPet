@@ -63,9 +63,13 @@ if (!touch) {
   })
   petEl.addEventListener('pointerleave', () => void (hovered = false))
 }
-/** A click that did not lift the pet: touch shows the spots, a still-hovering mouse gets back the ones pointerdown hid (#113). */
+/**
+ * A click that did not lift the pet: touch shows the spots, a still-hovering mouse gets back the ones pointerdown hid (#113).
+ * On Windows the desktop drag fires a pointerleave right after pointerdown while the cursor stays on the pet, and no
+ * pointerenter follows, so :hover is the source of truth when it is available.
+ */
 export function showFacePointsAfterClick(): void {
-  if (touch || hovered) showFacePoints()
+  if (touch || hovered || petEl.matches?.(':hover')) showFacePoints()
 }
 // Touch taps are handled by the shared pet gesture path, including native hosts.
 for (const ev of touch ? (['pointerdown'] as const) : (['pointerleave', 'pointerdown'] as const)) {
