@@ -56,21 +56,25 @@ export function status(): (Node | string)[] {
   return [`${b.name} `, div('fc', ` (${elapsed() | 0}分钟) `, button('stopDoActive butDo', stop, ' 停止 '))]
 }
 
+/** Opening or extending 贴心宝贝 with yuanbao; days add onto the current expiry (#105). */
+function buySweetHeart(): void {
+  windowView({
+    title: '贴心宝贝',
+    msg: info.sweetHeartOverTime ? `贴心宝贝${formatDate(info.sweetHeartOverTime)}到期，续费：300元宝/一天` : '托管费用：300元宝/一天',
+    max: 30,
+    sweet: true,
+    ok: (close, n) => {
+      close()
+      if (!pay(300 * n)) return
+      addSweetHeart(n)
+      speak({ s: `[host],贴心宝贝${formatDate(info.sweetHeartOverTime)}过期，我真是太爱你了！~`, now: true }, 'speak')
+    },
+  })
+}
+
 /** Buying sweetheart days, or switching a booked one on and off. */
 function sweetHeart(): void {
-  if (!info.sweetHeartOverTime) {
-    return windowView({
-      msg: '托管费用：300元宝/一天',
-      max: 30,
-      sweet: true,
-      ok: (close, n) => {
-        close()
-        if (!pay(300 * n)) return
-        addSweetHeart(n)
-        speak({ s: `[host],贴心宝贝${formatDate(info.sweetHeartOverTime)}过期，我真是太爱你了！~`, now: true }, 'speak')
-      },
-    })
-  }
+  if (!info.sweetHeartOverTime) return buySweetHeart()
   const on = !info.sweetHeart
   windowView({
     title: '贴心宝贝',
@@ -119,7 +123,9 @@ function render(): void {
     const g = goodOf(type as TimedType, t.id)
     return [Object.assign(img('groupIcons', g.url), { title: `${g.name}：${g.group}*${t.left | 0}分钟` })]
   })
-  const heart = div('sweetHeart')
+  // 点爱心图标续费，和粉钻图标一样 (#105 #84)
+  const heart = button('sweetHeart', buySweetHeart)
+  heart.title = info.sweetHeartOverTime ? '续费贴心宝贝' : '开通贴心宝贝'
   heart.style.backgroundImage = `url(pet/stateInfo/${info.sweetHeart ? 'h_up' : 'h_down'}.png)`
   const toggleNums = (): void => {
     showNums = !showNums

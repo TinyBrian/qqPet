@@ -53,7 +53,7 @@ export function openPinkDiamond(days: number): void {
 
 /** Books sweetheart for `days` more, from today's 06:00 when none is booked, and switches it on. */
 export function addSweetHeart(days: number): void {
-  setInfo('sweetHeartOverTime', (info.sweetHeartOverTime || dayStart()) + days * DAY)
+  setInfo('sweetHeartOverTime', Math.max(info.sweetHeartOverTime, dayStart()) + days * DAY)
   setInfo('sweetHeart', true)
 }
 

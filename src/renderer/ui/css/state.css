@@ -8,7 +8,7 @@
 .ui-state .close:active {background-image:url(/pet/stateInfo/close_over.png);position:relative;top:1px}
 .ui-state .onceInfo {padding:1px 2px}
 .ui-state .slotMain .foot {padding:3px 8px 6px}
-.ui-state .foot .sweetHeart {height:20px;width:65px;background-repeat:no-repeat;background-size:contain}
+.ui-state .foot .sweetHeart {height:20px;width:65px;background-repeat:no-repeat;background-size:contain;cursor:pointer}
 .ui-state .openSweetHeart {height:23px;width:40px;background-image:url(/pet/stateInfo/kaiqi_over.png);background-size:100% 100%;position:relative;background-repeat:no-repeat;top:-3px}
 .ui-state .openSweetHeart:hover {background-image:url(/pet/stateInfo/kaiqi_up.png);top:-2px}
 .ui-state .openSweetHeart:active {background-image:url(/pet/stateInfo/kaiqi_down.png);position:relative;top:1px}
