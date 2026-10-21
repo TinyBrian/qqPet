@@ -3,10 +3,10 @@ import { dayText } from '../pet/calendar'
 import EXAM from '../pet/data/exam.json'
 import { allGoods, findGood, parseGood, type Good, type GoodType } from '../pet/data/goods'
 import { hasGood, listGoods, takeGood } from '../pet/goods'
-import { give } from '../pet/items'
+import { give as giveGoods } from '../pet/items'
 import { loot } from '../pet/loot'
 import { rand } from '../pet/rand'
-import { info, save, update } from '../pet/store'
+import { addInfo, info, save, update } from '../pet/store'
 import { count, type Counter } from '../pet/tasks'
 import { dayStart } from '../pet/vip'
 import { openBox } from './box'
@@ -15,6 +15,12 @@ import { button, div, img } from './dom'
 import { TALK } from './island-talk'
 import { openShop, SOLD } from './shop'
 import { openTask } from './task'
+
+/** Community rewards: 元宝 go straight to the balance instead of the backpack, everything else as goods (#112). */
+function give(goods: Good[], text: string): void {
+  for (const g of goods) if (g.type === 'nums' && g.id === 'yb') addInfo('yb', g.num * (g.value ?? 1))
+  giveGoods(goods.filter((g) => !(g.type === 'nums' && g.id === 'yb')), text)
+}
 
 const pick = <T>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)]
 /** One line of `pool` with its {slots} filled; {pet} is the pet's name. */
