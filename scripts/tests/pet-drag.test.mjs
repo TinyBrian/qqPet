@@ -128,6 +128,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     showControl: noop,
     clearFacePoints: noop,
     showFacePoints: noop,
+    showFacePointsAfterClick: noop,
     catchDiudiule: noop,
     releaseDiudiule: (...args) => { releases.push(args); return false },
     scheduleHide: noop,
@@ -283,8 +284,19 @@ test('a late lift animation cannot move a released pet or change a new grab', ()
   pointer('pointerdown', info.lastX + 10, info.lastY + 10)
   lateStart()
   pointer('pointermove', released.lastX + 15, released.lastY + 10)
-  assert.equal(info.lastX, released.lastX + 5)
+  // Under the lift threshold the press is still a click and the pet stays put (#113).
+  assert.equal(info.lastX, released.lastX)
   assert.equal(info.lastY, released.lastY)
+})
+
+test('jitter below the lift threshold does not nudge a clicked pet (#113)', () => {
+  const { info, pointer } = renderer(144)
+  const before = { ...info }
+  pointer('pointerdown', 550, 340)
+  pointer('pointermove', 554, 343)
+  pointer('pointermove', 546, 337)
+  pointer('pointerup', 553, 342)
+  assert.deepEqual(info, before)
 })
 
 test('cancelling an anchor transition stops further frames without a fling', () => {

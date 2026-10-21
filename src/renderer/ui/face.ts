@@ -55,9 +55,18 @@ export function clearFacePoints(): void {
   clearTimeout(timer)
   layer.replaceChildren()
 }
-if (!touch) petEl.addEventListener('pointerenter', () => {
-  timer = window.setTimeout(showFacePoints, HOVER_MS)
-})
+let hovered = false
+if (!touch) {
+  petEl.addEventListener('pointerenter', () => {
+    hovered = true
+    timer = window.setTimeout(showFacePoints, HOVER_MS)
+  })
+  petEl.addEventListener('pointerleave', () => void (hovered = false))
+}
+/** A click that did not lift the pet: touch shows the spots, a still-hovering mouse gets back the ones pointerdown hid (#113). */
+export function showFacePointsAfterClick(): void {
+  if (touch || hovered) showFacePoints()
+}
 // Touch taps are handled by the shared pet gesture path, including native hosts.
 for (const ev of touch ? (['pointerdown'] as const) : (['pointerleave', 'pointerdown'] as const)) {
   petEl.addEventListener(ev, (e) => {
