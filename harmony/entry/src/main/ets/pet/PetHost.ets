@@ -22,6 +22,8 @@ export class PetHost {
   away: boolean = false
   private trayIcon: string = ''
   private trayTip: string = '点按查看宠物状态'
+  /** The page hid the pet (菜单 隐藏宠物); the notification then offers to show it again. */
+  private petHidden: boolean = false
   private subscriber: commonEventManager.CommonEventSubscriber | null = null
 
   constructor(context: common.UIAbilityContext) {
@@ -190,27 +192,55 @@ export class PetHost {
     await this.postTray()
   }
 
+  async setHidden(on: boolean): Promise<void> {
+    if (on === this.petHidden) {
+      return
+    }
+    this.petHidden = on
+    await this.postTray()
+  }
+
+  private async trayWant(kind: string, code: number) {
+    return wantAgent.getWantAgent({
+      wants: [{
+        bundleName: this.context.abilityInfo.bundleName,
+        abilityName: 'EntryAbility',
+        parameters: { kind: kind }
+      }] as Want[],
+      operationType: wantAgent.OperationType.START_ABILITY,
+      requestCode: code
+    })
+  }
+
   private async postTray(): Promise<void> {
     try {
+      const hideOrShow = this.petHidden ? 'show' : 'hide'
       const request: notificationManager.NotificationRequest = {
         id: TRAY_ID,
         content: {
           notificationContentType: notificationManager.ContentType.NOTIFICATION_CONTENT_BASIC_TEXT,
           normal: {
             title: 'QQ宠物',
-            text: this.trayTip
+            text: this.petHidden ? '宠物隐藏中，点按显示' : this.trayTip
           }
         },
         isUnremovable: true,
-        wantAgent: await wantAgent.getWantAgent({
-          wants: [{
-            bundleName: this.context.abilityInfo.bundleName,
-            abilityName: 'EntryAbility',
-            parameters: { kind: 'state' }
-          }] as Want[],
-          operationType: wantAgent.OperationType.START_ABILITY,
-          requestCode: 1
-        })
+        // A hidden pet has nothing to tap: the notification is the way back.
+        wantAgent: await this.trayWant(this.petHidden ? 'show' : 'state', 1),
+        actionButtons: [
+          {
+            title: this.petHidden ? '显示宠物' : '隐藏宠物',
+            wantAgent: await this.trayWant(hideOrShow, 3)
+          },
+          {
+            title: '菜单',
+            wantAgent: await this.trayWant('menu', 4)
+          },
+          {
+            title: '退出',
+            wantAgent: await this.trayWant('quit', 5)
+          }
+        ]
       }
       if (this.trayIcon.length > 0) {
         try {

@@ -342,7 +342,7 @@ window.__qqpetIOS = {
     else if (type === 'outside') outside()
     else if (type === 'trayClick' && payload && typeof payload === 'object') {
       const click = payload as TrayClick
-      if (click.kind === 'state' || click.kind === 'menu') emit('trayClick', { ...click, x: click.x ?? innerWidth / 2, y: click.y ?? innerHeight / 2 })
+      if (click.kind === 'state' || click.kind === 'menu' || click.kind === 'show' || click.kind === 'hide') emit('trayClick', { ...click, x: click.x ?? innerWidth / 2, y: click.y ?? innerHeight / 2 })
     } else if (type === 'gamePlayed') {
       void gamePlayed(payload).catch((error) => reportError('gamePlayed', error))
     } else if (type === 'clipboard' && typeof payload === 'string') {
