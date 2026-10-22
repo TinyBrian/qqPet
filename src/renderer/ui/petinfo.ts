@@ -124,7 +124,7 @@ export function openPetInfo(): void {
     pd.style.display = info.PDiamondLevel ? '' : 'none'
     diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
     // The original drew a 年 mark on a yearly member's badge; no asset for it survived, so it is drawn in CSS.
-    diamond.classList.toggle('pdYear', info.pinkDiamond && info.PDiamondYear)
+    diamond.className = info.pinkDiamond && info.PDiamondYear ? 'pinkDiamond pdYear' : 'pinkDiamond'
     pdGrowth.className = info.pinkDiamond ? 'pinkDiamondUP px8 pinkDiamondUPs' : 'pinkDiamondUP px8'
     pdGrowth.textContent = `${info.PDgrowth} / ${info.PDgrowthValue_next}`
     pd.title = info.pinkDiamond ? `当前成长速度：${info.PDgrowthValue}/每天,到期时间：${formatDate(info.PDiamondExpirationDate)}` : '当前未开通粉钻'
