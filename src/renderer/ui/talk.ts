@@ -76,6 +76,9 @@ function place(): void {
 
 /** `ms` is how long the bubble stays; 0 keeps it until a button is clicked. */
 export async function say(text: string, buttons: string[], onButton: (() => void)[] = [], ms = SHOW_MS): Promise<void> {
+  // A bubble whose button opens something (升学考试「我要考试」) is the only way in: idle chatter used to replace
+  // it before it could be clicked, and the exam never opened (#114 #106). It still expires on its own.
+  if (!onButton.length && actions.length && el.style.visibility === 'visible') return
   actions = onButton
   shown = text
   labels = buttons
