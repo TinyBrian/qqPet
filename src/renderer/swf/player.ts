@@ -63,6 +63,7 @@ function createRuffleElement(parent: HTMLElement): { el: RufflePlayerElement; cl
     el.style.height = '100%'
     parent.appendChild(el)
     safari14Styles(el)
+    hidePlayButton(el)
     return { el, cleanup }
   } catch (error) {
     cleanup()
@@ -131,6 +132,17 @@ const removed = new MutationObserver(() => {
   }
 })
 removed.observe(document.documentElement, { childList: true, subtree: true })
+
+// Autoplay is on, so Ruffle's play button is never useful. A player suspended by the host pause before its
+// movie first plays (away at launch) shows it over the pet until the user comes back (#119).
+function hidePlayButton(el: HTMLElement): void {
+  const shadow = el.shadowRoot
+  if (!shadow || shadow.getElementById('qqpet-no-play-button')) return
+  const style = el.ownerDocument.createElement('style')
+  style.id = 'qqpet-no-play-button'
+  style.textContent = '#play-button{display:none!important}'
+  shadow.appendChild(style)
+}
 
 function safari14Styles(el: HTMLElement): void {
   const shadow = el.shadowRoot
