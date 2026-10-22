@@ -86,3 +86,9 @@ test('auto-care config: thresholds clamp, chosen good wins while owned (#116)', 
   assert.equal(chooseCare(goods, 'hunger', 950, 'gone').id, 'b', 'a used-up choice falls back to auto')
   assert.equal(chooseCare(goods, 'hunger', 950, 't').id, 'b', 'a choice that does nothing for the stat is ignored')
 })
+
+test('a lesson ending after all lessons are done does not skip the exam', () => {
+  assert.equal(C.lessonCounts(8, 9), true)
+  assert.equal(C.lessonCounts(9, 9), false)
+  assert.equal(C.lessonCounts(10, 9), false)
+})
