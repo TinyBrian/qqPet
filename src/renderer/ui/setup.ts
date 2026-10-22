@@ -494,7 +494,11 @@ export function openSetup(): void {
   addEventListener('resize', refreshDirection)
   const orientation = window.screen.orientation
   orientation?.addEventListener('change', refreshDirection)
-  const remove = openFrame(div('ui-setup2', div('spanel', button('sclose focusPress', () => close(), '×'), nav, div('smain', title, body))))
+  const panel = div('spanel', button('sclose focusPress', () => close(), '×'), nav, div('smain', title, body))
+  // Windows sends the mouse wheel to the focused window only; the pet window is born unfocusable, and focus() at open
+  // time loses to the foreground lock. A click in the panel is the user's own input, so focusing then is allowed.
+  panel.addEventListener('pointerdown', () => window.qqpet.setFocusable(true))
+  const remove = openFrame(div('ui-setup2', panel))
   // The AI tab re-draws its option list (and its live input) while requests run; keep the
   // window a keyboard target for the whole panel so typing survives those re-draws.
   window.qqpet.setFocusable(true)
