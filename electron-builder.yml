@@ -17,7 +17,12 @@ asar: true
 publish: []
 
 win:
-  target: [nsis]
+  # Releases ship x64 only. An arm64 payload is packed with 7-Zip's ARM64 filter, which the NSIS 7z
+  # plugin cannot unpack: the installer then silently skips QQPet.exe and every DLL. Pin x64 so a
+  # local build on an Apple Silicon Mac (default arch arm64) matches the release.
+  target:
+    - target: nsis
+      arch: [x64]
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
