@@ -31,6 +31,13 @@
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
         <activity
+            android:name=".TrayActivity"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
             android:name=".FileActivity"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />

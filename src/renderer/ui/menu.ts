@@ -59,6 +59,11 @@ export function setHidden(on: boolean): void {
 }
 document.body.classList.toggle('petHidden', save.settings.hidden)
 
+/** Show or hide the pet as the menu does, saying so; from the Android notification too. */
+export function wantHidden(on: boolean): void {
+  if (on !== save.settings.hidden) toggleHidden()
+}
+
 function toggleHidden(): void {
   if (save.settings.hidden) {
     wakeFromHidden()
