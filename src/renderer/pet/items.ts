@@ -18,6 +18,16 @@ export function pay(price: number): boolean {
   return true
 }
 
+/** Deducts 钻石; on shortage says so and returns false. */
+export function payDiamond(n: number): boolean {
+  if (info.diamond < n) {
+    windowView({ msg: `钻石不足，需要${n}颗，现在有${info.diamond}颗。每日签到、节日邮件都能得到钻石哦~` })
+    return false
+  }
+  setInfo('diamond', info.diamond - n)
+  return true
+}
+
 /** Stat effects of a good; eating and cleaning come with `extra` mood. */
 export function apply(g: Good, extra = 0): void {
   const c = save.petComputedlInfo
@@ -71,7 +81,7 @@ export function useItem(g: Good, free = false, text?: string): void {
   const take = (): boolean => takeGood(g) || free
 
   if (g.type === 'nums') {
-    const key = (g.useId ?? g.id) as 'yb' | 'growth' | 'health'
+    const key = (g.useId ?? g.id) as 'yb' | 'growth' | 'health' | 'diamond'
     return windowView({
       title: `使用-${g.name}`,
       msg: '选择使用数量',

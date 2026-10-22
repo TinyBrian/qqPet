@@ -1,6 +1,7 @@
 import { elapsed, stopTask } from '../pet/activity'
 import { goodOf, type TimedType } from '../pet/data/goods'
-import { pay } from '../pet/items'
+import { pay, payDiamond } from '../pet/items'
+import { pinkCost, pinkDays, sweetDays, SWEET_DAYS_PER_DIAMOND } from '../pet/diamond'
 import { speak } from '../pet/pet'
 import { activity, growthPerMinute, info, onInfoChange, save, setInfo } from '../pet/store'
 import { addSweetHeart, openPinkDiamond } from '../pet/vip'
@@ -56,20 +57,30 @@ export function status(): (Node | string)[] {
   return [`${b.name} `, div('fc', ` (${elapsed() | 0}分钟) `, button('stopDoActive butDo', stop, ' 停止 '))]
 }
 
-/** Opening or extending 贴心宝贝 with yuanbao; days add onto the current expiry (#105). */
+/** Opening or extending 贴心宝贝 with 元宝 (#105), or with 钻石 (#75); days add onto the current expiry. */
 export function buySweetHeart(): void {
+  const until = info.sweetHeartOverTime ? `贴心宝贝${formatDate(info.sweetHeartOverTime)}到期。` : ''
+  const done = (): void => speak({ s: `[host],贴心宝贝${formatDate(info.sweetHeartOverTime)}过期，我真是太爱你了！~`, now: true }, 'speak')
   windowView({
     title: '贴心宝贝',
-    msg: info.sweetHeartOverTime ? `贴心宝贝${formatDate(info.sweetHeartOverTime)}到期，续费：300元宝/一天` : '托管费用：300元宝/一天',
+    msg: `${until}用元宝：300元宝/一天（选天数）。也可以用钻石：1颗=${SWEET_DAYS_PER_DIAMOND}天（现有${info.diamond}颗）。`,
     max: 30,
     sweet: true,
     ok: (close, n) => {
       close()
       if (!pay(300 * n)) return
       addSweetHeart(n)
-      speak({ s: `[host],贴心宝贝${formatDate(info.sweetHeartOverTime)}过期，我真是太爱你了！~`, now: true }, 'speak')
+      done()
     },
   })
+}
+
+/** 贴心宝贝 bought with 钻石: `n` diamonds, 3 days each. */
+export function buySweetHeartWithDiamond(n: number): boolean {
+  if (!payDiamond(n)) return false
+  addSweetHeart(sweetDays(n))
+  speak({ s: `[host],用${n}颗钻石开通了${sweetDays(n)}天贴心宝贝，${formatDate(info.sweetHeartOverTime)}到期~`, now: true }, 'speak')
+  return true
 }
 
 /** Buying sweetheart days, or switching a booked one on and off. */
@@ -88,17 +99,17 @@ export function sweetHeart(): void {
   })
 }
 
-/** Opening or extending pink diamond with yuanbao; 365 days or more is the yearly membership. */
+/** Opening or extending pink diamond with 钻石 (#75): 10 a month; 12 months make the yearly membership. */
 function pinkDiamond(): void {
   windowView({
     title: '粉钻贵族',
-    msg: info.pinkDiamond ? `粉钻${formatDate(info.PDiamondExpirationDate)}到期，续费：300元宝/一天` : '开通粉钻：300元宝/一天，一次开通365天即为年费粉钻',
-    max: 365,
-    init: 30,
+    msg: `${info.pinkDiamond ? `粉钻${formatDate(info.PDiamondExpirationDate)}到期，续费` : '开通粉钻'}：10钻石/月，开通12个月即为年费粉钻（现有${info.diamond}颗钻石）`,
+    max: 12,
+    init: 1,
     ok: (close, n) => {
       close()
-      if (!pay(300 * n)) return
-      openPinkDiamond(n)
+      if (!payDiamond(pinkCost(n))) return
+      openPinkDiamond(pinkDays(n))
       speak({ s: `[host],粉钻开通啦，${formatDate(info.PDiamondExpirationDate)}到期，谢谢你！~`, now: true }, 'appear')
     },
   })
@@ -118,6 +129,7 @@ function render(): void {
   const diamond = button('pinkDiamond', pinkDiamond)
   diamond.title = info.pinkDiamond ? '续费粉钻' : '开通粉钻'
   diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
+  if (info.pinkDiamond && info.PDiamondYear) diamond.className += ' pdYear'
   const timed = Object.entries(save.selfGoodUseOption).flatMap(([type, t]) => {
     if (!t) return []
     const g = goodOf(type as TimedType, t.id)

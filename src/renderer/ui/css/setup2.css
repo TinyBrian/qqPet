@@ -72,3 +72,10 @@
 .ui-setup2 .ssel .opt {padding:6px 10px;cursor:pointer;white-space:nowrap}
 .ui-setup2 .ssel .opt:hover {background:#fbedc9}
 .ui-setup2 .ssel .opt.on {background:var(--brown);color:#fff}
+.ui-setup2 .ssel.up .menu {top:auto;bottom:34px}
+.ui-setup2 .scare .k.wide {width:auto}
+.ui-setup2 .slog {max-height:180px;overflow-y:auto;border:1px solid #e6d3ae;border-radius:6px;background:#fff;margin-top:6px}
+.ui-setup2 .slog .le {display:flex;gap:10px;padding:5px 10px;border-top:1px solid #f0e4cc;font-size:13px}
+.ui-setup2 .slog .le:first-child {border-top:none}
+.ui-setup2 .slog .le .t {flex:none;color:#9b8466}
+.ui-setup2 .slog .le .s {flex:1;min-width:0}

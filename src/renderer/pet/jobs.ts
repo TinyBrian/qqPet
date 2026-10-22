@@ -16,6 +16,8 @@ import { speak } from './pet'
 import { rand } from './rand'
 import { activity, earnYb, info, luck, save, setInfo, update } from './store'
 import { addCount } from './tasks'
+import { care } from './custody'
+import { logCare } from './sweetcare'
 
 export { PROVINCES }
 
@@ -83,6 +85,12 @@ export function describeWork(g: Good): string[] {
   return lines.filter((l): l is string => Boolean(l))
 }
 
+/** The pet meets a job's level, stat and diploma requirements. */
+export const qualifies = (g: Good): boolean =>
+  !(g.needLevel! > save.petComputedlInfo.level) &&
+  !Object.entries(g.useArtt ?? {}).some(([k, v]) => v > info[k as 'charm']) &&
+  !Object.entries(g.education ?? {}).some(([k, v]) => v > save.studyInfo[k as Subject])
+
 /** Returns whether the pet went to work. */
 export function work(g: Good): boolean {
   if (cannot('工作')) return false
@@ -124,6 +132,12 @@ export function describeStudy(g: Good): string[] {
 
 /** All lessons of a school done: the pet asks for its exam. */
 function examPrompt(g: Good): void {
+  // 贴心宝贝 sits the exam itself.
+  if (info.sweetHeart && care().exam && info.health === 5) {
+    learn(subjectOf(g))
+    logCare(`${g.object}考试通过，升学啦`)
+    return
+  }
   speak({ s: '[host]，我要升学啦，我一定好好考试！', b: '我要考试', now: true }, 'speak', {
     wait: true,
     ok: () =>
