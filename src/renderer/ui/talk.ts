@@ -22,6 +22,8 @@ let hideTimer = 0
 const hide = (): void => {
   clearTimeout(hideTimer)
   el.style.visibility = 'hidden'
+  // A hidden bubble still redrew every frame: most of an idle pet's CPU (#119).
+  player.setIdle(true)
 }
 
 // From the cursor feed, not :hover: once the window turns click-through again it gets no mouseleave.
@@ -77,6 +79,7 @@ export async function say(text: string, buttons: string[], onButton: (() => void
   actions = onButton
   shown = text
   labels = buttons
+  player.setIdle(false)
   if (movie !== movieOf()) {
     movie = movieOf()
     await player.load(movie)

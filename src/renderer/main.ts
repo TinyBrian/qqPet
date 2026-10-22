@@ -10,6 +10,7 @@ import { catchDiudiule, releaseDiudiule } from './ui/diudiule'
 import { scheduleHide, showControl } from './ui/control'
 import { div, pageX, pageY, touch } from './ui/dom'
 import './ui/background'
+import './host-pause'
 import { clearFacePoints, showFacePointsAfterClick } from './ui/face'
 import { closeMenu, openMenu } from './ui/menu'
 import { closeState, openState } from './ui/state'
@@ -215,6 +216,8 @@ const setHitShape = window.qqpet.setHitShape
 if (setHitShape || window.qqpet.setDragging) {
   let sent = ''
   setInterval(() => {
+    // Nothing to hit while hidden or paused (#119); the hidden-change listener refreshes the cursor state.
+    if (save.settings.hidden && !dragging && (!setHitShape || sent === '[]')) return
     // The movie can retract under a stationary cursor; native cursor IPC only sends changes.
     if (!dragging) updateCursor(cursor)
     if (!setHitShape) return
