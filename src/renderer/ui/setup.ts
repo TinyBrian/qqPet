@@ -2,12 +2,8 @@ import { description } from '../../../package.json'
 import { APP_VERSION } from '../../shared/version'
 import { DEFAULT_HOTKEY, hotkeyLabel } from '../../shared/hotkey'
 import { forgetMemory } from './chat'
-import { allGoods, type GoodType } from '../pet/data/goods'
-import { give } from '../pet/items'
 import { applyPetSound, speak } from '../pet/pet'
-import { rand } from '../pet/rand'
-import { addInfo, info, save, setInfo, update } from '../pet/store'
-import { clearPinkDiamond, openPinkDiamond } from '../pet/vip'
+import { info, save, setInfo, update } from '../pet/store'
 import { weatherNow } from '../pet/weather'
 import { openFrame } from './box'
 import './css/setup2.css'
@@ -177,13 +173,6 @@ function rebornAsOther(): void {
     msg: '点击将会清空当前宠物数据，并重生为另一个性别的宠物，请慎重选择',
     ok: () => window.qqpet.resetPet(info.sex === 'GG' ? 'MM' : 'GG'),
   })
-}
-
-/** Ten of a random good of `type`. */
-function grant(type: GoodType): void {
-  const all = allGoods(type)
-  const g = { ...all[rand(0, all.length - 1)], num: 10 }
-  give([g], `[host]，我获得了${g.num}个${g.name}！`)
 }
 
 /** The pet reports the new city's weather right away, so a wrong name shows at once. */
@@ -409,60 +398,7 @@ const TABS: Tab[] = [
       { type: 'radio', label: '留意前台在用的软件（仅电脑，默认关）', title: '同一软件开太久，闲聊时可能会提起。不读窗口内容。', on: () => s.watchApp, run: () => toggleWatch('frontWatch', 'watchApp') },
     ],
   },
-  {
-    label: '作弊',
-    render: (redraw) => cheatSection(redraw, TABS.find((t) => t.label === '作弊')!.options.map((o) => option(o, redraw))),
-    options: [
-      {
-        type: 'button',
-        label: '元宝 +1000',
-        run: () => {
-          addInfo('yb', 1000)
-          speak({ s: '[host]，我获得了1000元宝！', now: true }, 'appear')
-        },
-      },
-      { type: 'button', label: '成长值 +5000', run: () => addInfo('growth', 5000) },
-      { type: 'button', label: '随机获得 10 个食物', run: () => grant('food') },
-      { type: 'button', label: '随机获得 10 个清洁用品', run: () => grant('clean') },
-      { type: 'button', label: '随机获得 10 个药品', run: () => grant('medicine') },
-      {
-        type: 'button',
-        label: '复活吧，我的宠物！',
-        run: () => (info.health === 0 ? setInfo('health', 5) : speak({ s: '[host]，我还活得好好的呢~', now: true }, 'speak')),
-      },
-      {
-        type: 'radio',
-        label: '聊天框金手指',
-        title: '在聊天里输入「元宝+100000」「不要死」等口令生效；关闭时「不要死」一并失效',
-        on: () => s.chatCheat,
-        run: () => update('settings', { chatCheat: !s.chatCheat, undying: false }),
-      },
-      {
-        type: 'button',
-        label: '粉钻 30天',
-        run: () => {
-          openPinkDiamond(30)
-          speak({ s: '[host]，粉钻开了30天！', now: true }, 'appear')
-        },
-      },
-      {
-        type: 'button',
-        label: '粉钻 年费',
-        run: () => {
-          openPinkDiamond(365)
-          speak({ s: '[host]，粉钻开了365天！', now: true }, 'appear')
-        },
-      },
-      {
-        type: 'button',
-        label: '粉钻 清除',
-        run: () => {
-          clearPinkDiamond()
-          speak({ s: '[host]，粉钻已清除~', now: true }, 'appear')
-        },
-      },
-    ],
-  },
+  { label: '作弊', options: [], render: cheatSection },
   {
     label: 'AI',
     get options() {
