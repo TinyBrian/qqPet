@@ -462,7 +462,11 @@ export function openSetup(): void {
   const nav = div('snav')
   const title = div('shead')
   const body = div('sbody')
+  let root: HTMLElement | undefined
+  // Pink with 粉钻 like openBox's vip skin, gold otherwise; re-checked on every draw (作弊) and live tick (expiry).
+  const skin = (): void => void root?.classList.toggle('vip', Boolean(info.pinkDiamond))
   const draw = (): void => {
+    skin()
     const tabs = TABS.filter((t) => t.label !== '作弊' || s.cheatTab)
     const current = tabs.find((t) => t.label === tab) ?? tabs[0]
     tab = current.label
@@ -487,6 +491,7 @@ export function openSetup(): void {
   let seenLog = save.saveJsonData.careLog
   const timer = window.setInterval(() => {
     refreshLive()
+    skin()
     if (save.saveJsonData.careLog === seenLog) return
     seenLog = save.saveJsonData.careLog
     const busy = body.querySelector('.ssel.open') || body.contains(document.activeElement) && document.activeElement?.tagName === 'INPUT'
@@ -508,7 +513,9 @@ export function openSetup(): void {
   // Windows sends the mouse wheel to the focused window only; the pet window is born unfocusable, and focus() at open
   // time loses to the foreground lock. A click in the panel is the user's own input, so focusing then is allowed.
   panel.addEventListener('pointerdown', () => window.qqpet.setFocusable(true))
-  const remove = openFrame(div('ui-setup2', panel))
+  root = div('ui-setup2', panel)
+  skin()
+  const remove = openFrame(root)
   // The AI tab re-draws its option list (and its live input) while requests run; keep the
   // window a keyboard target for the whole panel so typing survives those re-draws.
   window.qqpet.setFocusable(true)
