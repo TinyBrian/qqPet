@@ -1,4 +1,5 @@
 import { PetSwf } from '../swf/pet-swf'
+import { setBackgroundPeeking } from '../ui/background'
 import { openEmail } from '../ui/email'
 import { floatMood } from '../ui/float'
 import { say } from '../ui/talk'
@@ -62,6 +63,9 @@ export const machine = new Machine(petSwf, (over, next) => {
   }
   over.e?.()
   next.s?.()
+  const wasPeek = over.a === 'hideleft' || over.a === 'hideright'
+  const nowPeek = next.a === 'hideleft' || next.a === 'hideright'
+  if (wasPeek !== nowPeek) setBackgroundPeeking(nowPeek)
 })
 
 /** Answering the pet's small talk cheers it up. */
