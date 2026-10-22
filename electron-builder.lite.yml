@@ -23,7 +23,10 @@ publish: []
 artifactName: QQPet-Lite-${version}-${arch}.${ext}
 
 win:
-  target: [nsis]
+  # Same x64 pin as electron-builder.yml (NSIS cannot unpack an ARM64-filtered payload).
+  target:
+    - target: nsis
+      arch: [x64]
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
