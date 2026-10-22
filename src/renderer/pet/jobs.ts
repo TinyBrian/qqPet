@@ -231,6 +231,7 @@ export function studySubject(k: string, autoExam: boolean): 'started' | 'done' |
     }
     if (cannot('考试')) return 'no'
     learn(subjectOf(g))
+    logCare(`${g.object}考试通过，升学啦`, false)
     speak({ s: '[host],好开心啊，我终于升学了！~', now: true }, 'speak')
     return 'done'
   }

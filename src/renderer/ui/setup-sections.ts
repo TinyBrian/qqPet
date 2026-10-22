@@ -114,12 +114,14 @@ export function custodyLine(): string {
   const c = custody()
   if (!c.queue.length) return '队列为空，添加项目后开始托管'
   const cur = label(c.queue[c.cur])
+  // Not running and nothing under way: say so first, so this line agrees with custodyFoot below.
+  if (!c.running && !c.launched) return c.cur > 0 || c.rounds > 0 ? `已暂停 · 下一项：${cur}` : `未开始 · 第一项：${cur}`
   if (!info.sweetHeart) return `贴心宝贝未开启，托管暂停 · 下一项：${cur}`
   if (save.settings.paused) return `暂停成长中，托管全部暂停 · 当前：${cur}`
   if (c.launched && busy()) return `执行中：${cur}`
   if (c.launched) return `等待开始：${cur}（宠物现在无法出发时，约5分钟后重试）`
   if (busy()) return `等待当前活动结束 · 下一项：${cur}`
-  return c.running ? `即将开始：${cur}` : `已暂停 · 下一项：${cur}`
+  return `即将开始：${cur}`
 }
 
 export function custodyFoot(): string {
