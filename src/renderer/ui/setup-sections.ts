@@ -125,7 +125,8 @@ export function custodyLine(): string {
 export function custodyFoot(): string {
   const c = custody()
   const p = C.position(c)
-  const state = !c.running ? '关闭' : canCustody() ? '开启' : '暂停中'
+  const started = c.launched || c.cur > 0 || c.rounds > 0
+  const state = !c.running ? (started ? '已暂停' : '关闭') : canCustody() ? '开启' : '暂停中'
   return `已完成 ${c.rounds} 轮 · 托管${state} · 当前 / 下一项 ${p.cur} / ${p.next || '-'}`
 }
 
