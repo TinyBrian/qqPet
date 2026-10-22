@@ -128,7 +128,7 @@ export function openPetInfo(): void {
     pdGrowth.className = info.pinkDiamond ? 'pinkDiamondUP px8 pinkDiamondUPs' : 'pinkDiamondUP px8'
     pdGrowth.textContent = `${info.PDgrowth} / ${info.PDgrowthValue_next}`
     pd.title = info.pinkDiamond ? `当前成长速度：${info.PDgrowthValue}/每天,到期时间：${formatDate(info.PDiamondExpirationDate)}` : '当前未开通粉钻'
-    heart.style.backgroundImage = `url(pet/stateInfo/${info.sweetHeart ? 'h_up' : 'h_down'}.png)`
+    heart.style.backgroundImage = `url(pet/stateInfo/${info.sweetHeart ? 'h_up' : 'h_down'}.svg)`
     heart.title = info.sweetHeartOverTime ? `过期时间：${formatDate(info.sweetHeartOverTime)}` : '当前未开启贴心宝贝'
   }
   refresh()

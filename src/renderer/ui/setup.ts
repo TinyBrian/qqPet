@@ -494,7 +494,9 @@ export function openSetup(): void {
   addEventListener('resize', refreshDirection)
   const orientation = window.screen.orientation
   orientation?.addEventListener('change', refreshDirection)
-  const panel = div('spanel', button('sclose focusPress', () => close(), '×'), nav, div('smain', title, body))
+  // A real title bar: the window's name and a drawn close button, so the panel reads as a window at any scale.
+  const bar = div('stbar', div('stname', '系统设置'), button('sclose focusPress', () => close(), ''))
+  const panel = div('spanel', bar, div('srow', nav, div('smain', title, body)))
   // Windows sends the mouse wheel to the focused window only; the pet window is born unfocusable, and focus() at open
   // time loses to the foreground lock. A click in the panel is the user's own input, so focusing then is allowed.
   panel.addEventListener('pointerdown', () => window.qqpet.setFocusable(true))
