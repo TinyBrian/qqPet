@@ -6,7 +6,10 @@ import { DEAD, illOf } from './data/ills'
 import { addGood, hasGood, takeGood } from './goods'
 import { speak } from './pet'
 import { activity, busy, info, save, setInfo, update } from './store'
+import { asFarmUser, cropsFromXml, runFarmCare } from './farm-care'
+import { autoPondCare } from './fishing'
 import { dayStart } from './vip'
+import { farmOpen } from '../ui/farm'
 
 export const careLog = (): LogEntry[] => parseLog(save.saveJsonData.careLog)
 export const clearCareLog = (): void => update('saveJsonData', { careLog: '[]' })
@@ -90,4 +93,46 @@ export function careTick(): void {
       if (j && work(j)) logCare(`元宝不多了，自己去做${j.name}`, false)
     })
   }
+  if (cfg.farm) void farmCareTick()
+  if (cfg.fish) fishCareTick()
+}
+
+let cropTable: Record<string, import('./farm-care').CropInfo> | undefined
+let lastFarm = 0
+let lastFish = 0
+const PLACE_CD = 5 * 60_000
+
+async function farmCareTick(): Promise<void> {
+  if (farmOpen() || Date.now() - lastFarm < PLACE_CD) return
+  const stored = save.saveJsonData.farm
+  if (!stored) return
+  lastFarm = Date.now()
+  try {
+    cropTable ??= cropsFromXml(await (await fetch('pet/qqfarm/com/MyFarm/data/xml/Crop.xml')).text())
+  } catch {
+    return
+  }
+  const before = asFarmUser(JSON.parse(stored))
+  const r = runFarmCare(before, cropTable)
+  if (!(r.harvested || r.cared || r.cleared || r.planted)) return
+  update('saveJsonData', { farm: JSON.stringify(r.user) })
+  const parts = [
+    r.harvested && `收获${r.harvested}块地共${r.fruits}个果实`,
+    r.cared && `照料了${r.cared}块地`,
+    r.cleared && `铲除了${r.cleared}块枯萎`,
+    r.planted && `播种了${r.planted}块地`,
+  ].filter(Boolean)
+  logCare(`农场：${parts.join('，')}`, false)
+}
+
+function fishCareTick(): void {
+  if (Date.now() - lastFish < PLACE_CD) return
+  lastFish = Date.now()
+  const r = autoPondCare(true, (cost) => payCare(cost))
+  if (!(r.collected || r.fed)) return
+  const parts = [
+    r.collected && `收了${r.collected}条鱼（+${r.yb}元宝）`,
+    r.fed && `喂了${r.fed}条鱼（花${r.feedCost}元宝）`,
+  ].filter(Boolean)
+  logCare(`鱼塘：${parts.join('，')}`, false)
 }

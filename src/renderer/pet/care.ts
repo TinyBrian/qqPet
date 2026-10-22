@@ -40,6 +40,10 @@ export interface CareConfig {
   workBelow: number
   /** Say what it did in a bubble; the log keeps it either way. */
   notify: boolean
+  /** Closed farm: harvest, water/weed/kill, clear wilted, plant from the bag. */
+  farm: boolean
+  /** Fish pond: collect ripe fish, and feed growing ones (within the daily budget). */
+  fish: boolean
 }
 
 export const DEFAULT_CARE: CareConfig = {
@@ -58,6 +62,8 @@ export const DEFAULT_CARE: CareConfig = {
   work: false,
   workBelow: 200,
   notify: true,
+  farm: false,
+  fish: false,
 }
 
 export function parseCare(raw: string | undefined): CareConfig {
@@ -89,6 +95,8 @@ export function parseCare(raw: string | undefined): CareConfig {
     work: b(o.work, d.work),
     workBelow: yb(o.workBelow, d.workBelow),
     notify: b(o.notify, d.notify),
+    farm: b(o.farm, d.farm),
+    fish: b(o.fish, d.fish),
   }
 }
 
