@@ -18,6 +18,7 @@ import { activity, earnYb, info, luck, save, setInfo, update } from './store'
 import { addCount } from './tasks'
 import { care } from './custody'
 import { logCare } from './sweetcare'
+import { lessonCounts } from './custody-core'
 
 export { PROVINCES }
 
@@ -169,7 +170,7 @@ function studyTask(g: Good): Task {
     // A clever pet may be let out of the last five minutes.
     early: (done) => done > minutes - 5 && rand(0, Math.max(200, 3000 - info.intel / 10)) <= 10,
     end: (early) => {
-      learn(subjectOf(g))
+      if (lessonCounts(lessons(g), g.classNum!)) learn(subjectOf(g))
       apply(g)
       addCount('Study')
       if (lessons(g) === g.classNum) examPrompt(g)

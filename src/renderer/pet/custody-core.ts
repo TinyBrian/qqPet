@@ -128,3 +128,9 @@ export function position(c: Custody): { cur: number; next: number; total: number
   const next = c.cur + 1 < total ? c.cur + 2 : c.loop ? 1 : 0
   return { cur: c.cur + 1, next, total }
 }
+
+/**
+ * Whether a lesson that just ended counts. A school's lessons are capped at its class count: once they are all done
+ * (also when set so mid-class, e.g. by the cheat page) only the exam moves the pet on, never one more lesson.
+ */
+export const lessonCounts = (done: number, classNum: number): boolean => done < classNum
