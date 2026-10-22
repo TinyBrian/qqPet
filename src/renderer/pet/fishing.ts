@@ -225,3 +225,33 @@ export function resetFish(): void {
   pond.PD.canusecnt = info.pinkDiamond ? pond.PD.allvipcnt : 0
   store()
 }
+
+/** 贴心宝贝: collect every ripe fish, then optionally feed each growing one (`pay` must cover FEED_PRICE each time). */
+export function autoPondCare(feed: boolean, pay?: (cost: number) => boolean): { collected: number; yb: number; fed: number; feedCost: number } {
+  settle()
+  const sold = pond.fishs.filter(ripe)
+  const yb = sold.reduce((s, f) => s + f.YB * f.quantity, 0)
+  let collected = 0
+  if (yb) {
+    pond.fishs = pond.fishs.filter((f) => !ripe(f))
+    earnYb(yb)
+    harvested(sold.length)
+    collected = sold.length
+    store()
+  }
+  let fed = 0
+  let feedCost = 0
+  if (feed && pay) {
+    const t = now()
+    for (const f of [...pond.fishs]) {
+      if (ripe(f)) continue
+      if (!pay(FEED_PRICE)) break
+      f.siLiao++
+      grow(f, t)
+      fed++
+      feedCost += FEED_PRICE
+    }
+    if (fed) store()
+  }
+  return { collected, yb, fed, feedCost }
+}

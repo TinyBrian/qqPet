@@ -5,7 +5,7 @@ import { pinkCost, pinkDays, sweetDays } from '../../src/renderer/pet/diamond.ts
 
 test('care defaults: caring on, auto-work off, budget 500', () => {
   const c = parseCare('')
-  assert.deepEqual([c.heal, c.revive, c.restock, c.exam, c.notify, c.work, c.budget, c.workBelow], [true, true, true, true, true, false, 500, 200])
+  assert.deepEqual([c.heal, c.revive, c.restock, c.exam, c.notify, c.work, c.farm, c.fish, c.budget, c.workBelow], [true, true, true, true, true, false, false, false, 500, 200])
   const o = parseCare(JSON.stringify({ heal: false, budget: -5, workBelow: 1e12 }))
   assert.deepEqual([o.heal, o.budget, o.workBelow], [false, 0, 1e7])
 })

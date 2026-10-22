@@ -30,6 +30,9 @@ if (localStorage.getItem(MIGRATED) === null) {
 
 let open = false
 
+/** True while Farm.swf is on screen; auto-care skips then so it does not fight the movie. */
+export const farmOpen = (): boolean => open
+
 /** The save Farm.swf writes on its first run (FarmMain.locationInit). */
 function fresh(): Sol {
   return {
