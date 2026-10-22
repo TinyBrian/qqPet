@@ -164,10 +164,23 @@ for (const type of ['pointerup', 'pointercancel'] as const)
   )
 
 let bounds = { x: 0, y: 0, w: 0, h: 0 }
-function track(): void {
+// Measuring every element each frame kept the phone busy while nothing changed (#119): right after a touch or a
+// window change the window follows every frame, otherwise a few times a second (a bubble or an animation that
+// outgrows the window catches up within IDLE_MS). Nothing is measured while the page is paused (screen off).
+const BUSY_MS = 2000
+const IDLE_MS = 200
+let busyUntil = 0
+let measured = 0
+for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) document.addEventListener(type, () => (busyUntil = performance.now() + BUSY_MS), true)
+// A bubble, menu or panel appearing changes the page: the window follows it in the next frame, not IDLE_MS later.
+new MutationObserver(() => (busyUntil = performance.now() + BUSY_MS)).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
+function track(now: number): void {
   requestAnimationFrame(track)
   // A resize under a resting finger skews the next events (a long press reads as a drag); it waits for the lift.
   if (press && !dragging) return
+  if (window.__qqpetHostPaused) return
+  if (!dragging && now >= busyUntil && now - measured < IDLE_MS) return
+  measured = now
   let x = innerWidth
   let y = innerHeight
   let r = 0
@@ -183,7 +196,10 @@ function track(): void {
       b = Math.max(b, box.bottom)
     }
   const next = nextBounds(bounds, r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null, innerWidth, innerHeight)
-  if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) native.setBounds(next.x, next.y, next.w, next.h, innerWidth)
+  if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) {
+    native.setBounds(next.x, next.y, next.w, next.h, innerWidth)
+    busyUntil = now + BUSY_MS
+  }
   bounds = next
 }
 requestAnimationFrame(track)

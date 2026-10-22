@@ -13,6 +13,7 @@ import { openState } from './state'
 import { sendLetter } from './lan-visit'
 import { visitFriend } from './visit'
 import { windowView } from './window-view'
+import { wakeFromHidden } from '../host-pause'
 
 const ditu = (n: number): string => `pet/Menu/ditu0${n}.png`
 
@@ -59,7 +60,10 @@ export function setHidden(on: boolean): void {
 document.body.classList.toggle('petHidden', save.settings.hidden)
 
 function toggleHidden(): void {
-  if (save.settings.hidden) speak({ s: '[host],我出来啦~~有没有想我啊', now: true }, 'appear', { start: () => setHidden(false) })
+  if (save.settings.hidden) {
+    wakeFromHidden()
+    speak({ s: '[host],我出来啦~~有没有想我啊', now: true }, 'appear', { start: () => setHidden(false) })
+  }
   else speak({ s: '[host],我隐身啦~~', now: true }, 'hide', { end: () => setHidden(true) })
 }
 

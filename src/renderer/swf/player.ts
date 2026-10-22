@@ -186,6 +186,8 @@ export class SwfPlayer {
   private recovery = 0
   private recoveryTimes: number[] = []
   private resumeWaiters = new Set<() => void>()
+  /** Set while nothing shows the movie (a hidden bubble): it stays suspended through host resumes (#119). */
+  private idle = false
 
   /** The SWF's ExternalInterface calls go to the globals of the window that owns `parent`. */
   constructor(parent: HTMLElement, { recoverContext = false }: { recoverContext?: boolean } = {}) {
@@ -306,6 +308,7 @@ export class SwfPlayer {
       this.recovering = false
       if (this.stoppedAt !== null) this.el.ruffle().suspend()
       this.pauseForHost(hostPaused)
+      if (this.idle) this.el.ruffle().suspend()
     } catch (error) {
       if (current()) this.failMovie(request.url, error, 'context-recovery-failed')
     } finally {
@@ -423,6 +426,7 @@ export class SwfPlayer {
       this.pausedAt = null
       if (this.recoverContext) this.lastLoad = { url, base, options: { ...options } }
       this.pauseForHost(hostPaused)
+      if (this.idle) this.el.ruffle().suspend()
       return this.meta
     } catch (error) {
       // Removing the failed generation isolates every late fetch/build from future players.
@@ -478,9 +482,18 @@ export class SwfPlayer {
         if (this.stoppedAt !== null) this.stoppedAt += elapsed
         this.pausedAt = null
       }
-      if (this.stoppedAt === null || this.recovering) this.el.ruffle().resume()
+      if ((this.stoppedAt === null && !this.idle) || this.recovering) this.el.ruffle().resume()
       for (const resume of [...this.resumeWaiters]) resume()
     }
+  }
+
+  /** Suspends a movie nobody sees, without the frame clock `stop` keeps; `false` lets it run again. */
+  setIdle(idle: boolean): void {
+    if (this.idle === idle) return
+    this.idle = idle
+    if (this.destroyed || !this.meta || this.recovering) return
+    if (idle) this.el.ruffle().suspend()
+    else if (!hostPaused && this.stoppedAt === null) this.el.ruffle().resume()
   }
 
   async nextPaint(): Promise<void> {

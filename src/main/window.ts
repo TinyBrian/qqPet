@@ -9,6 +9,7 @@ import { fullscreenGate } from './fullscreen-gate'
 import { getSave } from './save'
 
 const CURSOR_INTERVAL_MS = 33
+const HIDDEN_CURSOR_INTERVAL_MS = 250
 const PAGES = process.env.ELECTRON_RENDERER_URL ?? APP_ORIGIN
 
 /** Transparent, click-through overlay following the pet's active display. */
@@ -66,15 +67,19 @@ export function createPetWindow(): BrowserWindow {
     return point
   })
   let last = ''
-  const timer = setInterval(() => {
+  let timer: ReturnType<typeof setTimeout>
+  const poll = (): void => {
+    // A hidden pet takes no input: a slower poll is enough to keep the page's cursor roughly current (#119).
+    timer = setTimeout(poll, getSave().settings.hidden ? HIDDEN_CURSOR_INTERVAL_MS : CURSOR_INTERVAL_MS)
     const p = position(dragging)
     const key = JSON.stringify({ ...p, desktop: { ...p.desktop, sequence: 0 } })
     if (key === last) return
     last = key
     win.webContents.send(IPC.cursor, p)
-  }, CURSOR_INTERVAL_MS)
+  }
+  poll()
   win.on('closed', () => {
-    clearInterval(timer)
+    clearTimeout(timer)
     ipcMain.removeHandler(IPC.setDragging)
   })
 

@@ -14,6 +14,7 @@ import './css/setup.css'
 import { button, div, typeable } from './dom'
 import { setFaceClick } from './face'
 import { readopt, setHidden } from './menu'
+import { wakeFromHidden } from '../host-pause'
 import { pageZoom, windowDirectionAvailable } from './viewport'
 import { checkUpdate, ipcError, packReady } from './update'
 import { windowView } from './window-view'
@@ -87,6 +88,7 @@ function homing(): void {
   setInfo('lastX', 100)
   setInfo('lastY', innerHeight * 0.6)
   // On start: an interrupted hide ends, and hides the pet, right before.
+  wakeFromHidden()
   speak({ s: '[host],我在这里~', now: true }, 'appear', { start: () => setHidden(false) })
 }
 
