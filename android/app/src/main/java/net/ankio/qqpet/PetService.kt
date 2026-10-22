@@ -25,6 +25,7 @@ import android.os.Build
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
@@ -76,6 +77,15 @@ class PetService : Service() {
         gravity = Gravity.TOP or Gravity.START
         layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         fitInsetsTypes = 0
+        // The system slides a window to its new origin over a few frames, while the page is already shifted by the
+        // whole move: shrinking the window from the left (the menu closing) showed the pet far left, sliding back.
+        // PRIVATE_FLAG_NO_MOVE_ANIMATION makes the move instant; hidden API, so a failure just keeps the slide.
+        try {
+            val f = LayoutParams::class.java.getField("privateFlags")
+            f.setInt(this, f.getInt(this) or 0x40)
+        } catch (e: Throwable) {
+            Log.w("QQPet", "no-move-animation flag unavailable", e)
+        }
     }
 
     private lateinit var probe: View
