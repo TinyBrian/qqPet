@@ -6,7 +6,8 @@ import { emitSaid } from './said'
 import { DEAD, illOf } from './data/ills'
 import { TALK, type Line } from './data/talk'
 import { advanceTask, stopTask } from './activity'
-import { pickCare } from './care'
+import { chooseCare } from './care'
+import { care, tickCustody } from './custody'
 import { IDLE, rephrase } from './ai'
 import { dateTalk, festival, greeting, loadCalendar } from './calendar'
 import { listGoods, tickTimed } from './goods'
@@ -379,6 +380,7 @@ function tick(): void {
     }
     for (const type of tickTimed(grown)) speak({ c: 'state', s: `${type}Over`, now: true }, 'speak')
     advanceTask(grown)
+    tickCustody()
   }
   lastTick = now
   update('nowTimeLine', now)
@@ -393,10 +395,13 @@ const NEEDS = [
 
 /** Sweetheart: the pet tends its first low need it has a good for, with the good that wastes least (#40). */
 function selfCare(quiet = false): void {
+  const cfg = care()
+  if (!cfg.on) return
   for (const need of NEEDS) {
     const max = save.petComputedlInfo[`${need.stat}Max`]
-    if (info[need.stat] / max >= 0.6) continue
-    const g = pickCare(listGoods(need.type, 1, Number.MAX_SAFE_INTEGER).list, need.stat, max - info[need.stat])
+    if (info[need.stat] / max >= cfg[need.stat] / 100) continue
+    const chosen = { food: cfg.food, clean: cfg.cleanGood, toy: cfg.toy }[need.type]
+    const g = chooseCare(listGoods(need.type, 1, Number.MAX_SAFE_INTEGER).list, need.stat, max - info[need.stat], chosen)
     if (!g) continue
     if (quiet) useItemQuietly(g)
     else useItem(g, false, `[host]，我可以自己${need.act}哦！~~使用了：${g.name}`)

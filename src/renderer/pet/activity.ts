@@ -16,12 +16,17 @@ let task: (Task & { done: number }) | null = null
 
 export const elapsed = (): number => task?.done ?? 0
 
+const started: (() => void)[] = []
+/** Called whenever a task starts (custody notes that its launch took). */
+export const onTaskStart = (l: () => void): void => void started.push(l)
+
 /** Starts a task; `value` is what activeOption shows (job id, city). */
 export function startTask(t: Task, value: string, done = 0): void {
   task = { ...t, done }
   update('saveJsonData', { activity: String(done) })
   setActivity(t.key, value)
   refreshTray()
+  for (const l of started) l()
 }
 
 /** Drops the running task without its end; returns its key. */
@@ -44,4 +49,11 @@ export function advanceTask(minutes: number): void {
   if (!early && t.done < t.minutes) return
   stopTask()
   t.end(early)
+}
+
+/** Cheat: ends the running task now, as if its time were up. */
+export function finishTask(): boolean {
+  if (!task) return false
+  advanceTask(task.minutes - task.done)
+  return true
 }

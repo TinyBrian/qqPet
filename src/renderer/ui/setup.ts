@@ -10,7 +10,7 @@ import { addInfo, info, save, setInfo, update } from '../pet/store'
 import { clearPinkDiamond, openPinkDiamond } from '../pet/vip'
 import { weatherNow } from '../pet/weather'
 import { openFrame } from './box'
-import './css/setup.css'
+import './css/setup2.css'
 import { button, div, typeable } from './dom'
 import { setFaceClick } from './face'
 import { readopt, setHidden } from './menu'
@@ -18,6 +18,8 @@ import { wakeFromHidden } from '../host-pause'
 import { pageZoom, windowDirectionAvailable } from './viewport'
 import { checkUpdate, ipcError, packReady } from './update'
 import { windowView } from './window-view'
+import { onCustodyChange } from '../pet/custody'
+import { btn, check, cheatSection, refreshLive, sweetSection } from './setup-sections'
 
 type Option = { label: string; title?: string } & (
   | { type: 'radio'; on: () => boolean; run: () => void }
@@ -25,6 +27,7 @@ type Option = { label: string; title?: string } & (
   | { type: 'button'; run: () => void }
   | { type: 'see'; value: string; run?: () => void }
   | { type: 'input'; value: () => string; set: (v: string) => void }
+  | { type: 'head' }
 )
 
 function webhookUrl(): string {
@@ -271,14 +274,22 @@ const aiOptions = (): Option[] => [
 const FACE_TIP = '使用互动动作：鼠标放入宠物范围0.3s后（手机上点一下宠物），开启点位可进行点击~'
 const s = save.settings
 
-const TABS: { label: string; options: Option[] }[] = [
+type Tab = { label: string; options: Option[]; render?: (redraw: () => void) => HTMLElement[] }
+const head = (label: string): Option => ({ type: 'head', label })
+
+const TABS: Tab[] = [
   {
     label: '全局设置',
     get options(): Option[] {
       return [
+        head('宠物'),
+        { type: 'button', label: '宠物不见了？点我试试', run: homing },
+        { type: 'radio', label: '开机自启', title: '仅 Windows、macOS 和 Android 有效', on: () => s.autoStart, run: toggleAutoStart },
+        { type: 'radio', label: '开启免打扰模式', on: () => s.quiet, run: () => update('settings', { quiet: !s.quiet }) },
+        { type: 'input', label: '天气城市（留空按网络位置自动定位）', value: () => s.weatherCity, set: setCity },
         { type: 'button', label: '重生~~~（注意数据丢失）', run: readopt },
         { type: 'button', label: '重生为另一个性别~~~（注意数据丢失）', run: rebornAsOther },
-        { type: 'button', label: '宠物不见了？点我试试', run: homing },
+        head('显示'),
         { type: 'slider', label: '透明度', value: () => s.opacity, step: (d) => setOpacity(s.opacity + d) },
         // Only the desktop host zooms the page; touch hosts already fit the screen.
         ...(pageZoom() === null
@@ -288,8 +299,8 @@ const TABS: { label: string; options: Option[] }[] = [
           { type: 'radio', label: '窗口方向：跟随屏幕', title: '保持窗口朝向与屏幕一致，空间不足时缩小', on: () => s.windowDirection === 'screen', run: () => update('settings', { windowDirection: 'screen' }) },
           { type: 'radio', label: '窗口方向：自动选择最大显示方向', title: '选择窗口能显示得更大的方向（默认）', on: () => s.windowDirection === 'auto', run: () => update('settings', { windowDirection: 'auto' }) },
         ] satisfies Option[] : []),
-        { type: 'radio', label: '开机自启', title: '仅 Windows、macOS 和 Android 有效', on: () => s.autoStart, run: toggleAutoStart },
-        { type: 'input', label: '天气城市（留空按网络位置自动定位）', value: () => s.weatherCity, set: setCity },
+        { type: 'radio', label: '开启高清画质', title: '高清托盘图标与窗口边框，新打开的窗口生效；高清界面素材重启后生效', on: () => s.hd, run: () => setHd(!s.hd) },
+        head('互动与玩法'),
         {
           type: 'radio',
           label: '是否开启互动动作(开启后会导致点击位置不可进行宠物移动~)',
@@ -305,7 +316,6 @@ const TABS: { label: string; options: Option[] }[] = [
           on: () => s.difficulty === 'standard',
           run: () => update('settings', { difficulty: s.difficulty === 'standard' ? 'easy' : 'standard' }),
         },
-        { type: 'radio', label: '开启免打扰模式', on: () => s.quiet, run: () => update('settings', { quiet: !s.quiet }) },
         {
           type: 'radio',
           label: '点宠物时显示动作栏',
@@ -321,7 +331,9 @@ const TABS: { label: string; options: Option[] }[] = [
           on: () => s.lan,
           run: () => update('settings', { lan: !s.lan }),
         },
+        head('联网'),
         ...(window.qqpet.onWebhook ? webhookOptions() : []),
+        head('对话与声音'),
         {
           type: 'radio',
           label: '语音对话',
@@ -361,13 +373,14 @@ const TABS: { label: string; options: Option[] }[] = [
           value: () => s.music,
           step: (d) => update('settings', { music: Math.round(Math.min(1, Math.max(0, s.music + d)) * 10) / 10 }),
         },
-        { type: 'radio', label: '开启高清画质', title: '高清托盘图标与窗口边框，新打开的窗口生效；高清界面素材重启后生效', on: () => s.hd, run: () => setHd(!s.hd) },
       ]
     },
   },
+  { label: '贴心宝贝', options: [], render: sweetSection },
   {
     label: '存档',
     options: [
+      head('存档'),
       { type: 'button', label: '导出存档', title: '把当前宠物保存成一个文件，可用于备份或换电脑', run: exportSave },
       { type: 'button', label: '导入存档（支持原版 config.json）', title: '用存档文件替换当前宠物，导入后自动重启', run: importSave },
       {
@@ -380,19 +393,15 @@ const TABS: { label: string; options: Option[] }[] = [
           speak({ s: '[host]，我把以前的事都忘掉啦~', now: true, ai: false }, 'speak')
         },
       },
+      ...(window.qqpet.packs
+        ? ([
+            head('内容包'),
+            { type: 'button', label: '导入内容包…', title: '安装 .qqpetpack 内容包（新素材），不用重装程序；导入后重启生效', run: importPack },
+            { type: 'button', label: '恢复内置内容', title: '删除已导入或下载的内容包，回到程序自带的素材，重启后生效', run: resetPacks },
+          ] satisfies Option[])
+        : []),
     ],
   },
-  ...(window.qqpet.packs
-    ? [
-        {
-          label: '内容包',
-          options: [
-            { type: 'button' as const, label: '导入内容包…', title: '安装 .qqpetpack 内容包（新素材），不用重装程序；导入后重启生效', run: importPack },
-            { type: 'button' as const, label: '恢复内置内容', title: '删除已导入或下载的内容包，回到程序自带的素材，重启后生效', run: resetPacks },
-          ],
-        },
-      ]
-    : []),
   {
     label: '工具',
     options: [
@@ -402,6 +411,7 @@ const TABS: { label: string; options: Option[] }[] = [
   },
   {
     label: '作弊',
+    render: (redraw) => cheatSection(redraw, TABS.find((t) => t.label === '作弊')!.options.map((o) => option(o, redraw))),
     options: [
       {
         type: 'button',
@@ -479,41 +489,31 @@ function option(o: Option, redraw: () => void): HTMLElement {
     f()
     redraw()
   }
-  let inner: HTMLElement
-  if (o.type === 'radio') {
-    inner = div('childrenIn fcc radio', button(o.on() ? 'choose focusPress active' : 'choose focusPress', act(o.run)), div('label', o.label))
-  } else if (o.type === 'slider') {
-    const knob = div('sl_center_z')
-    knob.style.left = `${o.value() * 100}%`
-    const line = div(
-      'sliderLine f1 w100 fcc mt8',
-      button(
-        'sl_down focusPress',
-        act(() => o.step(-0.1)),
-      ),
-      div('sl_center f1 por', div('sl_thumb_track', knob)),
-      button(
-        'sl_up focusPress',
-        act(() => o.step(0.1)),
-      ),
-    )
-    inner = div('childrenIn fccC slider', div('label f1 w100', o.label), line)
-  } else if (o.type === 'button') {
-    inner = div('childrenIn fcc', div('label f1 w100 por butsLabel fcc tc', `${o.label} `, div('butsButs f1 w100 fcc', button('butsButs_submit', o.run))))
-  } else if (o.type === 'input') {
-    const input = typeable(Object.assign(document.createElement('input'), { className: 'textInput', value: o.value() }))
+  let el: HTMLElement
+  if (o.type === 'head') return div('sh3', o.label)
+  if (o.type === 'radio') el = check(o.label, o.on(), act(o.run))
+  else if (o.type === 'slider') {
+    const fill = div('fill')
+    fill.style.width = `${Math.round(o.value() * 100)}%`
+    el = div('sslider', div('t', o.label), div('line', btn('−', act(() => o.step(-0.1)), false, 'mini'), div('track', fill), btn('+', act(() => o.step(0.1)), false, 'mini')))
+  } else if (o.type === 'button') el = div('sbuttonrow', btn(o.label, o.run))
+  else if (o.type === 'input') {
+    const input = typeable(Object.assign(document.createElement('input'), { className: 'sinput', value: o.value() }))
     input.addEventListener(
       'change',
       act(() => o.set(input.value)),
     )
-    inner = div('childrenIn fC', div('label', o.label), input)
+    el = div('sfield wide', div('k', o.label), input)
   } else {
-    inner = div('childrenIn fC', div('', `${o.label}：`), div('seeValue', o.value))
-    if (o.run) inner.addEventListener('click', act(o.run))
+    el = div('ssee', div('k', o.label), div('v', o.value))
+    if (o.run) el.addEventListener('click', act(o.run))
   }
-  const row = div('childrens', inner)
-  row.title = o.title ?? ''
-  return row
+  if (o.title) {
+    el.title = o.title
+    // Touch has no hover: the tip shows under the option.
+    el.append(div('stip', o.title))
+  }
+  return el
 }
 
 let close = (): void => {}
@@ -523,56 +523,50 @@ export function openSetup(): void {
   if (!draftModel) draftModel = s.aiModel
   // By label: showing the 作弊 tab shifts the tabs after it.
   let tab = TABS[0].label
-  const left = div('leftScroll fcC')
-  const title = div('right_title ml16')
-  const list = div('children')
-  const right = div('rightScroll fC', title, list)
+  const nav = div('snav')
+  const title = div('shead')
+  const body = div('sbody')
   const draw = (): void => {
     const tabs = TABS.filter((t) => t.label !== '作弊' || s.cheatTab)
     const current = tabs.find((t) => t.label === tab) ?? tabs[0]
     tab = current.label
     const pick = (label: string) => (): void => {
       tab = label
-      list.scrollTop = 0
+      body.scrollTop = 0
       draw()
     }
-    left.replaceChildren(...tabs.map((t) => button(t === current ? 'lm_once focusPress fcc activeMenu' : 'lm_once focusPress fcc', pick(t.label), t.label)))
+    nav.replaceChildren(...tabs.map((t) => button(t === current ? 'stab focusPress on' : 'stab focusPress', pick(t.label), t.label)))
     title.textContent = current.label
-    list.replaceChildren(...current.options.map((o) => option(o, draw)))
+    const scroll = body.scrollTop
+    body.replaceChildren(...(current.render ? current.render(draw) : current.options.map((o) => option(o, draw))))
+    body.scrollTop = scroll
   }
   draw()
   redraw = draw
+  // Custody and the stats move on their own: refresh the live lines, and the whole 贴心宝贝 page when its queue moves.
+  const offCustody = onCustodyChange(() => {
+    if (tab === '贴心宝贝' && !body.querySelector('.ssel.open')) draw()
+  })
+  const timer = window.setInterval(refreshLive, 3000)
   let directionChoice = windowDirectionAvailable()
   const refreshDirection = (): void => {
     const next = windowDirectionAvailable()
     if (next === directionChoice) return
     directionChoice = next
-    if (tab !== TABS[0].label) return
-    const scroll = list.scrollTop
-    draw()
-    list.scrollTop = scroll
+    if (tab === TABS[0].label) draw()
   }
   addEventListener('resize', refreshDirection)
   const orientation = window.screen.orientation
   orientation?.addEventListener('change', refreshDirection)
-  const remove = openFrame(
-    div(
-      'ui-setup',
-      div(
-        'setUp',
-        button('close focusPress', () => close()),
-        left,
-        right,
-      ),
-    ),
-    'pet/sysSeting/ditu.png',
-  )
+  const remove = openFrame(div('ui-setup2', div('spanel', button('sclose focusPress', () => close(), '×'), nav, div('smain', title, body))))
   // The AI tab re-draws its option list (and its live input) while requests run; keep the
   // window a keyboard target for the whole panel so typing survives those re-draws.
   window.qqpet.setFocusable(true)
   close = (): void => {
     removeEventListener('resize', refreshDirection)
     orientation?.removeEventListener('change', refreshDirection)
+    offCustody()
+    window.clearInterval(timer)
     window.qqpet.setFocusable(false)
     remove()
     close = () => {}
