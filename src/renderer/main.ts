@@ -12,7 +12,7 @@ import { div, pageX, pageY, touch } from './ui/dom'
 import './ui/background'
 import './host-pause'
 import { clearFacePoints, showFacePointsAfterClick } from './ui/face'
-import { closeMenu, openMenu } from './ui/menu'
+import { closeMenu, openMenu, wantHidden } from './ui/menu'
 import { closeState, openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
 import { windowView } from './ui/window-view'
@@ -444,7 +444,11 @@ window.qqpet.onTrayClick((c) => {
   if (menuLeave) { clearTimeout(menuLeave); menuLeave = 0 }
   const x = c.x ?? innerWidth - 60
   const y = c.y ?? 0
-  if (c.kind === 'menu') {
+  if (c.kind === 'show' || c.kind === 'hide') {
+    closeMenu()
+    closeState()
+    if (save.havePet) wantHidden(c.kind === 'hide')
+  } else if (c.kind === 'menu') {
     closeState()
     openMenu({ x, y, pet: false }, adoptPet)
   } else if (save.havePet) {

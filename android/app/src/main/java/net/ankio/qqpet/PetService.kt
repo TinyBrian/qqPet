@@ -177,7 +177,7 @@ class PetService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "state", "menu" -> emit("trayClick", JSONObject().put("kind", intent.action).toString())
+            "state", "menu", "show", "hide" -> emit("trayClick", JSONObject().put("kind", intent.action).toString())
             "quit" -> stopSelf()
         }
         return START_STICKY
@@ -227,15 +227,32 @@ class PetService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
     }
 
+    /** The page hid the pet (菜单 隐藏宠物); the notification then offers to show it again. */
+    private var petHidden = false
+
+    private fun setHidden(on: Boolean) {
+        if (on == petHidden) return
+        petHidden = on
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
+    }
+
     private fun notification(): Notification {
+        // Through TrayActivity, which closes the shade; quitting needs no shade closed.
+        fun tap(name: String) = PendingIntent.getActivity(
+            this, name.hashCode(),
+            Intent(this, TrayActivity::class.java).setAction(name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         fun action(name: String) = PendingIntent.getService(this, name.hashCode(), Intent(this, PetService::class.java).setAction(name), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, "pet")
             .setSmallIcon(trayIcon ?: Icon.createWithResource(this, R.drawable.ic_notification))
             .setLargeIcon(trayIcon)
             .setContentTitle("QQ宠物")
-            .setContentText(trayTip)
-            .setContentIntent(action("state"))
-            .addAction(Notification.Action.Builder(null, "菜单", action("menu")).build())
+            .setContentText(if (petHidden) "宠物隐藏中，点按显示" else trayTip)
+            // A hidden pet has nothing to tap: the notification is the way back.
+            .setContentIntent(tap(if (petHidden) "show" else "state"))
+            .addAction(Notification.Action.Builder(null, if (petHidden) "显示宠物" else "隐藏宠物", tap(if (petHidden) "show" else "hide")).build())
+            .addAction(Notification.Action.Builder(null, "菜单", tap("menu")).build())
             .addAction(Notification.Action.Builder(null, "退出", action("quit")).build())
             .setOngoing(true)
             .build()
@@ -416,6 +433,9 @@ class PetService : Service() {
 
         @JavascriptInterface
         fun setTray(icon: String, tip: String?) = web.post { this@PetService.setTray(icon, tip) }
+
+        @JavascriptInterface
+        fun setHidden(on: Boolean) = web.post { this@PetService.setHidden(on) }
 
         @JavascriptInterface
         fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double) = web.post { this@PetService.setBounds(x, y, w, h, viewport) }

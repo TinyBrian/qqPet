@@ -94,7 +94,8 @@ export type TrayState =
 
 /** `state` opens the pet status panel, `menu` the pet's context menu. Window coordinates (the tray may lie outside it), absent on Linux. */
 export interface TrayClick {
-  kind: 'state' | 'menu'
+  /** show/hide: the Android notification's 显示宠物/隐藏宠物. */
+  kind: 'state' | 'menu' | 'show' | 'hide'
   x?: number
   y?: number
   /** Windows tray left click: the status panel closes by itself unless the cursor stays on it (#41). */
