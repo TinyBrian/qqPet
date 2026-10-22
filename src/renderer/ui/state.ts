@@ -129,6 +129,7 @@ function render(): void {
   const diamond = button('pinkDiamond', pinkDiamond)
   diamond.title = info.pinkDiamond ? '续费粉钻' : '开通粉钻'
   diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
+  diamond.classList.toggle('pdYear', info.pinkDiamond && info.PDiamondYear)
   const timed = Object.entries(save.selfGoodUseOption).flatMap(([type, t]) => {
     if (!t) return []
     const g = goodOf(type as TimedType, t.id)

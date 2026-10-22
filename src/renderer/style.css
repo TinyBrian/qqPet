@@ -293,3 +293,7 @@ body {
 .petHidden .ui-control {
   display: none;
 }
+
+/* 年费粉钻: a small 年 mark on the pink diamond badge (petinfo, state panel). */
+.pdYear {position:relative;overflow:visible}
+.pdYear::after {content:'年';position:absolute;right:-4px;top:-4px;width:13px;height:13px;line-height:13px;border-radius:50%;background:#e8336d;color:#fff;font-size:9px;font-weight:bold;text-align:center;box-shadow:0 0 0 1px #fff}
