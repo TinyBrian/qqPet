@@ -1,4 +1,5 @@
 // 贴心宝贝循环托管 driver: runs the queue (custody-core) on the growth tick, only while 贴心宝贝 is on.
+import { onTaskStart } from './activity'
 import { parseCare, type CareConfig } from './care'
 import * as C from './custody-core'
 import { goodOf } from './data/goods'
@@ -56,3 +57,9 @@ export function tickCustody(): void {
   }
   if (JSON.stringify(c) !== save.saveJsonData.custody) setCustody(c)
 }
+
+// A launched item's activity began: from now on its end (even an instant one) finishes the item.
+onTaskStart(() => {
+  const c = custody()
+  if (c.launched && !c.seen) setCustody({ ...c, seen: true })
+})
