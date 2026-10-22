@@ -57,7 +57,7 @@ export function status(): (Node | string)[] {
 }
 
 /** Opening or extending 贴心宝贝 with yuanbao; days add onto the current expiry (#105). */
-function buySweetHeart(): void {
+export function buySweetHeart(): void {
   windowView({
     title: '贴心宝贝',
     msg: info.sweetHeartOverTime ? `贴心宝贝${formatDate(info.sweetHeartOverTime)}到期，续费：300元宝/一天` : '托管费用：300元宝/一天',
@@ -73,7 +73,7 @@ function buySweetHeart(): void {
 }
 
 /** Buying sweetheart days, or switching a booked one on and off. */
-function sweetHeart(): void {
+export function sweetHeart(): void {
   if (!info.sweetHeartOverTime) return buySweetHeart()
   const on = !info.sweetHeart
   windowView({

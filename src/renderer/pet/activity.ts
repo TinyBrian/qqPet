@@ -45,3 +45,10 @@ export function advanceTask(minutes: number): void {
   stopTask()
   t.end(early)
 }
+
+/** Cheat: ends the running task now, as if its time were up. */
+export function finishTask(): boolean {
+  if (!task) return false
+  advanceTask(task.minutes - task.done)
+  return true
+}

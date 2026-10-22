@@ -196,11 +196,37 @@ function back(p: Province, early: boolean): void {
 }
 
 /** An hour in a random province; a lucky pet comes back early from an encounter. */
-export function travel(): void {
-  if (cannot('旅行了', '去旅游哦')) return
+export function travel(): boolean {
+  if (cannot('旅行了', '去旅游哦')) return false
   const p = PROVINCES[rand(0, PROVINCES.length - 1)]
   speak({ s: `[host]，我开始去${p.name}了哦~`, now: true }, 'speak', { start: () => startTask(tripTask(p), p.name) })
+  return true
 }
+
+/**
+ * 贴心宝贝托管: one lesson of a subject at its current school. 'started' when class began, 'done' when nothing is left
+ * to wait for (exam passed automatically, or the exam prompt shown), 'no' when the pet can't go now.
+ */
+export function studySubject(k: string, autoExam: boolean): 'started' | 'done' | 'no' {
+  const g = studyGoods().find((x) => subjectOf(x) === k)
+  if (!g) return 'done'
+  if (lessons(g) === g.classNum) {
+    if (!autoExam) {
+      study(g)
+      return 'done'
+    }
+    if (cannot('考试')) return 'no'
+    learn(subjectOf(g))
+    speak({ s: '[host],好开心啊，我终于升学了！~', now: true }, 'speak')
+    return 'done'
+  }
+  return study(g) ? 'started' : 'no'
+}
+
+/** Cheat: lessons done per subject, and setting one. */
+export const subjects = (): { key: Subject; name: string; value: number; diploma: string }[] =>
+  SUBJECTS.map((k) => ({ key: k, name: goodOf('study', `xx-${k}`).object ?? k, value: save.studyInfo[k], diploma: diploma(k, save.studyInfo[k]) }))
+export const setSubject = (k: Subject, v: number): void => update('studyInfo', { [k]: Math.max(0, Math.floor(v)) })
 
 const tripTask = (p: Province): Task => ({
   key: 'trip',
