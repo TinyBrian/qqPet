@@ -227,15 +227,20 @@ function hide(): void {
 }
 
 let list: HTMLElement | null = null
+/** The stat bar of the open panel, updated in place so a tick does not rebuild the goods under a finger. */
+let bar: HTMLElement | null = null
+/** The good a touch already previewed; it survives rebuilds of the same panel (a count change, a page turn). */
+let picked: string | null = null
 
 function openPanel(p: Panel, page = 1): void {
+  if (open?.type !== p.type || open?.icon !== p.icon) picked = null
   open = { ...p, page }
+  bar = null
   menus.style.display = 'none'
   const { list: goods, totalPage } = p.list(page)
   const turn = (d: number) => (): void => {
     if (page + d >= 1 && page + d <= totalPage) openPanel(p, page + d)
   }
-  let picked: Good | null = null
   const items = goods.map((g: Good) =>
     div(
       'goodItem',
@@ -245,7 +250,8 @@ function openPanel(p: Panel, page = 1): void {
         Object.assign(img('goodItemIcon', g.url), {
           onclick: () => {
             // A tap hovers what it touches: the first one shows the good's info, the next uses it.
-            if (touch && picked !== g) return void (picked = g)
+            if (touch && picked !== g.id) return void (picked = g.id)
+            picked = null
             if (p.use(g)) closePanel()
           },
         }),
@@ -263,7 +269,7 @@ function openPanel(p: Panel, page = 1): void {
       div(
         'goods f1 fC h100',
         div('fc f1', ...(items.length ? items : [div('goodsNone tc w100', ' 空空如也~~ ')])),
-        ...(p.stat ? [div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`]))] : []),
+        ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
       ),
       button('toRight', turn(1)),
     ),
@@ -277,13 +283,20 @@ function closePanel(): void {
   open = null
   list?.remove()
   list = null
+  bar = null
+  picked = null
   menus.style.display = ''
   scheduleHide()
 }
 
 onInfoChange((key) => {
   if (key === 'lastX' || key === 'lastY' || key === 'growth') place()
-  if (open && key === open.stat) openPanel(open, open.page)
+  // 只换进度条：整块重建会丢掉手指刚点过的预览，第二下又变成预览，物品用不出去
+  if (open?.stat && key === open.stat && bar) {
+    const next = div('progress', progress(info[open.stat], save.petComputedlInfo[`${open.stat}Max`]))
+    bar.replaceWith(next)
+    bar = next
+  }
 })
 onGoodsChange((type) => {
   if (open?.type === type) openPanel(open, Math.min(open.page, Math.max(open.list(1).totalPage, 1)))
