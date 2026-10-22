@@ -87,29 +87,33 @@ export interface SwfFailure {
   terminal?: 'context-recovery-failed' | 'context-recovery-exhausted'
 }
 
-/** Display lifecycle is independent from the user's paused-growth setting. */
 // Ruffle keeps its requestAnimationFrame loop running while suspended, which still costs ~20% of a core.
 // While the host is paused, hold animation-frame callbacks and run them on resume, so the loops actually stop.
-const nativeRaf = window.requestAnimationFrame.bind(window)
-const nativeCancel = window.cancelAnimationFrame.bind(window)
 const heldFrames = new Map<number, FrameRequestCallback>()
 let heldId = -1
-window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-  if (!hostPaused) return nativeRaf(cb)
-  const id = heldId--
-  heldFrames.set(id, cb)
-  return id
-}
-window.cancelAnimationFrame = (id: number): void => {
-  if (id < 0) heldFrames.delete(id)
-  else nativeCancel(id)
+let nativeRaf: ((cb: FrameRequestCallback) => number) | undefined
+if (typeof window.requestAnimationFrame === 'function' && typeof window.cancelAnimationFrame === 'function') {
+  const raf = window.requestAnimationFrame.bind(window)
+  const cancel = window.cancelAnimationFrame.bind(window)
+  nativeRaf = raf
+  window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+    if (!hostPaused) return raf(cb)
+    const id = heldId--
+    heldFrames.set(id, cb)
+    return id
+  }
+  window.cancelAnimationFrame = (id: number): void => {
+    if (id < 0) heldFrames.delete(id)
+    else cancel(id)
+  }
 }
 function releaseFrames(): void {
   const held = [...heldFrames.values()]
   heldFrames.clear()
-  for (const cb of held) nativeRaf(cb)
+  for (const cb of held) nativeRaf?.(cb)
 }
 
+/** Display lifecycle is independent from the user's paused-growth setting. */
 export function setHostPaused(paused: boolean): void {
   hostPaused = paused
   if (!paused) releaseFrames()
