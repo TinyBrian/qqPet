@@ -1,12 +1,7 @@
 /* Settings panel: sidebar + sticky header, warm beige and brown. On narrow screens the sidebar becomes a tab strip. */
 .ui-setup2 {--ink:#4a3015;--brown:#9a6a2f;--line:#d8b98a;--paper:#fffbee;--side:#efe0c4;--btn:#fff4d6;color:var(--ink);font-size:14px;line-height:1.4}
-.ui-setup2 .spanel {position:relative;display:flex;flex-direction:column;width:min(620px,calc(100vw - 16px));height:min(470px,calc(100vh - 16px));background:var(--paper);border:2px dashed #ff9fc8;border-radius:10px;box-shadow:0 0 0 4px #ffe3ef;overflow:hidden;box-sizing:border-box}
-.ui-setup2 .stbar {flex:none;display:flex;align-items:center;height:34px;padding:0 8px 0 14px;background:linear-gradient(#ffeaf3,#ffd3e6);border-bottom:1px solid #ffb6d2;box-sizing:border-box}
-.ui-setup2 .stname {flex:1;font-size:14px;font-weight:bold;color:#c2185b;letter-spacing:1px;text-shadow:0 1px 0 #fff}
-.ui-setup2 .sclose {flex:none;width:26px;height:22px;background:url(/pet/windowTip/close-x.svg) 0 0 / 100% 100% no-repeat;cursor:pointer}
-.ui-setup2 .sclose:hover {background-image:url(/pet/windowTip/close-x-hover.svg)}
-.ui-setup2 .sclose:active {transform:translateY(1px)}
-.ui-setup2 .srow {flex:1 1 0;min-height:0;display:flex}
+.ui-setup2 .spanel {position:relative;display:flex;width:min(620px,calc(100vw - 16px));height:min(470px,calc(100vh - 16px));background:var(--paper);border:2px dashed #ff9fc8;border-radius:10px;box-shadow:0 0 0 4px #ffe3ef;overflow:hidden;box-sizing:border-box}
+.ui-setup2 .sclose {position:absolute;right:8px;top:6px;width:26px;height:26px;line-height:24px;text-align:center;font-size:22px;font-weight:bold;color:#e0417a;background:#fff;border:1px solid #ffb6d2;border-radius:6px;cursor:pointer;z-index:5}
 .ui-setup2 .snav {flex:0 0 136px;display:flex;flex-direction:column;gap:10px;padding:18px 12px;background:var(--side);border-right:1px solid var(--line);overflow-y:auto;box-sizing:border-box}
 .ui-setup2 .stab {flex:none;padding:9px 4px;text-align:center;background:var(--btn);border:1px solid var(--line);border-radius:5px;cursor:pointer;white-space:nowrap}
 .ui-setup2 .stab:hover {background:#fbe9c0}
@@ -62,9 +57,8 @@
 .ui-setup2 .sgrid {display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 12px}
 @media (max-width:560px) {
   .ui-setup2 {font-size:13px}
-  .ui-setup2 .srow {flex-direction:column}
-  .ui-setup2 .stbar {height:30px}
-  .ui-setup2 .snav {flex:none;flex-direction:row;gap:6px;padding:8px;border-right:none;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
+  .ui-setup2 .spanel {flex-direction:column}
+  .ui-setup2 .snav {flex:none;flex-direction:row;gap:6px;padding:8px 40px 8px 8px;border-right:none;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
   .ui-setup2 .stab {padding:6px 10px}
   .ui-setup2 .shead {padding:8px 14px;font-size:16px}
   .ui-setup2 .sbody {padding:4px 12px 14px}

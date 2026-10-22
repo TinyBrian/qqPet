@@ -216,28 +216,28 @@ body {
   height: 30px;
   background-image: url(/pet/windowTip/vip/btn_closedefault.png);
 }
-.box .content1 {
+.hd .box .content1 {
   background-image: url(/pet/windowTip/normal/beijing4.svg);
 }
-.box .content3 {
+.hd .box .content3 {
   background-image: url(/pet/windowTip/normal/beijing5.svg);
 }
-.box .close {
+.hd .box .close {
   background-image: url(/pet/windowTip/normal/btn_close1.svg);
 }
-.box .close:hover {
+.hd .box .close:hover {
   background-image: url(/pet/windowTip/normal/btn_close2.svg);
 }
-.box .close:active {
+.hd .box .close:active {
   background-image: url(/pet/windowTip/normal/btn_close3.svg);
 }
-.box.vip .content1 {
+.hd .box.vip .content1 {
   background-image: url(/pet/windowTip/vip/Q_04.svg);
 }
-.box.vip .content3 {
+.hd .box.vip .content3 {
   background-image: url(/pet/windowTip/vip/Q_06.svg);
 }
-.box.vip .close {
+.hd .box.vip .close {
   background-image: url(/pet/windowTip/vip/btn_closedefault.svg);
 }
 

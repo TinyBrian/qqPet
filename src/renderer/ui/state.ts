@@ -138,7 +138,7 @@ function render(): void {
   // 点爱心图标续费，和粉钻图标一样 (#105 #84)
   const heart = button('sweetHeart', buySweetHeart)
   heart.title = info.sweetHeartOverTime ? '续费贴心宝贝' : '开通贴心宝贝'
-  heart.style.backgroundImage = `url(pet/stateInfo/${info.sweetHeart ? 'h_up' : 'h_down'}.svg)`
+  heart.style.backgroundImage = `url(pet/stateInfo/${info.sweetHeart ? 'h_up' : 'h_down'}.png)`
   const toggleNums = (): void => {
     showNums = !showNums
     render()

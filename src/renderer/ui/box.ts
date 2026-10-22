@@ -9,13 +9,14 @@ const SKINS = {
 }
 
 function row(cls: string, imgs: string[], extra?: HTMLElement): HTMLElement {
-  // Frame slices always use the SVG redraws under the same names: crisp at any scale, not only in hd mode.
+  // The hd frame slices are SVG redraws under the same names.
+  const hd = save.settings.hd
   const r = document.createElement('div')
   r.className = cls
   imgs.forEach((src, i) => {
     const img = document.createElement('img')
     img.className = `${cls}${i + 1}`
-    img.src = `pet/windowTip/${src.replace(/\.\w+$/, '.svg')}`
+    img.src = `pet/windowTip/${hd ? src.replace(/\.\w+$/, '.svg') : src}`
     r.appendChild(img)
   })
   if (extra) r.appendChild(extra)
