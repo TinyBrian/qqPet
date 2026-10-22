@@ -18,9 +18,12 @@ let actions: (() => void)[] = []
 let shown = ''
 let labels: string[] = []
 let hideTimer = 0
+/** The bubble on screen is pinned: only another pinned one may replace it. */
+let pinned = false
 
 const hide = (): void => {
   clearTimeout(hideTimer)
+  pinned = false
   el.style.visibility = 'hidden'
   // A hidden bubble still redrew every frame: most of an idle pet's CPU (#119).
   player.setIdle(true)
@@ -75,10 +78,13 @@ function place(): void {
 }
 
 /** `ms` is how long the bubble stays; 0 keeps it until a button is clicked. */
-export async function say(text: string, buttons: string[], onButton: (() => void)[] = [], ms = SHOW_MS): Promise<void> {
+export async function say(text: string, buttons: string[], onButton: (() => void)[] = [], ms = SHOW_MS, pin = false): Promise<void> {
   // A bubble whose button opens something (升学考试「我要考试」) is the only way in: idle chatter used to replace
   // it before it could be clicked, and the exam never opened (#114 #106). It still expires on its own.
   if (!onButton.length && actions.length && el.style.visibility === 'visible') return
+  // 闲聊也带「好的」回调；钉住的提示只让给另一个钉住的
+  if (pinned && !pin && el.style.visibility === 'visible') return
+  pinned = pin
   actions = onButton
   shown = text
   labels = buttons
