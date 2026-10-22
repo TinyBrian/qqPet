@@ -545,7 +545,7 @@ export function openSetup(): void {
   redraw = draw
   // Custody and the stats move on their own: refresh the live lines, and the whole 贴心宝贝 page when its queue moves.
   const offCustody = onCustodyChange(() => {
-    if (tab === '贴心宝贝' && !(document.activeElement instanceof HTMLSelectElement)) draw()
+    if (tab === '贴心宝贝' && !body.querySelector('.ssel.open')) draw()
   })
   const timer = window.setInterval(refreshLive, 3000)
   let directionChoice = windowDirectionAvailable()

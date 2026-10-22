@@ -21,18 +21,40 @@ export const btn = (text: string, run: () => void, disabled = false, cls = ''): 
 }
 
 export function check(text: string, on: boolean, toggle: () => void, title = ''): HTMLElement {
-  const row = button('scheck focusPress', toggle, div(on ? 'box on' : 'box'), div('t', text))
+  const row = button('scheck focusPress', toggle, div(on ? 'cb on' : 'cb'), div('t', text))
   row.title = title
   return row
 }
 
-export function select(opts: [string, string][], value: string, change: (v: string) => void, cls = ''): HTMLSelectElement {
-  const s = document.createElement('select')
-  s.className = `ssel ${cls}`
-  for (const [v, t] of opts) s.append(Object.assign(document.createElement('option'), { value: v, textContent: t, selected: v === value }))
-  s.addEventListener('pointerdown', () => window.qqpet.setFocusable(true))
-  s.addEventListener('change', () => change(s.value))
-  return s
+/**
+ * A drop-down drawn in the page: native <select> pop-ups are unreliable in the transparent, always-on-top pet
+ * window (the pick is lost) and differ across WebViews.
+ */
+export function select(opts: [string, string][], value: string, change: (v: string) => void, cls = ''): HTMLElement {
+  const text = (v: string): string => opts.find(([k]) => k === v)?.[1] ?? opts[0]?.[1] ?? ''
+  const cur = div('cur', text(value))
+  const menu = div('menu')
+  const wrap = div(`ssel ${cls}`, cur, menu)
+  const shut = (): void => {
+    wrap.classList.remove('open')
+    document.removeEventListener('pointerdown', outside, true)
+  }
+  const outside = (e: Event): void => {
+    if (!wrap.contains(e.target as Node)) shut()
+  }
+  for (const [v, t] of opts)
+    menu.append(
+      button(v === value ? 'opt on' : 'opt', () => {
+        cur.textContent = t
+        shut()
+        change(v)
+      }, t),
+    )
+  cur.addEventListener('click', () => {
+    if (wrap.classList.toggle('open')) document.addEventListener('pointerdown', outside, true)
+    else shut()
+  })
+  return wrap
 }
 
 export function numInput(value: number, set: (n: number) => void, cls = ''): HTMLInputElement {
