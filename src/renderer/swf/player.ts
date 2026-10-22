@@ -88,8 +88,31 @@ export interface SwfFailure {
 }
 
 /** Display lifecycle is independent from the user's paused-growth setting. */
+// Ruffle keeps its requestAnimationFrame loop running while suspended, which still costs ~20% of a core.
+// While the host is paused, hold animation-frame callbacks and run them on resume, so the loops actually stop.
+const nativeRaf = window.requestAnimationFrame.bind(window)
+const nativeCancel = window.cancelAnimationFrame.bind(window)
+const heldFrames = new Map<number, FrameRequestCallback>()
+let heldId = -1
+window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+  if (!hostPaused) return nativeRaf(cb)
+  const id = heldId--
+  heldFrames.set(id, cb)
+  return id
+}
+window.cancelAnimationFrame = (id: number): void => {
+  if (id < 0) heldFrames.delete(id)
+  else nativeCancel(id)
+}
+function releaseFrames(): void {
+  const held = [...heldFrames.values()]
+  heldFrames.clear()
+  for (const cb of held) nativeRaf(cb)
+}
+
 export function setHostPaused(paused: boolean): void {
   hostPaused = paused
+  if (!paused) releaseFrames()
   window.__qqpetHostPaused = paused
   if (paused) window.__qqpetInput?.({ phase: 'cancel', id: -1, x: 0, y: 0 })
   for (const player of players) player.pauseForHost(paused)
