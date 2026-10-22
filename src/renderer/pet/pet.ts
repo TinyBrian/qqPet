@@ -453,6 +453,8 @@ function healthRoll(): void {
 function grow(): void {
   if (info.health <= 0 || save.settings.paused) {
     lastTick = null
+    // 贴心宝贝 still watches over a dead pet: its revive lives in careTick, which tick() no longer reaches.
+    if (info.health <= 0 && !save.settings.paused) careTick()
     return
   }
   tick()

@@ -483,7 +483,15 @@ export function openSetup(): void {
   const offCustody = onCustodyChange(() => {
     if (tab === '贴心宝贝' && !body.querySelector('.ssel.open')) draw()
   })
-  const timer = window.setInterval(refreshLive, 3000)
+  // The care log grows on its own too; redraw the page for it unless the user is mid-edit.
+  let seenLog = save.saveJsonData.careLog
+  const timer = window.setInterval(() => {
+    refreshLive()
+    if (save.saveJsonData.careLog === seenLog) return
+    seenLog = save.saveJsonData.careLog
+    const busy = body.querySelector('.ssel.open') || body.contains(document.activeElement) && document.activeElement?.tagName === 'INPUT'
+    if (tab === '贴心宝贝' && !busy) draw()
+  }, 3000)
   let directionChoice = windowDirectionAvailable()
   const refreshDirection = (): void => {
     const next = windowDirectionAvailable()
