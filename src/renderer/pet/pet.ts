@@ -235,6 +235,9 @@ interface Say {
 }
 
 /** Shows a bubble, optionally together with an action that it waits for. Do-not-disturb drops only the bubble, never one whose button the caller waits for. */
+/** How long a bubble whose button the caller waits for stays up. */
+const WAIT_MS = 180_000
+
 export function speak(t: Say, action?: string, hooks: { start?: () => void; end?: () => void; ok?: () => void } = {}): void {
   let text = t.s ?? ''
   let button = t.b ?? '好的'
@@ -253,7 +256,8 @@ export function speak(t: Say, action?: string, hooks: { start?: () => void; end?
       const blurt = (s: string): void => {
         // 入账的是它真正说出口的那句
         emitSaid(s)
-        void say(s, [button], onOk)
+        // 等按钮的气泡（如「我要考试」）是唯一入口，5 秒就消失主人常常来不及点；留 3 分钟，点掉或被关闭为止
+        void say(s, [button], onOk, onOk.length ? WAIT_MS : undefined)
       }
       if (!polish) blurt(text)
       else void rephrase(text, t.ai || undefined).then((s) => blurt(s ?? text))
