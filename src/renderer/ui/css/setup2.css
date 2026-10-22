@@ -1,8 +1,10 @@
+/* Settings panel: the frame follows the 宠物资料 window skin — gold like the normal box, pink (.vip) with 粉钻. */
+.ui-setup2.vip {--frame:#ff9fc8;--glow:#ffe3ef;--bar1:#ffeaf3;--bar2:#ffd3e6;--barline:#ffb6d2;--tname:#c2185b}
 /* Settings panel: sidebar + sticky header, warm beige and brown. On narrow screens the sidebar becomes a tab strip. */
-.ui-setup2 {--ink:#4a3015;--brown:#9a6a2f;--line:#d8b98a;--paper:#fffbee;--side:#efe0c4;--btn:#fff4d6;color:var(--ink);font-size:14px;line-height:1.4}
-.ui-setup2 .spanel {position:relative;display:flex;flex-direction:column;width:min(620px,calc(100vw - 16px));height:min(470px,calc(100vh - 16px));background:var(--paper);border:2px dashed #ff9fc8;border-radius:10px;box-shadow:0 0 0 4px #ffe3ef;overflow:hidden;box-sizing:border-box}
-.ui-setup2 .stbar {flex:none;position:relative;display:flex;align-items:center;height:30px;padding:0 8px 0 14px;background:linear-gradient(#ffeaf3,#ffd3e6);border-bottom:1px solid #ffb6d2;box-sizing:border-box}
-.ui-setup2 .stname {flex:1;font-size:14px;font-weight:bold;color:#c2185b;letter-spacing:1px;text-shadow:0 1px 0 #fff}
+.ui-setup2 {--ink:#4a3015;--brown:#9a6a2f;--line:#d8b98a;--paper:#fffbee;--side:#efe0c4;--btn:#fff4d6;--frame:#bc8204;--glow:#eee2ad;--bar1:#e7c86d;--bar2:#eee2ad;--barline:#be8509;--tname:#6b4300;color:var(--ink);font-size:14px;line-height:1.4}
+.ui-setup2 .spanel {position:relative;display:flex;flex-direction:column;width:min(620px,calc(100vw - 16px));height:min(470px,calc(100vh - 16px));background:var(--paper);border:2px dashed var(--frame);border-radius:10px;box-shadow:0 0 0 4px var(--glow);overflow:hidden;box-sizing:border-box}
+.ui-setup2 .stbar {flex:none;position:relative;display:flex;align-items:center;height:30px;padding:0 8px 0 14px;background:linear-gradient(var(--bar1),var(--bar2));border-bottom:1px solid var(--barline);box-sizing:border-box}
+.ui-setup2 .stname {flex:1;font-size:14px;font-weight:bold;color:var(--tname);letter-spacing:1px;text-shadow:0 1px 0 #fff}
 /* Same close button as the 宠物资料 window (original btn_close art; .hd swaps in its vector twin). */
 .ui-setup2 .sclose {flex:none;position:relative;width:26px;height:16px;padding:0;border:0;background:url(/pet/windowTip/normal/btn_close1.png) 0 0 / 100% 100% no-repeat;cursor:pointer}
 .ui-setup2 .sclose:hover {background-image:url(/pet/windowTip/normal/btn_close2.png)}
