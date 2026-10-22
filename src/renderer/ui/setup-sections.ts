@@ -14,7 +14,8 @@ import { busy, info, save, setInfo, stage, syncLevel, update } from '../pet/stor
 import { dayStart } from '../pet/vip'
 import { formatDate } from './date'
 import { button, div, typeable } from './dom'
-import { buySweetHeart, sweetHeart } from './state'
+import { buySweetHeart, buySweetHeartWithDiamond, sweetHeart } from './state'
+import { SWEET_DAYS_PER_DIAMOND } from '../pet/diamond'
 import { careLog, clearCareLog, spentToday } from '../pet/sweetcare'
 
 type Redraw = () => void
@@ -88,6 +89,7 @@ const field = (t: string, ...c: (Node | string)[]): HTMLElement => div('sfield',
 // ---------------------------------------------------------------- 贴心宝贝
 
 let kind: CustodyKind = 'trip'
+let diamondBuy = 1
 let target = ''
 
 const NEEDS = [
@@ -156,6 +158,7 @@ export function sweetSection(redraw: Redraw): HTMLElement[] {
       btn(info.sweetHeartOverTime ? '续费贴心宝贝' : '开通贴心宝贝', buySweetHeart),
       ...(info.sweetHeartOverTime ? [btn(info.sweetHeart ? '关闭贴心宝贝' : '开启贴心宝贝', sweetHeart)] : []),
     ),
+    div('scare', div('k wide', `用钻石（现有 ${info.diamond} 颗，1颗=${SWEET_DAYS_PER_DIAMOND}天）`), numInput(diamondBuy, (n) => (diamondBuy = Math.max(1, Math.round(n))), 'num'), btn('颗钻石开通', () => buySweetHeartWithDiamond(diamondBuy) && redraw(), info.diamond < 1)),
   )
   // Auto care (#116)
   live.stats = div('snote', statsLine())
@@ -281,6 +284,7 @@ let grantNum = 10
 let ybAdd = 1000
 let growthAdd = 5000
 let pdDays = 30
+let diamondAdd = 10
 let skipHours = 1
 
 const say = (s: string): void => speak({ s, now: true }, 'appear')
@@ -318,11 +322,17 @@ export function cheatSection(redraw: Redraw): HTMLElement[] {
   const out: HTMLElement[] = [note('直接修改存档里的数值，回车或离开输入框生效。')]
 
   out.push(
-    h3('元宝与粉钻'),
+    h3('元宝、钻石与粉钻'),
     field('增加元宝（可填负数扣除）'),
     amount(ybAdd, (n) => (ybAdd = n), '增加元宝', (n) => {
       setInfo('yb', Math.max(0, info.yb + n))
       say(`[host]，元宝${n >= 0 ? '增加' : '减少'}了${Math.abs(n)}，现在有${info.yb}！`)
+      redraw()
+    }, -1e9),
+    field(`增加钻石（现有 ${info.diamond} 颗，可填负数扣除）`),
+    amount(diamondAdd, (n) => (diamondAdd = n), '增加钻石', (n) => {
+      setInfo('diamond', Math.max(0, info.diamond + n))
+      say(`[host]，现在有${info.diamond}颗钻石！`)
       redraw()
     }, -1e9),
     field(`粉钻天数（${info.pinkDiamond ? `当前 ${formatDate(info.PDiamondExpirationDate, 'YYYY-MM-DD')} 到期` : '未开通'}，满 365 天算年费）`),

@@ -99,7 +99,7 @@ export function openPetInfo(): void {
     small('sex', '性别：', info.sex),
     birthday,
     liveSmall('level', '等级：', () => save.petComputedlInfo.level),
-    liveSmall('yb', '元宝：', () => info.yb),
+    liveSmall('yb', '元宝：', () => `${info.yb}  钻石：${info.diamond}`),
     div('rightRow attributeValue', div('label', '个人能力')),
     liveSmall('intel', '智力：', () => info.intel),
     liveSmall('strong', '武力：', () => info.strong),

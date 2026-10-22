@@ -39,10 +39,11 @@ function slot(mails: Record<string, Mail>): number {
 }
 
 /** Random food and toys plus `yb` 元宝, unless a mail with key `k` was ever sent. */
-function send(mails: Record<string, Mail>, k: string, l: string, yb: number, m: string): boolean {
+function send(mails: Record<string, Mail>, k: string, l: string, yb: number, m: string, diamond = 0): boolean {
   if (Object.values(mails).some((x) => x.k === k)) return false
   const d = slot(mails)
-  mails[d] = { d, k, l, m, glb: [...some('food', 3), ...some('toy', 2), goodOf('nums', 'yb', scaleYb(yb))] }
+  const gems = diamond ? [goodOf('nums', 'diamond', diamond)] : []
+  mails[d] = { d, k, l, m, glb: [...some('food', 3), ...some('toy', 2), goodOf('nums', 'yb', scaleYb(yb)), ...gems] }
   return true
 }
 
@@ -55,18 +56,21 @@ export function mailPhoto(s: Shot): void {
   writeMails(mails)
 }
 
+/** Holiday mails bring 10-20 钻石 (#75), the same for every pet on a given holiday. */
+export const holidayDiamonds = (name: string): number => 10 + ([...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 11)
+
 /** Welcome, birthday and holiday mails due today; true when any arrived. */
 export function deliverMails(today?: CalendarDay): boolean {
   const mails = readMails()
   const now = new Date()
   const born = new Date(info.birthDay * 1000)
   const years = now.getFullYear() - born.getFullYear()
-  const due: [k: string, l: string, yb: number, m: string][] = []
+  const due: [k: string, l: string, yb: number, m: string, diamond?: number][] = []
   if (!Object.values(mails).some((m) => !m.e)) due.push(['welcome', '欢迎来到QQ宠物~', 100, '[host]，欢迎回家！右键（手机上长按）我或者点我脚下的标签，有好多好玩的哦~'])
   if (years > 0 && now.getMonth() === born.getMonth() && now.getDate() === born.getDate())
     due.push([`birthday-${now.getFullYear()}`, `${info.name}的${years}周岁生日快乐！`, 300, '[host]，今天是我的生日，谢谢你一直陪着我！'])
   const h = today?.holiday
-  if (h?.off) due.push([`${now.getFullYear()}-${h.name}`, `${h.name}快乐！`, 200, `[host]，${h.name}快乐！收到节日礼物啦~`])
+  if (h?.off) due.push([`${now.getFullYear()}-${h.name}`, `${h.name}快乐！`, 200, `[host]，${h.name}快乐！收到节日礼物啦~`, holidayDiamonds(h.name)])
   const sent = due.filter((m) => send(mails, ...m)).length > 0
   if (sent) writeMails(mails)
   return sent
