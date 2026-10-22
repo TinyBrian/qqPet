@@ -125,6 +125,7 @@ export function describeStudy(g: Good): string[] {
 /** All lessons of a school done: the pet asks for its exam. */
 function examPrompt(g: Good): void {
   speak({ s: '[host]，我要升学啦，我一定好好考试！', b: '我要考试', now: true }, 'speak', {
+    wait: true,
     ok: () =>
       openExam(g.id, () => {
         speak({ s: '[host],好开心啊，我终于升学了！~', now: true }, 'speak')
