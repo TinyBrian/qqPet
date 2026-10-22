@@ -72,15 +72,16 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return 8; }
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return 10; }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)index {
     UITableViewCell *cell=[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
-    NSArray *titles=@[@"开始桌宠",@"停止桌宠",@"宠物菜单",@"宠物状态",@"导入存档",@"导出存档",@"朗读剪贴板文本",@"运行信息"];
-    cell.textLabel.text=titles[index.row]; cell.accessoryType=index.row==7?UITableViewCellAccessoryNone:UITableViewCellAccessoryDisclosureIndicator;
+    NSArray *titles=@[@"开始桌宠",@"停止桌宠",@"宠物菜单",@"宠物状态",@"显示宠物",@"隐藏宠物",@"导入存档",@"导出存档",@"朗读剪贴板文本",@"运行信息"];
+    cell.textLabel.text=titles[index.row]; cell.accessoryType=index.row==9?UITableViewCellAccessoryNone:UITableViewCellAccessoryDisclosureIndicator;
     BOOL running=QPProcessAlive(self.status);
     if (index.row==0) cell.detailTextLabel.text=running?@"桌宠已在运行":@"独立 HUD，退出管理界面后继续运行";
-    if (index.row==6) cell.detailTextLabel.text=@"只在点击后读取，不后台监视剪贴板";
-    if (index.row==7) {
+    if (index.row==4) cell.detailTextLabel.text=@"隐藏后从这里显示；菜单在隐藏时也可能打不开";
+    if (index.row==8) cell.detailTextLabel.text=@"只在点击后读取，不后台监视剪贴板";
+    if (index.row==9) {
         cell.detailTextLabel.numberOfLines=0;
         NSString *detail=self.status[@"message"] ?: self.status[@"fatalError"] ?: self.status[@"stopReason"] ?: @"尚未启动";
         cell.detailTextLabel.text=[NSString stringWithFormat:@"%@ · manager UID %u\n%@\n%@",running?@"运行中":@"已停止",getuid(),detail,self.message ?: @""];
@@ -99,9 +100,11 @@
         case 1: if (!QPStopHUD(self.state,&error)) [self alert:error.localizedDescription]; break;
         case 2: [self command:@"trayClick" args:@{@"kind":@"menu"}]; break;
         case 3: [self command:@"trayClick" args:@{@"kind":@"state"}]; break;
-        case 4: [self command:@"importSave" args:@{}]; break;
-        case 5: [self command:@"exportSave" args:@{}]; break;
-        case 6: { NSString *text=UIPasteboard.generalPasteboard.string; if (text.length) [self command:@"clipboard" args:@{@"text":text}]; else [self alert:@"剪贴板中没有文本。"]; break; }
+        case 4: [self command:@"trayClick" args:@{@"kind":@"show"}]; break;
+        case 5: [self command:@"trayClick" args:@{@"kind":@"hide"}]; break;
+        case 6: [self command:@"importSave" args:@{}]; break;
+        case 7: [self command:@"exportSave" args:@{}]; break;
+        case 8: { NSString *text=UIPasteboard.generalPasteboard.string; if (text.length) [self command:@"clipboard" args:@{@"text":text}]; else [self alert:@"剪贴板中没有文本。"]; break; }
         default: [self poll]; break;
     }
 }

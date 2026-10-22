@@ -21,7 +21,7 @@ export class Native {
   static readonly METHODS: string[] = [
     'read', 'write', 'http', 'exportSave', 'importSave',
     'openGame', 'quit', 'copyText', 'openUrl', 'setFocusable', 'setAutoStart',
-    'setTray', 'setBounds', 'safeArea'
+    'setTray', 'setHidden', 'setBounds', 'safeArea'
   ]
 
   read(name: string): string {
@@ -140,6 +140,10 @@ export class Native {
 
   setTray(icon: string, tip: string): void {
     host().setTray(icon, tip === 'null' ? '' : tip)
+  }
+
+  setHidden(on: boolean | string | number): void {
+    host().setHidden(flag(on))
   }
 
   setBounds(rect: string): void {

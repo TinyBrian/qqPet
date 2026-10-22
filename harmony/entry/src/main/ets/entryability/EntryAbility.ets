@@ -43,7 +43,7 @@ export default class EntryAbility extends UIAbility {
 
   private handleWant(want: Want): void {
     const kind = want.parameters?.['kind']
-    if (kind === 'state' || kind === 'menu') {
+    if (kind === 'state' || kind === 'menu' || kind === 'show' || kind === 'hide') {
       PetHost.inst?.emit('trayClick', JSON.stringify({ kind: kind }))
     } else if (kind === 'url') {
       this.url = want.parameters?.['url'] as string
