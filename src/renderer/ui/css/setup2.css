@@ -92,3 +92,5 @@
 .ui-setup2 .slog .le:first-child {border-top:none}
 .ui-setup2 .slog .le .t {flex:none;color:#9b8466}
 .ui-setup2 .slog .le .s {flex:1;min-width:0}
+/* 子项缩进两格（鱼塘下的「花元宝喂鱼」） */
+.ui-setup2 .sindent {padding-left:26px}
