@@ -57,13 +57,15 @@ export function addSweetHeart(days: number): void {
   setInfo('sweetHeart', true)
 }
 
-/** 06:00 accounting: pink diamond growth for the days since it was last counted, and VIP expiry. */
+/** 06:00 accounting: pink diamond growth for the days since it was last counted, VIP expiry, and pond super-feed uses (#123). */
 export function newDay(today: number): void {
   if (info.pinkDiamond) {
     setInfo('PDgrowth', info.PDgrowth + (info.PDgrowthValue * (Math.min(today, info.PDiamondExpirationDate) - info.PDiamondBeginDate)) / DAY)
     setInfo('PDiamondBeginDate', today)
     settle(today)
   }
+  // Daily refill (or clear when pink diamond lapsed); was easy to miss when only looking at this function (#123).
+  resetFish()
   if (info.sweetHeartOverTime <= today) {
     setInfo('sweetHeartOverTime', 0)
     setInfo('sweetHeart', false)

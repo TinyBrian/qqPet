@@ -35,8 +35,8 @@ interface Fish {
 
 /** saveJsonData.fishs, in the original's shape. */
 interface Pond {
-  /** Pink diamond speed-ups: per day, and left today. */
-  PD: { allvipcnt: number; canusecnt: number }
+  /** Pink diamond speed-ups: per day, left today, and the 06:00 day they were filled for. */
+  PD: { allvipcnt: number; canusecnt: number; day?: number }
   fishs: Fish[]
 }
 
@@ -71,16 +71,39 @@ function grow(f: Fish, t: number): void {
 
 let last = 0
 
+/** Same 06:00 day boundary as vip.dayStart; local copy avoids an import cycle. */
+function pondDay(t = now()): number {
+  const d = new Date(t * 1000)
+  d.setHours(6, 0, 0, 0)
+  if (d.getTime() > t * 1000) d.setDate(d.getDate() - 1)
+  return d.getTime() / 1000
+}
+
+/** Refill pink-diamond super-feed uses for the current VIP day (#123). */
+function refillVipFeed(): void {
+  pond.PD.allvipcnt = (info.PDiamondLevel || 1) * 2
+  pond.PD.canusecnt = info.pinkDiamond ? pond.PD.allvipcnt : 0
+  pond.PD.day = pondDay()
+}
+
+/** Cross-day refresh even if the pet tick already advanced nowTimeLine without us (#123). */
+function ensureVipFeed(): void {
+  if ((pond.PD.day ?? 0) === pondDay()) return
+  refillVipFeed()
+}
+
 /** Grows every fish up to now; a clock set back empties the pond, as in the original. */
 function settle(): void {
   const t = now()
   if (last > t) {
+    // Empty once, then catch last up — leaving last in the future re-wiped canusecnt on every open (#123).
     pond.fishs = []
-    pond.PD.canusecnt = 0
+    last = t
   } else {
     last = t
     for (const f of pond.fishs) grow(f, t)
   }
+  ensureVipFeed()
   store()
 }
 
@@ -221,8 +244,7 @@ export function pondCommand(cmd: number, data: Data): Reply {
 
 /** 06:00, and pink diamond opened: the day's speed-ups, two per pink diamond level. */
 export function resetFish(): void {
-  pond.PD.allvipcnt = (info.PDiamondLevel || 1) * 2
-  pond.PD.canusecnt = info.pinkDiamond ? pond.PD.allvipcnt : 0
+  refillVipFeed()
   store()
 }
 

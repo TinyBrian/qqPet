@@ -40,7 +40,6 @@ import {
   syncLevel,
   update,
 } from './store'
-import { resetFish } from './fishing'
 import { harvestNews } from './harvest'
 import { resetSignIn, tickGift } from './signin'
 import { resetTasks, rollDaily } from './tasks'
@@ -365,7 +364,6 @@ function tick(): void {
     newDay(today)
     resetTasks()
     resetSignIn()
-    resetFish()
     void daily()
   }
   if (lastTick !== null) {

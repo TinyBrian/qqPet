@@ -297,6 +297,22 @@
 .ui-control .goodItemIconBox:hover .goodInfo {
   display: unset;
 }
+/* Near the right edge, open the good tip to the left so it stays on screen (#124). */
+.ui-control .nearRight .goodInfo {
+  left: auto;
+  right: 100%;
+}
+.ui-control .nearRight .childrenMenu {
+  left: auto;
+  right: 0;
+  padding-left: 0;
+  padding-right: 5px;
+}
+.ui-control .nearRight .childrenMenuItem:after {
+  left: auto;
+  right: -5px;
+}
+
 .ui-control .goodName {
   white-space: nowrap;
   color: #86ff05b9;

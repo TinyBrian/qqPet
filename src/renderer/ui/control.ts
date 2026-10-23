@@ -4,6 +4,7 @@ import { listGoods, onGoodsChange, pageOf, type Page } from '../pet/goods'
 import { doctor, useItem } from '../pet/items'
 import { describeStudy, describeWork, study, studyGoods, work, workGoods } from '../pet/jobs'
 import { info, onInfoChange, petSize, save } from '../pet/store'
+import { viewportSize } from './viewport'
 import './css/control.css'
 import { button, div, img, touch } from './dom'
 import { openCommunity } from './community'
@@ -139,21 +140,59 @@ let introTimer = 0
 let open: (Panel & { page: number }) | null = null
 
 /**
+ * Visible page box the bar must stay inside. Desktop uses the overlay size; when Android zooms the
+ * layout viewport above what is shown, prefer the visual viewport so the panel is not clipped (#124 #103).
+ */
+function screenBox(): { left: number; top: number; width: number; height: number } {
+  const base = touch ? { width: innerWidth, height: innerHeight } : viewportSize()
+  const vv = window.visualViewport
+  if (vv && vv.scale > 1.01) {
+    return {
+      left: vv.offsetLeft,
+      top: vv.offsetTop,
+      width: Math.min(vv.width, base.width),
+      height: Math.min(vv.height, base.height),
+    }
+  }
+  return { left: 0, top: 0, width: base.width, height: base.height }
+}
+
+/**
  * Centered under the pet's feet; when there is no room below, mirrored above its head. Kept on screen.
  * Native iPads use the original toolbar size; other touch hosts grow it with the pet.
  */
 function place(): void {
   const size = petSize()
-  const scale = toolbarScaleFor(size, (innerWidth - 2 * EDGE) / BAR_WIDTH, touch, window.qqpet.deviceKind)
+  const box = screenBox()
+  const scale = toolbarScaleFor(size, (box.width - 2 * EDGE) / BAR_WIDTH, touch, window.qqpet.deviceKind)
   const height = BAR_HEIGHT * scale
   const half = (BAR_WIDTH * scale) / 2 + EDGE
   const feet = info.lastY + size * FEET
-  const onTop = feet > innerHeight - EDGE - height
+  const onTop = feet > box.top + box.height - EDGE - height
   control.classList.toggle('up', onTop)
-  control.style.left = `${Math.min(Math.max(info.lastX + size / 2, half), innerWidth - half)}px`
+  // Prefer the pet's center, then clamp so the 314px goods panel (scaled) stays fully visible (#124).
+  const center = Math.min(Math.max(info.lastX + size / 2, box.left + half), box.left + box.width - half)
+  control.style.left = `${center}px`
   control.style.top = `${onTop ? info.lastY + size * HEAD : feet}px`
   control.style.transform = `scale(${scale})`
   setBubbleLift(shown && onTop ? Math.max(height - size * HEAD, 0) : 0)
+  // Tooltips and submenus can still stick out: nudge after layout if children overflow the visible box.
+  requestAnimationFrame(() => {
+    if (!shown) return
+    let minL = center
+    let maxR = center
+    for (const child of control.children) {
+      const r = (child as HTMLElement).getBoundingClientRect()
+      if (r.width <= 0 && r.height <= 0) continue
+      minL = Math.min(minL, r.left)
+      maxR = Math.max(maxR, r.right)
+    }
+    let shift = 0
+    if (maxR > box.left + box.width - EDGE) shift = box.left + box.width - EDGE - maxR
+    if (minL + shift < box.left + EDGE) shift = box.left + EDGE - minL
+    if (shift) control.style.left = `${center + shift}px`
+    control.classList.toggle('nearRight', center + shift > box.left + box.width / 2)
+  })
 }
 
 /** A tap leaves its menu hovered, children shown: on touch the bar goes once a child is picked, unless it opened a goods panel. */
@@ -277,6 +316,7 @@ function openPanel(p: Panel, page = 1): void {
   if (list) list.replaceWith(next)
   else control.appendChild(next)
   list = next
+  place()
 }
 
 function closePanel(): void {
