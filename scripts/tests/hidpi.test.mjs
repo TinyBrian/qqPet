@@ -3,17 +3,15 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { deflateSync } from 'node:zlib'
 import { createRequire } from 'node:module'
-import { execFileSync } from 'node:child_process'
 
-// Compile hidpi.ts on the fly via the project's tsx/ts-node, or import built output.
 const dir = mkdtempSync(join(tmpdir(), 'hidpi-'))
 const require = createRequire(import.meta.url)
 
-// Prefer built JS if present after electron-vite build; else transpile with esbuild.
 let hidpiSvg, imageSize
 try {
-  ;({ hidpiSvg, imageSize } = await import('../src/main/hidpi.ts'))
+  ;({ hidpiSvg, imageSize } = await import('../../src/main/hidpi.ts'))
 } catch {
   const esbuild = require('esbuild')
   const outfile = join(dir, 'hidpi.mjs')
@@ -21,68 +19,90 @@ try {
   ;({ hidpiSvg, imageSize } = await import(outfile))
 }
 
-function png(w, h, rgba = [0, 255, 0, 255], pad = 0) {
-  // minimal uncompressed-ish PNG via sharp if available, else pure JS IHDR+IDAT
-  const sharp = (() => { try { return require('sharp') } catch { return null } })()
-  if (sharp) {
-    const buf = Buffer.alloc(w * h * 4)
-    for (let i = 0; i < w * h; i++) buf.set(rgba, i * 4)
-    let img = sharp(buf, { raw: { width: w, height: h, channels: 4 } }).png()
-    return img.toBuffer()
+function crc32(buf) {
+  let c = ~0
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i]
+    for (let k = 0; k < 8; k++) c = c & 1 ? (0xedb88320 ^ (c >>> 1)) : c >>> 1
   }
-  // fallback: write via sips/python
-  const raw = join(dir, `r${w}x${h}.rgba`)
-  const out = join(dir, `r${w}x${h}.png`)
-  const buf = Buffer.alloc(w * h * 4 + pad)
-  for (let i = 0; i < w * h; i++) buf.set(rgba, i * 4)
-  writeFileSync(raw, buf.subarray(0, w * h * 4))
-  execFileSync('python3', ['-c', `
-from PIL import Image
-im=Image.frombytes('RGBA', (${w},${h}), open(${JSON.stringify(raw)},'rb').read())
-im.save(${JSON.stringify(out)})
-`])
-  const pngBuf = readFileSync(out)
-  if (pad) {
-    // append junk after IEND to inflate size for "large" tests if needed — skip, we always base64 now
-  }
-  return pngBuf
+  return ~c >>> 0
+}
+
+function pngChunk(type, data) {
+  const typeBuf = Buffer.from(type, 'ascii')
+  const len = Buffer.alloc(4)
+  len.writeUInt32BE(data.length)
+  const crcBuf = Buffer.alloc(4)
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])))
+  return Buffer.concat([len, typeBuf, data, crcBuf])
+}
+
+/** Minimal solid RGBA PNG (no external deps). */
+function png(w, h, rgba = [0, 255, 0, 255]) {
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(w, 0)
+  ihdr.writeUInt32BE(h, 4)
+  ihdr[8] = 8
+  ihdr[9] = 6 // RGBA
+  const row = Buffer.alloc(1 + w * 4)
+  for (let x = 0; x < w; x++) row.set(rgba, 1 + x * 4)
+  const raw = Buffer.alloc(h * row.length)
+  for (let y = 0; y < h; y++) row.copy(raw, y * row.length)
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+/** Minimal solid RGB GIF87a (imageSize only needs screen descriptor). */
+function gif(w, h, rgb = [1, 2, 3]) {
+  const header = Buffer.from('GIF87a', 'ascii')
+  const screen = Buffer.alloc(7)
+  screen.writeUInt16LE(w, 0)
+  screen.writeUInt16LE(h, 2)
+  screen[4] = 0x80
+  screen[5] = 0
+  screen[6] = 0
+  const gct = Buffer.from([rgb[0], rgb[1], rgb[2], 0, 0, 0])
+  const image = Buffer.alloc(10)
+  image[0] = 0x2c
+  image.writeUInt16LE(0, 1)
+  image.writeUInt16LE(0, 3)
+  image.writeUInt16LE(w, 5)
+  image.writeUInt16LE(h, 7)
+  image[9] = 0
+  const data = Buffer.from([0x02, 0x02, 0x44, 0x01, 0x00])
+  const trailer = Buffer.from([0x3b])
+  return Buffer.concat([header, screen, gct, image, data, trailer])
 }
 
 describe('hidpi', () => {
-  it('imageSize reads PNG dimensions', async () => {
-    const buf = await png(50, 50)
+  it('imageSize reads PNG dimensions', () => {
+    const buf = png(50, 50)
     assert.deepEqual(imageSize(buf), { w: 50, h: 50 })
   })
 
-  it('hidpiSvg accepts exact 2× and larger twins; rejects undersized; always base64', async () => {
+  it('hidpiSvg accepts exact 2× and larger twins; rejects undersized; always base64', () => {
     const base = join(dir, 'icon.gif')
-    // GIF 50x50
-    writeFileSync(base, await (async () => {
-      // write gif via pillow
-      const out = join(dir, 'icon.gif')
-      execFileSync('python3', ['-c', `
-from PIL import Image
-Image.new('RGB',(50,50),(1,2,3)).save(${JSON.stringify(out)},'GIF')
-`])
-      return readFileSync(out)
-    })())
+    writeFileSync(base, gif(50, 50))
+    assert.deepEqual(imageSize(readFileSync(base)), { w: 50, h: 50 })
 
     const exact = join(dir, 'icon@2x.png')
-    writeFileSync(exact, await png(100, 100))
+    writeFileSync(exact, png(100, 100))
     const svg1 = hidpiSvg(base)
-    assert.ok(svg1.includes('width="50"'))
-    assert.ok(svg1.includes('data:image/png;base64,'))
-    assert.ok(!svg1.includes('href="icon@2x.png"'))
+    assert.ok(svg1?.includes('width="50"'))
+    assert.ok(svg1?.includes('data:image/png;base64,'))
+    assert.ok(!svg1?.includes('href="icon@2x.png"'))
 
-    // larger than 2× (repair-style)
-    writeFileSync(exact, await png(1254, 1254))
+    writeFileSync(exact, png(1254, 1254))
     const svg2 = hidpiSvg(base)
-    assert.ok(svg2.includes('width="50"'))
-    assert.ok(svg2.includes('data:image/png;base64,'))
+    assert.ok(svg2?.includes('width="50"'))
+    assert.ok(svg2?.includes('data:image/png;base64,'))
     assert.ok(svg2.length > 1000)
 
-    // undersized rejected
-    writeFileSync(exact, await png(60, 60))
+    writeFileSync(exact, png(60, 60))
     assert.equal(hidpiSvg(base), undefined)
   })
 })
