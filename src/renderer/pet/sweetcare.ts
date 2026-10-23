@@ -94,7 +94,7 @@ export function careTick(): void {
     })
   }
   if (cfg.farm) void farmCareTick()
-  if (cfg.fish) fishCareTick()
+  if (cfg.fish) fishCareTick(cfg.fishFeed)
 }
 
 let cropTable: Record<string, import('./farm-care').CropInfo> | undefined
@@ -125,10 +125,10 @@ async function farmCareTick(): Promise<void> {
   logCare(`农场：${parts.join('，')}`, false)
 }
 
-function fishCareTick(): void {
+function fishCareTick(feed: boolean): void {
   if (Date.now() - lastFish < PLACE_CD) return
   lastFish = Date.now()
-  const r = autoPondCare(true, (cost) => payCare(cost))
+  const r = autoPondCare(feed, (cost) => payCare(cost))
   if (!(r.collected || r.fed)) return
   const parts = [
     r.collected && `收了${r.collected}条鱼（+${r.yb}元宝）`,

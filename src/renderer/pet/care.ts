@@ -42,8 +42,10 @@ export interface CareConfig {
   notify: boolean
   /** Closed farm: harvest, water/weed/kill, clear wilted, plant from the bag. */
   farm: boolean
-  /** Fish pond: collect ripe fish, and feed growing ones (within the daily budget). */
+  /** Fish pond: collect ripe fish. */
   fish: boolean
+  /** Fish pond: also feed growing fish to shorten their growth (10 元宝 an hour each, within the daily budget). */
+  fishFeed: boolean
 }
 
 export const DEFAULT_CARE: CareConfig = {
@@ -64,6 +66,7 @@ export const DEFAULT_CARE: CareConfig = {
   notify: true,
   farm: false,
   fish: false,
+  fishFeed: false,
 }
 
 export function parseCare(raw: string | undefined): CareConfig {
@@ -97,6 +100,7 @@ export function parseCare(raw: string | undefined): CareConfig {
     notify: b(o.notify, d.notify),
     farm: b(o.farm, d.farm),
     fish: b(o.fish, d.fish),
+    fishFeed: b(o.fishFeed, d.fishFeed),
   }
 }
 

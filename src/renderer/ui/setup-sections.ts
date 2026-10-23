@@ -192,7 +192,7 @@ export function sweetSection(redraw: Redraw): HTMLElement[] {
     )
   }
   // More care
-  const opt = (text: string, key: 'heal' | 'revive' | 'restock' | 'exam' | 'work' | 'notify' | 'farm' | 'fish', title = ''): HTMLElement =>
+  const opt = (text: string, key: 'heal' | 'revive' | 'restock' | 'exam' | 'work' | 'notify' | 'farm' | 'fish' | 'fishFeed', title = ''): HTMLElement =>
     check(text, cfg[key], () => {
       setCare({ [key]: !cfg[key] })
       redraw()
@@ -206,7 +206,8 @@ export function sweetSection(redraw: Redraw): HTMLElement[] {
     opt('元宝不足时自己去打工（挑收入最高且能胜任的工作）', 'work', '托管队列运行时不会另外打工'),
     div('scare', div('k wide', '元宝低于'), numInput(cfg.workBelow, (n) => setCare({ workBelow: n }), 'num'), div('', '时去打工')),
     opt('自动打理农场（收获、浇水除草杀虫、铲除、用包袱种子播种）', 'farm', '农场窗口打开时不自动操作，避免和游戏冲突'),
-    opt('自动打理鱼塘（收成熟的鱼，并喂食未成熟的；喂食花元宝，算进每日预算）', 'fish'),
+    opt('自动打理鱼塘（收成熟的鱼）', 'fish'),
+    div('sindent', opt('花元宝喂鱼（喂未成熟的鱼，每条每次 10 元宝，算进每日预算）', 'fishFeed', '不勾选时只收成熟的鱼，不花元宝')),
     opt('做了事情时用气泡告诉我', 'notify', '关闭后只记在下面的日志里'),
   )
   // Custody queue
