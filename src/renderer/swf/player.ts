@@ -63,6 +63,7 @@ function createRuffleElement(parent: HTMLElement): { el: RufflePlayerElement; cl
     el.style.height = '100%'
     parent.appendChild(el)
     safari14Styles(el)
+    hidePlayButton(el)
     return { el, cleanup }
   } catch (error) {
     cleanup()
@@ -87,9 +88,36 @@ export interface SwfFailure {
   terminal?: 'context-recovery-failed' | 'context-recovery-exhausted'
 }
 
+// Ruffle keeps its requestAnimationFrame loop running while suspended, which still costs ~20% of a core.
+// While the host is paused, hold animation-frame callbacks and run them on resume, so the loops actually stop.
+const heldFrames = new Map<number, FrameRequestCallback>()
+let heldId = -1
+let nativeRaf: ((cb: FrameRequestCallback) => number) | undefined
+if (typeof window.requestAnimationFrame === 'function' && typeof window.cancelAnimationFrame === 'function') {
+  const raf = window.requestAnimationFrame.bind(window)
+  const cancel = window.cancelAnimationFrame.bind(window)
+  nativeRaf = raf
+  window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+    if (!hostPaused) return raf(cb)
+    const id = heldId--
+    heldFrames.set(id, cb)
+    return id
+  }
+  window.cancelAnimationFrame = (id: number): void => {
+    if (id < 0) heldFrames.delete(id)
+    else cancel(id)
+  }
+}
+function releaseFrames(): void {
+  const held = [...heldFrames.values()]
+  heldFrames.clear()
+  for (const cb of held) nativeRaf?.(cb)
+}
+
 /** Display lifecycle is independent from the user's paused-growth setting. */
 export function setHostPaused(paused: boolean): void {
   hostPaused = paused
+  if (!paused) releaseFrames()
   window.__qqpetHostPaused = paused
   if (paused) window.__qqpetInput?.({ phase: 'cancel', id: -1, x: 0, y: 0 })
   for (const player of players) player.pauseForHost(paused)
@@ -104,6 +132,17 @@ const removed = new MutationObserver(() => {
   }
 })
 removed.observe(document.documentElement, { childList: true, subtree: true })
+
+// Autoplay is on, so Ruffle's play button is never useful. A player suspended by the host pause before its
+// movie first plays (away at launch) shows it over the pet until the user comes back (#119).
+function hidePlayButton(el: HTMLElement): void {
+  const shadow = el.shadowRoot
+  if (!shadow || shadow.getElementById('qqpet-no-play-button')) return
+  const style = el.ownerDocument.createElement('style')
+  style.id = 'qqpet-no-play-button'
+  style.textContent = '#play-button{display:none!important}'
+  shadow.appendChild(style)
+}
 
 function safari14Styles(el: HTMLElement): void {
   const shadow = el.shadowRoot
@@ -186,6 +225,8 @@ export class SwfPlayer {
   private recovery = 0
   private recoveryTimes: number[] = []
   private resumeWaiters = new Set<() => void>()
+  /** Set while nothing shows the movie (a hidden bubble): it stays suspended through host resumes (#119). */
+  private idle = false
 
   /** The SWF's ExternalInterface calls go to the globals of the window that owns `parent`. */
   constructor(parent: HTMLElement, { recoverContext = false }: { recoverContext?: boolean } = {}) {
@@ -306,6 +347,7 @@ export class SwfPlayer {
       this.recovering = false
       if (this.stoppedAt !== null) this.el.ruffle().suspend()
       this.pauseForHost(hostPaused)
+      if (this.idle) this.el.ruffle().suspend()
     } catch (error) {
       if (current()) this.failMovie(request.url, error, 'context-recovery-failed')
     } finally {
@@ -423,6 +465,7 @@ export class SwfPlayer {
       this.pausedAt = null
       if (this.recoverContext) this.lastLoad = { url, base, options: { ...options } }
       this.pauseForHost(hostPaused)
+      if (this.idle) this.el.ruffle().suspend()
       return this.meta
     } catch (error) {
       // Removing the failed generation isolates every late fetch/build from future players.
@@ -478,9 +521,18 @@ export class SwfPlayer {
         if (this.stoppedAt !== null) this.stoppedAt += elapsed
         this.pausedAt = null
       }
-      if (this.stoppedAt === null || this.recovering) this.el.ruffle().resume()
+      if ((this.stoppedAt === null && !this.idle) || this.recovering) this.el.ruffle().resume()
       for (const resume of [...this.resumeWaiters]) resume()
     }
+  }
+
+  /** Suspends a movie nobody sees, without the frame clock `stop` keeps; `false` lets it run again. */
+  setIdle(idle: boolean): void {
+    if (this.idle === idle) return
+    this.idle = idle
+    if (this.destroyed || !this.meta || this.recovering) return
+    if (idle) this.el.ruffle().suspend()
+    else if (!hostPaused && this.stoppedAt === null) this.el.ruffle().resume()
   }
 
   async nextPaint(): Promise<void> {

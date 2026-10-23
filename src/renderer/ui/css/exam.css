@@ -13,3 +13,17 @@
 .ui-exam .close:hover {background-image:url(/pet/answerQuestions/Button_close_01.png)}
 .ui-exam .close:active {background-image:url(/pet/answerQuestions/Button_close_02.png)}
 .ui-exam {background:url(/pet/answerQuestions/56.svg) 0 0/100% 100% no-repeat}
+
+/* 未通过时的错题回顾 (#114) */
+.ui-exam .exam-review {
+  overflow: hidden auto;
+  gap: 6px;
+}
+.ui-exam .exam-yours {
+  color: #d33;
+  font-weight: normal;
+}
+.ui-exam .exam-right {
+  color: #2a8a2a;
+  font-weight: normal;
+}

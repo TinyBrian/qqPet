@@ -1,6 +1,15 @@
 import { cover, hitCover, coverageTiming, resetCoverage, type Box } from '../mobile/overlay'
 import type { IOSRPC } from './rpc'
 
+// The real frame clock: the SWF player holds page animation frames while the host is paused (#119), and the
+// surface must still follow a menu or panel opened from the manager while the pet is hidden. Prefer window's
+// copy (captured before the pause wrapper); fall back to the free global for the iOS runtime tests' vm.
+const raf = (
+  typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+    ? window.requestAnimationFrame
+    : requestAnimationFrame
+).bind(typeof window !== 'undefined' ? window : globalThis)
+
 export interface Rect { x: number; y: number; width: number; height: number }
 export interface PetPointer { phase: 'begin' | 'move' | 'end' | 'cancel'; id: number; x: number; y: number; time?: number }
 interface GeometryTiming { framesPerSecond: number; lastFrameAgoMs: number | null; maxFrameGapMs: number; readbackFailures: number; lastReadbackMs: number | null }
@@ -30,6 +39,16 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
   let sampleFrames = 0
   let framesPerSecond = 0
   let maxFrameGapMs = 0
+  // Paused the page rarely changes: measure seldom, but at once after a menu or panel appears.
+  const PAUSED_MS = 1000
+  const BUSY_MS = 2000
+  let busyUntil = 0
+  let measured = 0
+  for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) document.addEventListener(type, () => (busyUntil = performance.now() + BUSY_MS), true)
+  // The iOS runtime tests run geometry in a vm without MutationObserver; production always has it.
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver(() => (busyUntil = performance.now() + BUSY_MS)).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
+  }
 
   const pointer = (input: PetPointer): void => {
     if (input.phase === 'cancel' && input.id === -1) { presses.clear(); dragging = false }
@@ -48,9 +67,11 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
 
   const track = (): void => {
     if (stopped) return
-    frame = requestAnimationFrame(track)
-    if (paused) return
+    frame = raf(track)
     const now = performance.now()
+    // Keep the loop alive while paused (native raf); only skip the heavy measure until something changes.
+    if (paused && !dragging && now >= busyUntil && now - measured < PAUSED_MS) return
+    measured = now
     if (lastFrame !== null) maxFrameGapMs = Math.max(maxFrameGapMs, now - lastFrame)
     lastFrame = now
     sampleFrames++
@@ -97,9 +118,10 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
     if (signature !== previous) {
       rpc.notify('setGeometry', payload)
       previous = signature
+      busyUntil = now + BUSY_MS
     }
   }
-  frame = requestAnimationFrame(track)
+  frame = raf(track)
   return {
     pointer,
     bounds: () => bounds,
@@ -112,6 +134,8 @@ export function startGeometry(rpc: IOSRPC): { pointer(input: PetPointer): void; 
         sampleFrames = 0
         framesPerSecond = 0
         maxFrameGapMs = 0
+        measured = 0
+        busyUntil = performance.now() + BUSY_MS
       }
       paused = value
       if (paused) pointer({ phase: 'cancel', id: -1, x: 0, y: 0 })

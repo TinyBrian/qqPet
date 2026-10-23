@@ -6,6 +6,7 @@ import { aiChat, aiModels } from '../shared/ai'
 import { webSearch } from '../shared/websearch'
 import { calendar } from '../shared/calendar'
 import { abortReason, cloneJson } from '../shared/compat'
+import { nextBounds } from '../mobile/bounds'
 import { cover } from '../mobile/overlay'
 import type { Fetch, Point, QQPetApi, TrayClick, TrayState } from '../shared/ipc'
 import type { SaveData } from '../shared/save'
@@ -35,6 +36,8 @@ interface Native {
   setAutoStart(on: boolean): void
   /** The notification standing in for the tray: an icon under pet/img_res/Tray/, and its text unless null. */
   setTray(icon: string, tip: string | null): void
+  /** The pet is hidden: the notification offers 显示宠物. Absent on older shells. */
+  setHidden?(on: boolean): void
   /** The overlay window's rectangle, in CSS pixels of a page `viewport` pixels wide. */
   setBounds(x: number, y: number, w: number, h: number, viewport: number): void
   /** "left,top,right,bottom" of the system bars and cutout, in CSS pixels of a page `viewport` pixels wide. */
@@ -63,6 +66,9 @@ declare global {
 }
 
 const native = window.QQPetNative
+// The real frame clock: the SWF player holds page animation frames while the host is paused (#119), and the window
+// must still follow a menu or panel opened from the notification while the pet is hidden.
+const frame = window.requestAnimationFrame.bind(window)
 
 const pending = new Map<number, { resolve: (v: string | null) => void; reject: (e: Error) => void }>()
 let seq = 0
@@ -163,10 +169,32 @@ for (const type of ['pointerup', 'pointercancel'] as const)
   )
 
 let bounds = { x: 0, y: 0, w: 0, h: 0 }
-function track(): void {
-  requestAnimationFrame(track)
+// Measuring every element each frame kept the phone busy while nothing changed (#119): right after a touch or a
+// window change the window follows every frame, otherwise a few times a second (a bubble or an animation that
+// outgrows the window catches up within IDLE_MS).
+const BUSY_MS = 2000
+const IDLE_MS = 200
+const PAUSED_MS = 1000
+let busyUntil = 0
+let measured = 0
+for (const type of ['pointerdown', 'pointermove', 'pointerup'] as const) document.addEventListener(type, () => (busyUntil = performance.now() + BUSY_MS), true)
+// A bubble, menu or panel appearing changes the page: the window follows it in the next frame, not IDLE_MS later.
+// The notification offers 显示宠物 while the pet is hidden.
+let hiddenSent: boolean | undefined
+const sendHidden = (): void => {
+  const on = document.body.classList.contains('petHidden')
+  if (on !== hiddenSent) native.setHidden?.((hiddenSent = on))
+}
+new MutationObserver(sendHidden).observe(document.body, { attributes: true, attributeFilter: ['class'] })
+sendHidden()
+new MutationObserver(() => (busyUntil = performance.now() + BUSY_MS)).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
+function track(now: number): void {
+  frame(track)
   // A resize under a resting finger skews the next events (a long press reads as a drag); it waits for the lift.
   if (press && !dragging) return
+  // Paused (pet hidden, or the owner away) the page rarely changes: measure seldom, but at once after a change.
+  if (!dragging && now >= busyUntil && now - measured < (window.__qqpetHostPaused ? PAUSED_MS : IDLE_MS)) return
+  measured = now
   let x = innerWidth
   let y = innerHeight
   let r = 0
@@ -181,13 +209,14 @@ function track(): void {
       r = Math.max(r, box.right)
       b = Math.max(b, box.bottom)
     }
-  const next = { x: Math.max(Math.floor(x), 0), y: Math.max(Math.floor(y), 0), w: 0, h: 0 }
-  next.w = Math.max(Math.min(Math.ceil(r), innerWidth) - next.x, 0)
-  next.h = Math.max(Math.min(Math.ceil(b), innerHeight) - next.y, 0)
-  if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) native.setBounds(next.x, next.y, next.w, next.h, innerWidth)
+  const next = nextBounds(bounds, r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null, innerWidth, innerHeight)
+  if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) {
+    native.setBounds(next.x, next.y, next.w, next.h, innerWidth)
+    busyUntil = now + BUSY_MS
+  }
   bounds = next
 }
-requestAnimationFrame(track)
+frame(track)
 
 // The page spans the whole screen, under the status and navigation bars; frames keep clear of them (box.ts).
 function safeArea(): void {

@@ -100,6 +100,7 @@ export function openPetInfo(): void {
     birthday,
     liveSmall('level', '等级：', () => save.petComputedlInfo.level),
     liveSmall('yb', '元宝：', () => info.yb),
+    liveSmall('diamond', '钻石：', () => info.diamond),
     div('rightRow attributeValue', div('label', '个人能力')),
     liveSmall('intel', '智力：', () => info.intel),
     liveSmall('strong', '武力：', () => info.strong),
@@ -122,6 +123,8 @@ export function openPetInfo(): void {
     head.style.backgroundImage = `url(${bg ? goodOf('background', bg.id).url : 'pet/info/16.svg'})`
     pd.style.display = info.PDiamondLevel ? '' : 'none'
     diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
+    // The original drew a 年 mark on a yearly member's badge; no asset for it survived, so it is drawn in CSS.
+    diamond.className = info.pinkDiamond && info.PDiamondYear ? 'pinkDiamond pdYear' : 'pinkDiamond'
     pdGrowth.className = info.pinkDiamond ? 'pinkDiamondUP px8 pinkDiamondUPs' : 'pinkDiamondUP px8'
     pdGrowth.textContent = `${info.PDgrowth} / ${info.PDgrowthValue_next}`
     pd.title = info.pinkDiamond ? `当前成长速度：${info.PDgrowthValue}/每天,到期时间：${formatDate(info.PDiamondExpirationDate)}` : '当前未开通粉钻'

@@ -4,6 +4,7 @@ import { stripTypeScriptTypes } from 'node:module'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { FACE } from '../../src/renderer/pet/data/face.ts'
+import { pokeMoodGain } from '../../src/renderer/pet/mood.ts'
 import { renderer } from './pet-drag.test.mjs'
 
 const faceSource = readFileSync(new URL('../../src/renderer/ui/face.ts', import.meta.url), 'utf8')
@@ -66,6 +67,7 @@ function faceFixture({ stage = 'Egg', sex = 'GG', touch = true, faceClick = 2, p
       div: className => Object.assign(new Element(), { className }),
       clearFacePoints: () => face.clearFacePoints(),
       showFacePoints: () => face.showFacePoints(),
+      showFacePointsAfterClick: () => face.showFacePointsAfterClick(),
     },
   })
   Object.assign(app.info, { sex, mood })
@@ -74,7 +76,7 @@ function faceFixture({ stage = 'Egg', sex = 'GG', touch = true, faceClick = 2, p
   let now = 0, nextTimer = 0
   const timers = new Map()
   const scope = {
-    FACE, document, machine, touch, info: app.info, save: app.save,
+    FACE, pokeMoodGain, document, machine, touch, info: app.info, save: app.save,
     stage: () => stage,
     mood: () => app.info.mood >= 800 ? 'happy' : app.info.mood >= 500 ? 'peaceful' : app.info.mood >= 200 ? 'upset' : 'sad',
     rand: (min, max) => min === 5 && max === 15 ? 10 : min,
@@ -87,7 +89,7 @@ function faceFixture({ stage = 'Egg', sex = 'GG', touch = true, faceClick = 2, p
     clearTimeout: id => timers.delete(id),
   }
   const source = stripTypeScriptTypes(faceSource).replace(/^import .*$/gm, '').replace(/^export /gm, '')
-  runInNewContext(source + '\nthis.face = { showFacePoints, clearFacePoints }', scope)
+  runInNewContext(source + '\nthis.face = { showFacePoints, showFacePointsAfterClick, clearFacePoints }', scope)
   face = scope.face
   const layer = pet.children.find(child => child.className === 'face')
   const native = (phase, x = 550, y = 340) => app.nativeInput({ phase, id: 1, x, y })
@@ -130,7 +132,7 @@ test('clicking a real point counts amusement, cheers the pet and selects its sta
     assert.deepEqual(f.counts, ['Amusing'])
     assert.equal(f.app.save.gameSaveDatas.ddw, 1)
     assert.equal(f.app.info.mood, 1000, 'mood is capped even when the reward exceeds the remaining room')
-    assert.deepEqual(f.floats, [10])
+    assert.deepEqual(f.floats, [5], '兴奋档逗宠只加 5，995+5 正好封顶')
     assert.equal(f.alerts.length, 1, 'the first poke unlocks the achievement')
     assert.equal(f.plays.at(-1).a, 'faceActive')
     assert.equal(f.plays.at(-1).opt.url,
@@ -197,5 +199,14 @@ test('desktop hover still waits 300ms and leaving cancels or clears the points',
   f.advance(300)
   assert.equal(f.points().length, 0)
   f.tap('dom')
-  assert.equal(f.points().length, 0, 'a desktop tap does not replace hover with touch behavior')
+  assert.equal(f.points().length, 4, 'a desktop click on the pet brings the spots back for the next click (#113)')
+})
+
+test('a desktop click that did not lift brings back the hover points it hid (#113)', () => {
+  const f = faceFixture({ touch: false })
+  f.pet.dispatchEvent(new Event('pointerenter'))
+  f.advance(300)
+  assert.equal(f.points().length, 4)
+  f.tap('dom')
+  assert.equal(f.points().length, 4, 'still hovering: the spots return for the next click')
 })

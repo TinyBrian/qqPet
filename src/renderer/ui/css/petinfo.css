@@ -19,6 +19,7 @@
 .ui-petinfo .birthDay {left:270px}
 .ui-petinfo .level {top:85px}
 .ui-petinfo .yb {top:85px;left:270px}
+.ui-petinfo .diamond {top:145px;left:300px}
 .ui-petinfo .attributeValue,
 .ui-petinfo .educationValue,
 .ui-petinfo .statusValue {border-bottom:1px dotted #8aa}

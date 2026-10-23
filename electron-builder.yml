@@ -17,7 +17,12 @@ asar: true
 publish: []
 
 win:
-  target: [nsis]
+  # Releases ship x64 only. An arm64 payload is packed with 7-Zip's ARM64 filter, which the NSIS 7z
+  # plugin cannot unpack: the installer then silently skips QQPet.exe and every DLL. Pin x64 so a
+  # local build on an Apple Silicon Mac (default arch arm64) matches the release.
+  target:
+    - target: nsis
+      arch: [x64]
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -27,6 +32,9 @@ mac:
     - target: dmg
       arch: [arm64, x64]
   category: public.app-category.games
+  # macOS 15+ prompts for Local Network; without this string UDP discovery for 局域网串门 stays blocked (#120).
+  extendInfo:
+    NSLocalNetworkUsageDescription: "QQ宠物用本地网络发现同一局域网里的好友宠物，以便串门和传话。"
 
 linux:
   target: [AppImage, deb]

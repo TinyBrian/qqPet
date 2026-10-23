@@ -271,12 +271,17 @@ app.whenReady().then(() => {
     const { width, height } = win.getContentBounds()
     win.setShape(toShape(rects, win.webContents.getZoomFactor(), width, height))
   })
-  ipcMain.on(IPC.setAlwaysOnTop, (_e, on: boolean) => win.setAlwaysOnTop(on, 'screen-saver'))
+  // Panels that stay open for long (社区) lower the window so other apps can be raised over it.
+  let lowered = false
+  ipcMain.on(IPC.setAlwaysOnTop, (_e, on: boolean) => {
+    lowered = !on
+    win.setAlwaysOnTop(on, 'screen-saver')
+  })
   ipcMain.on(IPC.setFocusable, (_e, on: boolean) => {
     panel = on
     win.setFocusable(on)
     // macOS draws IME candidates below screen-saver level; drop under them while a panel takes typing.
-    if (process.platform === 'darwin') win.setAlwaysOnTop(true, on ? 'floating' : 'screen-saver')
+    if (process.platform === 'darwin') win.setAlwaysOnTop(!lowered, on ? 'floating' : 'screen-saver')
     // The window is born unfocusable; setFocusable alone does not make it key, so IME stays on the previous app.
     if (on) {
       if (process.platform === 'darwin') app.focus({ steal: true })

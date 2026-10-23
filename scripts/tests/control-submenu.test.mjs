@@ -33,3 +33,10 @@ test('an action submenu stays hittable for a moment after its button loses hover
   assert.equal(delay(open, 'visibility'), 0)
   assert.match(open, /z-index:\s*1/)
 })
+
+test('switching to another action button hides the previous submenu at once (#108)', () => {
+  const other = rule('.ui-control:has(.menuItem:hover) .menuItem:not(:hover) .childrenMenu')
+  assert.match(other, /visibility:\s*hidden/)
+  assert.match(other, /opacity:\s*0/)
+  assert.match(other, /transition:\s*none/)
+})

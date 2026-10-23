@@ -30,6 +30,17 @@ const scrolls = (el: HTMLElement): boolean =>
   /auto|scroll/.test(getComputedStyle(el).overflow) && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)
 
 /**
+ * The size of the page on screen. Android pins the page's short side to 480 CSS px; on a tablet that is a zoom above 1,
+ * the layout viewport stays at device-width and only the visual viewport is shown. Fixed frames are already centred on
+ * what is shown, but fitting them to the layout viewport left them at full size, past the right and bottom edges (#103).
+ */
+function visibleSize(viewport: HTMLElement): { w: number; h: number } {
+  const vv = window.visualViewport
+  if (!vv || !(vv.scale > 1.01)) return { w: viewport.clientWidth, h: viewport.clientHeight }
+  return { w: Math.min(vv.width, viewport.clientWidth), h: Math.min(vv.height, viewport.clientHeight) }
+}
+
+/**
  * Shows a frame centered by `translate(-50%, -50%)` in the screen clear of system bars. Returns a function that removes it.
  *
  * The frame is scaled down when the screen is too small for it. With a mouse it is
@@ -68,7 +79,8 @@ function show(frame: HTMLElement, keep?: HTMLElement): () => void {
     const h = frame.offsetHeight
     const [left, top, right, bottom] = ['left', 'top', 'right', 'bottom'].map(inset)
     const viewport = document.documentElement
-    const room = { w: viewport.clientWidth - left - right - WINDOW_MARGIN, h: viewport.clientHeight - top - bottom - WINDOW_MARGIN }
+    const { w: vw, h: vh } = visibleSize(viewport)
+    const room = { w: vw - left - right - WINDOW_MARGIN, h: vh - top - bottom - WINDOW_MARGIN }
     // Never above 1: the page's own scale sizes windows for the screen, and blowing one up breaks its proportions to the rest.
     flat = Math.min(1, room.w / w, room.h / h)
     const turned = Math.min(1, room.w / h, room.h / w)

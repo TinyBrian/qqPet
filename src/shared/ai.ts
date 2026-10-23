@@ -29,7 +29,10 @@ export async function aiModels(fetch: Fetch, c: Omit<AiConfig, 'model'>): Promis
 
 export async function aiChat(fetch: Fetch, c: AiConfig, messages: AiMessage[]): Promise<string> {
   // 关思考：Qwen 系认 chat_template_kwargs.enable_thinking；DeepSeek 认 thinking.type=disabled（思考默认开、effort 默认 high，不关会烧光 max_tokens 导致 content 为空）。两字段互不干扰，各自服务端忽略另一个。
-  const body: Record<string, unknown> = { model: c.model, messages, max_tokens: 300, chat_template_kwargs: { enable_thinking: false } }
+  const body: Record<string, unknown> = { model: c.model, messages, max_tokens: 300 }
+  // OpenAI 官方等严格校验的服务会对未知字段 chat_template_kwargs 返回 400 (#111)，只发给可能是 Qwen/vLLM 的端点。
+  const strict = /api\.openai\.com|openai\.azure\.com|deepseek|ollama|:11434/i.test(c.url)
+  if (!strict) body.chat_template_kwargs = { enable_thinking: false }
   if (/deepseek/i.test(c.url)) body.thinking = { type: 'disabled' }
   // Ollama's OpenAI layer ignores the two fields above and only honours reasoning_effort.
   if (/ollama|:11434/i.test(c.url)) body.reasoning_effort = 'none'

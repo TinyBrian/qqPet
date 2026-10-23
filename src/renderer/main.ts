@@ -10,8 +10,9 @@ import { catchDiudiule, releaseDiudiule } from './ui/diudiule'
 import { scheduleHide, showControl } from './ui/control'
 import { div, pageX, pageY, touch } from './ui/dom'
 import './ui/background'
-import { clearFacePoints, showFacePoints } from './ui/face'
-import { closeMenu, openMenu } from './ui/menu'
+import './host-pause'
+import { clearFacePoints, showFacePointsAfterClick } from './ui/face'
+import { closeMenu, openMenu, wantHidden } from './ui/menu'
 import { closeState, openState } from './ui/state'
 import { startAutoUpdate } from './ui/update'
 import { windowView } from './ui/window-view'
@@ -215,6 +216,8 @@ const setHitShape = window.qqpet.setHitShape
 if (setHitShape || window.qqpet.setDragging) {
   let sent = ''
   setInterval(() => {
+    // Nothing to hit while hidden or paused (#119); the hidden-change listener refreshes the cursor state.
+    if (save.settings.hidden && !dragging && (!setHitShape || sent === '[]')) return
     // The movie can retract under a stationary cursor; native cursor IPC only sends changes.
     if (!dragging) updateCursor(cursor)
     if (!setHitShape) return
@@ -289,7 +292,8 @@ const petInput = createPetInput({
     } else if (edge) machine.play({ a: edge })
     else if (lifted || machine.pose.a === 'hideleft' || machine.pose.a === 'hideright') machine.play({ a: 'normal' })
     scheduleHide()
-    if (touch && !lifted && !cancelled) showFacePoints()
+    // A plain click hid the spots on pointerdown; bring them back so the next click can land on one (#113).
+    if (!lifted && !cancelled) showFacePointsAfterClick()
   },
 }, touch ? HOLD_MS : 0)
 
@@ -440,7 +444,11 @@ window.qqpet.onTrayClick((c) => {
   if (menuLeave) { clearTimeout(menuLeave); menuLeave = 0 }
   const x = c.x ?? innerWidth - 60
   const y = c.y ?? 0
-  if (c.kind === 'menu') {
+  if (c.kind === 'show' || c.kind === 'hide') {
+    closeMenu()
+    closeState()
+    if (save.havePet) wantHidden(c.kind === 'hide')
+  } else if (c.kind === 'menu') {
     closeState()
     openMenu({ x, y, pet: false }, adoptPet)
   } else if (save.havePet) {

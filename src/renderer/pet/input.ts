@@ -112,7 +112,8 @@ export function createPetInput(actions: PetInputActions, holdMilliseconds = 0) {
         const anchor = actions.lift(box.size, align)
         if (anchor) align(anchor)
       }
-      actions.move(input.x - (press.scaleGrab ? press.grabX * box.size : press.dx), input.y - (press.scaleGrab ? press.grabY * box.size : press.dy), press.lifted)
+      // Below the lift threshold a press is a click: hand jitter must not nudge the pet off the spot being clicked (#113).
+      if (press.lifted) actions.move(input.x - (press.scaleGrab ? press.grabX * box.size : press.dx), input.y - (press.scaleGrab ? press.grabY * box.size : press.dy), true)
       if (input.phase === 'end') finish(false, now)
     },
   }

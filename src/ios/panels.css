@@ -4,3 +4,8 @@
 .boxFrame .ui-setup .rightScroll > .children {
   touch-action: none;
 }
+
+.boxFrame .ui-setup2 .sbody,
+.boxFrame .ui-setup2 .snav {
+  touch-action: none;
+}

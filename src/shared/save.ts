@@ -25,6 +25,8 @@ export interface PetInfo {
   lastY: number
   /** 元宝 */
   yb: number
+  /** 钻石: the free premium currency that stands in for the original's Q币 (#75). */
+  diamond: number
   lastLoginTime: number
   onlineDataTime: number
   pinkDiamond: boolean

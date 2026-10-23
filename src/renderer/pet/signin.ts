@@ -2,7 +2,7 @@ import { goodOf, parseGood, type Good } from './data/goods'
 import { give } from './items'
 import { loot } from './loot'
 import { rand } from './rand'
-import { info, save, update } from './store'
+import { addInfo, info, save, update } from './store'
 import { dayStart } from './vip'
 
 const GIFT_MINUTES = 20
@@ -53,7 +53,8 @@ export function signToday(): Good[] {
   ;(year[d.getMonth() + 1] ??= []).push(today)
   store()
   const goods = loot(1).map((g) => (g.type === 'nums' ? { ...g, num: 20 } : g))
-  give(goods, '今日签到成功哦！~')
+  addInfo('diamond', 1)
+  give(goods, '今日签到成功哦！还得到了1颗钻石~')
   return goods
 }
 

@@ -25,6 +25,7 @@ import android.os.Build
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
@@ -39,6 +40,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 
@@ -54,6 +56,9 @@ class PetService : Service() {
             private set
 
         private const val NOTIFICATION_ID = 1
+        /** A window move this far (px) is hidden until the page is drawn at the new origin. */
+        private const val JUMP_PX = 4
+        private const val REVEAL_MS = 200L
         private const val TRAY_ICON_PX = 96
     }
 
@@ -72,6 +77,15 @@ class PetService : Service() {
         gravity = Gravity.TOP or Gravity.START
         layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         fitInsetsTypes = 0
+        // The system slides a window to its new origin over a few frames, while the page is already shifted by the
+        // whole move: shrinking the window from the left (the menu closing) showed the pet far left, sliding back.
+        // PRIVATE_FLAG_NO_MOVE_ANIMATION makes the move instant; hidden API, so a failure just keeps the slide.
+        try {
+            val f = LayoutParams::class.java.getField("privateFlags")
+            f.setInt(this, f.getInt(this) or 0x40)
+        } catch (e: Throwable) {
+            Log.w("QQPet", "no-move-animation flag unavailable", e)
+        }
     }
 
     private lateinit var probe: View
@@ -122,6 +136,7 @@ class PetService : Service() {
             root.getLocationOnScreen(at)
             if (web.translationX != -at[0].toFloat()) web.translationX = -at[0].toFloat()
             if (web.translationY != -at[1].toFloat()) web.translationY = -at[1].toFloat()
+            reveal?.let { if (it[0] == at[0] && it[1] == at[1]) { reveal = null; web.alpha = 1f } }
             true
         }
         wm.addView(root, params)
@@ -162,7 +177,7 @@ class PetService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "state", "menu" -> emit("trayClick", JSONObject().put("kind", intent.action).toString())
+            "state", "menu", "show", "hide" -> emit("trayClick", JSONObject().put("kind", intent.action).toString())
             "quit" -> stopSelf()
         }
         return START_STICKY
@@ -212,15 +227,32 @@ class PetService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
     }
 
+    /** The page hid the pet (菜单 隐藏宠物); the notification then offers to show it again. */
+    private var petHidden = false
+
+    private fun setHidden(on: Boolean) {
+        if (on == petHidden) return
+        petHidden = on
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
+    }
+
     private fun notification(): Notification {
+        // Through TrayActivity, which closes the shade; quitting needs no shade closed.
+        fun tap(name: String) = PendingIntent.getActivity(
+            this, name.hashCode(),
+            Intent(this, TrayActivity::class.java).setAction(name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         fun action(name: String) = PendingIntent.getService(this, name.hashCode(), Intent(this, PetService::class.java).setAction(name), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, "pet")
             .setSmallIcon(trayIcon ?: Icon.createWithResource(this, R.drawable.ic_notification))
             .setLargeIcon(trayIcon)
             .setContentTitle("QQ宠物")
-            .setContentText(trayTip)
-            .setContentIntent(action("state"))
-            .addAction(Notification.Action.Builder(null, "菜单", action("menu")).build())
+            .setContentText(if (petHidden) "宠物隐藏中，点按显示" else trayTip)
+            // A hidden pet has nothing to tap: the notification is the way back.
+            .setContentIntent(tap(if (petHidden) "show" else "state"))
+            .addAction(Notification.Action.Builder(null, if (petHidden) "显示宠物" else "隐藏宠物", tap(if (petHidden) "show" else "hide")).build())
+            .addAction(Notification.Action.Builder(null, "菜单", tap("menu")).build())
             .addAction(Notification.Action.Builder(null, "退出", action("quit")).build())
             .setOngoing(true)
             .build()
@@ -245,17 +277,45 @@ class PetService : Service() {
         val scale = web.layoutParams.width / viewport
         val nx = floor(x * scale).toInt()
         val ny = floor(y * scale).toInt()
-        // The window is never hidden while it moves: hiding until the next frame commit and showing it again
-        // with a second relayout blanked the pet for up to half a second on every tap or menu (#18).
-        // The frame drawn for this layout must already carry the new page offset, or the page lags the window by a frame.
-        web.translationX = -nx.toFloat()
-        web.translationY = -ny.toFloat()
-        params.x = nx
-        params.y = ny
-        params.width = maxOf(ceil(w * scale).toInt(), 1)
-        params.height = maxOf(ceil(h * scale).toInt(), 1)
-        params.flags = if (w == 0.0 || h == 0.0) params.flags or LayoutParams.FLAG_NOT_TOUCHABLE else params.flags and LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        val touchable = w != 0.0 && h != 0.0
+        val to = intArrayOf(nx, ny, maxOf(ceil(w * scale).toInt(), 1), maxOf(ceil(h * scale).toInt(), 1), if (touchable) 1 else 0)
+        // Until the app draws again the system shows the window's last frame at its new origin, so a far move showed
+        // the pet at a wrong place for a frame (#18: drag start and end, menus). The page itself is made transparent
+        // and drawn so first (no relayout, unlike the window alpha that blanked it for half a second), then the window
+        // moves, and the pre-draw listener shows the page again once the window really is there.
+        val far = abs(nx - params.x) > JUMP_PX || abs(ny - params.y) > JUMP_PX
+        if (target != null || far && web.alpha != 0f) {
+            val first = target == null
+            target = to
+            if (first) {
+                web.alpha = 0f
+                root.viewTreeObserver.registerFrameCommitCallback { web.post { target?.let { target = null; place(it, true) } } }
+                web.invalidate()
+            }
+            return
+        }
+        place(to, false)
+    }
+
+    /** Window origin awaiting the transparent frame; null when none. */
+    private var target: IntArray? = null
+    /** The origin the hidden page is shown again at. */
+    private var reveal: IntArray? = null
+
+    private fun place(to: IntArray, hidden: Boolean) {
+        web.translationX = -to[0].toFloat()
+        web.translationY = -to[1].toFloat()
+        params.x = to[0]
+        params.y = to[1]
+        params.width = to[2]
+        params.height = to[3]
+        params.flags = if (to[4] == 0) params.flags or LayoutParams.FLAG_NOT_TOUCHABLE else params.flags and LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         wm.updateViewLayout(root, params)
+        if (hidden) {
+            reveal = intArrayOf(to[0], to[1])
+            // The system may keep the window elsewhere than asked (pre-draw listener); never leave the pet hidden.
+            web.postDelayed({ if (reveal != null && target == null) { reveal = null; web.alpha = 1f } }, REVEAL_MS)
+        }
         // Chromium rasters only the visible rect; without this, static content uncovered by a bigger window stays blank.
         web.invalidate()
     }
@@ -373,6 +433,9 @@ class PetService : Service() {
 
         @JavascriptInterface
         fun setTray(icon: String, tip: String?) = web.post { this@PetService.setTray(icon, tip) }
+
+        @JavascriptInterface
+        fun setHidden(on: Boolean) = web.post { this@PetService.setHidden(on) }
 
         @JavascriptInterface
         fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double) = web.post { this@PetService.setBounds(x, y, w, h, viewport) }
