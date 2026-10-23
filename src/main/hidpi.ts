@@ -18,14 +18,19 @@ export function imageSize(data: Buffer): { w: number; h: number } | undefined {
 }
 
 /**
- * Redrawn art ships as `name@2x.png` (PNG or APNG, twice the size) next to the
+ * Redrawn art ships as `name@2x.png` (PNG or APNG, at least twice the size) next to the
  * original `name.png|gif|bmp|jpg`. A plain image file cannot tell the browser
  * its density, so image requests get an SVG with the original's size that
- * embeds the 2x bitmap: layouts stay the same, HiDPI screens get the real
- * pixels. Undefined when the file has no @2x twin, or the twin is not twice
- * the original: an SVG sized from it showed a shop item ten times too big when
- * a replaced @2x was larger, and one no bigger than the original would only
- * blur it (shequ.png); the original is served instead.
+ * embeds the HiDPI bitmap: layouts stay the same, HiDPI screens get the real
+ * pixels. Undefined when the file has no @2x twin, or the twin is smaller than
+ * twice the original (a replaced @2x that was larger used to blow up shop items
+ * when the SVG was sized from the twin; we always size from the original).
+ * Twins larger than 2× (e.g. redrawn backgrounds) are fine: CSS still lays out
+ * at 1× and the extra pixels sharpen retina screens.
+ *
+ * The @2x PNG is always inlined as base64. SVG used as CSS `background-image`
+ * or `<img>` is drawn in "secure image" mode and will not load external
+ * `href`s, so a relative link to the twin would paint nothing.
  */
 export function hidpiSvg(file: string): string | undefined {
   const hi = file.replace(/\.(png|gif|bmp|jpg)$/i, '@2x.png')
@@ -33,10 +38,11 @@ export function hidpiSvg(file: string): string | undefined {
   const size = imageSize(readFileSync(file))
   const png = readFileSync(hi)
   const twin = imageSize(png)
-  if (!size || !twin || Math.abs(twin.w - 2 * size.w) > 1 || Math.abs(twin.h - 2 * size.h) > 1) return undefined
+  if (!size || !twin || twin.w < 2 * size.w - 1 || twin.h < 2 * size.h - 1) return undefined
   const { w, h } = size
+  const href = `data:image/png;base64,${png.toString('base64')}`
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
-    `<image href="data:image/png;base64,${png.toString('base64')}" width="${w}" height="${h}" preserveAspectRatio="none"/></svg>`
+    `<image href="${href}" width="${w}" height="${h}" preserveAspectRatio="none"/></svg>`
   )
 }
