@@ -178,7 +178,7 @@ npm run ios       # iOS IPA（资源、SDK 和签名工具见 iOS 说明）
 
 推送 `v*` 标签时由 GitHub Actions 打出三平台安装包、Android APK、Harmony HAP 和 iOS IPA 并发布 Release。iOS 及共用代码的 pull request 还会生成可下载的 IPA。iOS CI 在 Ubuntu 上使用固定版本的 LLVM、SDK 和 `ldid`，并打包完整资源。
 
-Android 版本地调试用 `npm run android`（debug 包，输出到 `android/app/build/outputs/apk/debug/`），需要 Android SDK 和 JDK 17（Gradle 8 不支持更新的 JDK，可用 `JAVA_HOME` 指定）。CI 打的 release 包需要在仓库 Secrets 中配置签名密钥：
+Android 版本地调试用 `npm run android`（debug 包，输出到 `android/app/build/outputs/apk/debug/`），需要 Android SDK 和 JDK 17（Gradle 8 不支持更新的 JDK，可用 `JAVA_HOME` 指定）。如果从 Android Studio 或直接运行 Gradle 构建，需先在仓库根目录执行 `npm run build:android-web`，否则 APK 缺少网页资源且无法启动。CI 打的 release 包需要在仓库 Secrets 中配置签名密钥：
 
 | Secret | 内容 |
 |---|---|

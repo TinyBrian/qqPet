@@ -49,6 +49,15 @@ android {
     }
 }
 
+tasks.named("preBuild") {
+    doFirst {
+        val webIndex = rootDir.resolve("../out/android/index.html")
+        check(webIndex.isFile) {
+            "Android web assets are missing. Run `npm run build:android-web` from the repository root before building with Gradle."
+        }
+    }
+}
+
 kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }
