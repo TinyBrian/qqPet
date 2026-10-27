@@ -16,6 +16,7 @@ import { listGoods, tickTimed } from './goods'
 import { doctor, useItem, useItemQuietly } from './items'
 import { deliverMails } from './mail'
 import { Machine, type Pose } from './machine'
+import { petInsets } from './edges'
 import { moodDecayPerMinute } from './mood'
 import { rand } from './rand'
 import { lookUrl, restPlan, SINGLE_FRAME_HOLD, walkUrl } from './router'
@@ -137,6 +138,7 @@ function stopWalk(): void {
 
 /** Move only after the walk pose is on screen. play() is async; starting the timer earlier suicides. */
 function startWalkMove(speed: number, until: number): void {
+  const inset = petInsets()
   clearInterval(walkTick)
   walkTick = window.setInterval(() => {
     if (machine.pose.a !== 'walk') {
@@ -145,9 +147,11 @@ function startWalkMove(speed: number, until: number): void {
       return
     }
     const next = info.lastX + speed
-    const max = innerWidth - petSize()
-    if (Date.now() > until || next <= 0 || next >= max) {
-      setInfo('lastX', Math.min(Math.max(next, 0), max))
+    // Walking stops where the drawn pet, not its transparent stage, reaches the screen.
+    const min = -inset.left
+    const max = Math.max(min, innerWidth - petSize() + inset.right)
+    if (Date.now() > until || next <= min || next >= max) {
+      setInfo('lastX', Math.min(Math.max(next, min), max))
       stopWalk()
       return
     }
@@ -160,8 +164,9 @@ function walk(): boolean {
   if (!save.settings.roam || busy() || playingDesk() || info.health < 5) return false
   if (machine.pose.a !== 'normal' || edgeSide()) return false
   const s = petSize()
-  const roomL = info.lastX
-  const roomR = innerWidth - info.lastX - s
+  const inset = petInsets()
+  const roomL = info.lastX + inset.left
+  const roomR = innerWidth - info.lastX - s + inset.right
   if (roomL < 48 && roomR < 48) return false
   const dir: 'left' | 'right' = roomL < 80 ? 'right' : roomR < 80 ? 'left' : Math.random() < 0.5 ? 'left' : 'right'
   walkDir = dir

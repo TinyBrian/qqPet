@@ -1,7 +1,8 @@
 import type { TrayState } from '../../shared/ipc'
 import type { PetInfo, SaveData, SavePatch, Settings } from '../../shared/save'
-import { petSizeFor } from '../../shared/layout'
+import { petSizeFor, edgeOfVisible } from '../../shared/layout'
 import { goodOf, type TimedType } from './data/goods'
+import { petInsets } from './edges'
 import { levelOf, stageOf, type Stage } from './level'
 import type { Mood } from './router'
 import { touch } from '../ui/dom'
@@ -111,10 +112,7 @@ export const petSize = (): number =>
 export const EDGE_NEAR = 36
 
 export function edgeSide(): 'hideleft' | 'hideright' | null {
-  const s = petSize()
-  if (info.lastX <= EDGE_NEAR) return 'hideleft'
-  if (info.lastX + s >= viewportSize().width - EDGE_NEAR) return 'hideright'
-  return null
+  return edgeOfVisible({ x: info.lastX, size: petSize() }, petInsets(), viewportSize().width, EDGE_NEAR)
 }
 
 /** Snaps X onto the side it is already on. */

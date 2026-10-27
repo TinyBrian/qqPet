@@ -3,6 +3,7 @@ import { clipAsk, IDLE, note } from './pet/ai'
 import { resumeTask } from './pet/jobs'
 import { machine, speak, startPet } from './pet/pet'
 import { applyEdge, info, onInfoChange, petSize, save, setInfo, stage, update } from './pet/store'
+import { petInsets } from './pet/edges'
 import type { DesktopCursor } from '../shared/ipc'
 import { pageZoom, setDesktopSize, viewportSize } from './ui/viewport'
 import { adopt } from './ui/adopt'
@@ -20,7 +21,7 @@ import { initLanVisit } from './ui/lan-visit'
 import { initWebhook } from './ui/webhook'
 import { initMemory } from './ui/chat'
 import { initVoice } from './ui/voice'
-import { resizePetPosition } from '../shared/layout'
+import { clampVisible, resizePetPosition } from '../shared/layout'
 import { hitCover, type Box } from '../mobile/overlay'
 
 let lastPlatformError = ''
@@ -47,10 +48,9 @@ let desktopSequence = 0
 let dragMove: ((point: DesktopCursor) => void) | null = null
 
 function clampOnScreen(): void {
-  const s = petSize()
-  const area = viewportSize()
-  setInfo('lastX', Math.min(Math.max(info.lastX, 0), Math.max(0, area.width - s)))
-  setInfo('lastY', Math.min(Math.max(info.lastY, 0), Math.max(0, area.height - s)))
+  const position = clampVisible({ x: info.lastX, y: info.lastY }, petSize(), petInsets(), viewportSize())
+  setInfo('lastX', position.x)
+  setInfo('lastY', position.y)
 }
 
 /** Left/right: keep the box on-screen. Hide_left/right already peek from the sprite edge. */

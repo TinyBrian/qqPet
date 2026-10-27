@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { petSizeFor, resizePetPosition, toolbarScaleFor } from '../../src/shared/layout.ts'
+import { clampVisible, edgeOfVisible, petSizeFor, resizePetPosition, toolbarScaleFor } from '../../src/shared/layout.ts'
 
 const fit = width => (width - 20) / 314
 
@@ -42,6 +42,29 @@ test('desktop and existing mobile hosts retain their established display scaling
   assert.equal(toolbarScaleFor(328, fit(3840), false), 1)
   assert.equal(petSizeFor(1, { width: 360, height: 780 }, true), 146)
   assert.equal(toolbarScaleFor(146, fit(360), true), 146 / 150)
+})
+
+// An egg stage is 200 px wide but draws its pet in the middle 45%, so these insets are typical.
+const egg = { left: 50, right: 60, top: 40, bottom: 10 }
+
+test('a transparent stage margin is not the pet touching a side', () => {
+  const viewport = 480
+  // The stage reaches the right side at x = 280; the drawn pet is still 60 px short of it.
+  assert.equal(edgeOfVisible({ x: 250, size: 200 }, egg, viewport, 36), null)
+  assert.equal(edgeOfVisible({ x: 280, size: 200 }, egg, viewport, 36), null)
+  // The drawn pet peeks once it itself is within the margin.
+  assert.equal(edgeOfVisible({ x: 305, size: 200 }, egg, viewport, 36), 'hideright')
+  assert.equal(edgeOfVisible({ x: 0, size: 200 }, egg, viewport, 36), null)
+  assert.equal(edgeOfVisible({ x: -20, size: 200 }, egg, viewport, 36), 'hideleft')
+})
+
+test('the drawn pet stays on screen, so the stage may overhang a side', () => {
+  const viewport = { width: 480, height: 800 }
+  assert.deepEqual(clampVisible({ x: 100, y: 100 }, 200, egg, viewport), { x: 100, y: 100 })
+  assert.deepEqual(clampVisible({ x: 350, y: 700 }, 200, egg, viewport), { x: 340, y: 610 })
+  assert.deepEqual(clampVisible({ x: -80, y: -60 }, 200, egg, viewport), { x: -50, y: -40 })
+  // A stage wider than the viewport still leaves the drawn pet a valid position.
+  assert.deepEqual(clampVisible({ x: 500, y: 0 }, 600, egg, viewport), { x: -50, y: 0 })
 })
 
 test('rotation preserves left/right peeking and the relative height along either edge', () => {

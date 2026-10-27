@@ -5,7 +5,7 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { route } from '../../src/renderer/pet/router.ts'
 import { createPetInput } from '../../src/renderer/pet/input.ts'
-import { resizePetPosition } from '../../src/shared/layout.ts'
+import { clampVisible, resizePetPosition } from '../../src/shared/layout.ts'
 
 test('drag fallback keeps the stage, sex and mood', () => {
   for (const sex of ['GG', 'MM']) {
@@ -65,6 +65,8 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
   const services = {
     createPetInput,
     resizePetPosition,
+    clampVisible,
+    petInsets: () => initial.insets ?? { left: 0, right: 0, top: 0, bottom: 0 },
     info,
     save: { settings: { petBar: false }, petInfo: info, havePet: false },
     machine: { pose: { a: initial.pose ?? 'normal' }, play: pose => poses.push(pose) },
