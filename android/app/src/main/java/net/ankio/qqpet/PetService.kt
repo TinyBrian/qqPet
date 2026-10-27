@@ -113,6 +113,12 @@ class PetService : Service() {
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = AssetClient(this@PetService) { hd() }
             addJavascriptInterface(Bridge(), "QQPetNative")
+            // The overlay crop moves the WebView while a touch is active; restore screen-space
+            // coordinates so DOM pointer positions do not shift with the window origin.
+            setOnTouchListener { _, event ->
+                event.offsetLocation(event.rawX - event.x, event.rawY - event.y)
+                false
+            }
         }
         root = object : FrameLayout(this) {
             override fun dispatchTouchEvent(e: MotionEvent): Boolean {
@@ -273,7 +279,7 @@ class PetService : Service() {
     }
 
     /** Moves the window onto CSS rectangle (x, y, w, h) of the page, keeping the page in place on screen. */
-    private fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double) {
+    private fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean) {
         val scale = web.layoutParams.width / viewport
         val nx = floor(x * scale).toInt()
         val ny = floor(y * scale).toInt()
@@ -284,6 +290,13 @@ class PetService : Service() {
         // and drawn so first (no relayout, unlike the window alpha that blanked it for half a second), then the window
         // moves, and the pre-draw listener shows the page again once the window really is there.
         val far = abs(nx - params.x) > JUMP_PX || abs(ny - params.y) > JUMP_PX
+        if (dragging) {
+            target = null
+            reveal = null
+            web.alpha = 1f
+            place(to, false)
+            return
+        }
         if (target != null || far && web.alpha != 0f) {
             val first = target == null
             target = to
@@ -438,7 +451,8 @@ class PetService : Service() {
         fun setHidden(on: Boolean) = web.post { this@PetService.setHidden(on) }
 
         @JavascriptInterface
-        fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double) = web.post { this@PetService.setBounds(x, y, w, h, viewport) }
+        fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean) =
+            web.post { this@PetService.setBounds(x, y, w, h, viewport, dragging) }
 
         /** "left,top,right,bottom" of the system bars and cutout, in CSS pixels of a page [viewport] pixels wide. Hidden bars count: a swipe brings them back. */
         @JavascriptInterface

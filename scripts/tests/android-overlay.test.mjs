@@ -6,6 +6,16 @@ import { nextBounds } from '../../src/mobile/bounds.ts'
 const service = readFileSync(new URL('../../android/app/src/main/java/net/ankio/qqpet/PetService.kt', import.meta.url), 'utf8')
 const setBounds = service.slice(service.indexOf('private fun setBounds('), service.indexOf('private fun http('))
 const place = setBounds.slice(setBounds.indexOf('private fun place('))
+const bridge = readFileSync(new URL('../../src/android/bridge.ts', import.meta.url), 'utf8')
+
+test('drag keeps the overlay cropped and applies bounds without hiding the page', () => {
+  assert.doesNotMatch(bridge, /if \(dragging\) \[x, y, r, b\] = \[0, 0, innerWidth, innerHeight\]/)
+  assert.match(bridge, /native\.setBounds\(next\.x, next\.y, next\.w, next\.h, innerWidth, dragging\)/)
+  assert.match(service, /setOnTouchListener \{ _, event ->\s*event\.offsetLocation\(event\.rawX - event\.x, event\.rawY - event\.y\)\s*false/)
+  assert.match(setBounds, /if \(dragging\) \{\s*target = null\s*reveal = null\s*web\.alpha = 1f\s*place\(to, false\)/)
+  assert.match(setBounds, /if \(target != null \|\| far && web\.alpha != 0f\) \{\s*val first = target == null\s*target = to/)
+  assert.match(service, /fun setBounds\(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean\)/)
+})
 
 test('a far window move hides only the page, never the window (#18: the pet blanked on every tap or menu)', () => {
   assert.ok(place.includes('wm.updateViewLayout(root, params)'))

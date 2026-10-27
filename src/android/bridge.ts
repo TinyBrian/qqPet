@@ -39,7 +39,7 @@ interface Native {
   /** The pet is hidden: the notification offers 显示宠物. Absent on older shells. */
   setHidden?(on: boolean): void
   /** The overlay window's rectangle, in CSS pixels of a page `viewport` pixels wide. */
-  setBounds(x: number, y: number, w: number, h: number, viewport: number): void
+  setBounds(x: number, y: number, w: number, h: number, viewport: number, dragging: boolean): void
   /** "left,top,right,bottom" of the system bars and cutout, in CSS pixels of a page `viewport` pixels wide. */
   safeArea(viewport: number): string
 }
@@ -151,8 +151,8 @@ const cursor = (p: Point): void => {
 }
 for (const type of ['pointerdown', 'pointermove'] as const) document.addEventListener(type, (e) => cursor({ x: e.clientX, y: e.clientY }), true)
 
-// While a finger drags, the window covers the screen so the dragged pet or frame is never cut off.
-// A tap leaves the window alone: every resize risks a frame where the page and window disagree.
+// Keep the window cropped to visible content while dragging too. Expanding it to the whole screen on
+// pointermove made the surface jump between distant origins at drag start and release.
 const DRAG_PX = 6
 let press: Point | null = null
 let dragging = false
@@ -199,19 +199,17 @@ function track(now: number): void {
   let y = innerHeight
   let r = 0
   let b = 0
-  if (dragging) [x, y, r, b] = [0, 0, innerWidth, innerHeight]
-  else
-    for (const el of document.body.querySelectorAll('*')) {
-      const box = cover(el)
-      if (!box) continue
-      x = Math.min(x, box.left)
-      y = Math.min(y, box.top)
-      r = Math.max(r, box.right)
-      b = Math.max(b, box.bottom)
-    }
+  for (const el of document.body.querySelectorAll('*')) {
+    const box = cover(el)
+    if (!box) continue
+    x = Math.min(x, box.left)
+    y = Math.min(y, box.top)
+    r = Math.max(r, box.right)
+    b = Math.max(b, box.bottom)
+  }
   const next = nextBounds(bounds, r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null, innerWidth, innerHeight)
   if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) {
-    native.setBounds(next.x, next.y, next.w, next.h, innerWidth)
+    native.setBounds(next.x, next.y, next.w, next.h, innerWidth, dragging)
     busyUntil = now + BUSY_MS
   }
   bounds = next
