@@ -14,8 +14,20 @@ export interface Rect {
 /** CSS pixels kept around the content. */
 export const MARGIN = 24
 
-/** The window rectangle for content `need` (left, top, right, bottom; null for none) in a `vw`×`vh` page, given the current one. */
-export function nextBounds(cur: Rect, need: { left: number; top: number; right: number; bottom: number } | null, vw: number, vh: number, margin = MARGIN): Rect {
+/**
+ * The window rectangle for content `need` (left, top, right, bottom; null for none) in a `vw`×`vh` page, given the
+ * current one. `shrink` false keeps the current window whenever it still covers the content: while the page is busy,
+ * a bubble or menu closing must not move the window (each move blanks the page for a frame or two), so it waits for
+ * an idle moment to fit the window back around the content.
+ */
+export function nextBounds(
+  cur: Rect,
+  need: { left: number; top: number; right: number; bottom: number } | null,
+  vw: number,
+  vh: number,
+  margin = MARGIN,
+  shrink = true,
+): Rect {
   if (!need || need.right <= need.left || need.bottom <= need.top) return { x: 0, y: 0, w: 0, h: 0 }
   const l = Math.max(need.left, 0)
   const t = Math.max(need.top, 0)
@@ -24,8 +36,11 @@ export function nextBounds(cur: Rect, need: { left: number; top: number; right: 
   if (cur.w > 0 && cur.h > 0) {
     const [cl, ct, cr, cb] = [cur.x, cur.y, cur.x + cur.w, cur.y + cur.h]
     const fits = cl <= l && ct <= t && cr >= r && cb >= b
-    const room = (gap: number) => gap <= 2 * margin
-    if (fits && room(l - cl) && room(t - ct) && room(cr - r) && room(cb - b)) return cur
+    if (fits) {
+      if (!shrink) return cur
+      const room = (gap: number) => gap <= 2 * margin
+      if (room(l - cl) && room(t - ct) && room(cr - r) && room(cb - b)) return cur
+    }
   }
   const x = Math.max(Math.floor(l - margin), 0)
   const y = Math.max(Math.floor(t - margin), 0)

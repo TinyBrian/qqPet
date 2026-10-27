@@ -21,6 +21,16 @@ const CONFIG = {
   logLevel: 'error',
 }
 
+/**
+ * Ruffle rebuilds its instance for every movie, so a phone WebView pays the renderer's build cost on each pet
+ * action. A host may name a cheaper renderer for these small stages (see QQPetApi capabilities); an empty object
+ * keeps Ruffle's own choice.
+ */
+export function smallStageOptions(): Record<string, unknown> {
+  const renderer = window.qqpet.capabilities?.swfRenderer
+  return renderer ? { preferredRenderer: renderer } : {}
+}
+
 interface GlobalListener {
   target: EventTarget
   type: string

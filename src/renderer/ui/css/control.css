@@ -100,9 +100,37 @@
   animation-iteration-count: infinite;
   opacity: 1;
 }
-.ui-control .hoverMenuItemIcon {
+/* The opening wave: one icon after another. It runs on the compositor, so a tap that has to load an
+   SWF (a few hundred milliseconds of main-thread work on Android) cannot stall it. */
+.ui-control .showControl .menuItemIconBox {
+  animation: menuIntroScale 460ms ease-in-out var(--menu-delay, 0ms) 1;
+}
+.ui-control .showControl .menuItemIconBox:after {
   background-image: url(/pet/control/icons/bk/8.svg);
-  transform: scale(1.333333);
+  animation: menuIntroGlow 460ms ease-in-out var(--menu-delay, 0ms) 1;
+}
+/* A cursor on the bar takes over from the wave at once. */
+.ui-control .introOff .menuItemIconBox,
+.ui-control .introOff .menuItemIconBox:after {
+  animation: none;
+}
+@keyframes menuIntroScale {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.333333);
+  }
+}
+@keyframes menuIntroGlow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
 }
 .ui-control .menuTip {
   position: absolute;

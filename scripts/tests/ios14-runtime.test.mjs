@@ -26,6 +26,8 @@ test('mood movie loads on first demand, shares concurrent requests and retries a
   }
   const context = {
     SwfPlayer: Movie,
+    // Hosts without a cheaper renderer pass no options at all.
+    smallStageOptions: () => ({}),
     document: { createElement: () => ({}), getElementById: () => ({ appendChild() {} }) },
   }
   const source = readFileSync(new URL('../../src/renderer/ui/float.ts', import.meta.url), 'utf8')
@@ -67,7 +69,7 @@ test('pet swaps after paint, retires the previous runtime and preserves its fron
     destroy() { this.destroyed = true }
   }
   const save = { settings: { sound: true } }
-  const context = { save, SwfPlayer: Movie }
+  const context = { save, SwfPlayer: Movie, smallStageOptions: () => ({}) }
   const source = readFileSync(new URL('../../src/renderer/swf/pet-swf.ts', import.meta.url), 'utf8')
   runInNewContext(stripTypeScriptTypes(source.replace(/^import .*$/gm, '').replace('export class', 'class')) + '\nthis.PetSwf = PetSwf', context)
   const pet = new context.PetSwf({ isConnected: true })

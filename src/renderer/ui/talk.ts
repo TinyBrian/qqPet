@@ -1,6 +1,6 @@
 import { info, petSize, save } from '../pet/store'
 import { emitReply } from '../pet/said'
-import { SwfPlayer } from '../swf/player'
+import { smallStageOptions, SwfPlayer } from '../swf/player'
 
 const W = 261
 const H = 183
@@ -91,7 +91,7 @@ export async function say(text: string, buttons: string[], onButton: (() => void
   player.setIdle(false)
   if (movie !== movieOf()) {
     movie = movieOf()
-    await player.load(movie)
+    await player.load(movie, undefined, smallStageOptions())
   }
   const speak = await player.callback('speak')
   place()

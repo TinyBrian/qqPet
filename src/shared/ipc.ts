@@ -206,6 +206,12 @@ export interface QQPetApi {
   capabilities?: {
     /** This host adapts to screen rotation; omitted means windows always follow the screen. */
     rotatableScreen?: boolean
+    /**
+     * Ruffle renderer for the small stages the page reloads while the user waits (the pet, its speech bubble, the
+     * mood float). A host whose WebView builds Ruffle's default renderer slowly names a cheaper one here; games keep
+     * Ruffle's own choice, and omitting this keeps it for every player.
+     */
+    swfRenderer?: 'canvas' | 'webgl'
     autoStart?: boolean; autoStartReason?: string
     clipboardWatch?: boolean; clipboardWatchReason?: string
     frontWatch?: boolean; frontWatchReason?: string

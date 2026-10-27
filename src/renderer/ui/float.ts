@@ -1,4 +1,4 @@
-import { SwfPlayer } from '../swf/player'
+import { smallStageOptions, SwfPlayer } from '../swf/player'
 
 const el = document.createElement('div')
 el.className = 'float-mood'
@@ -8,7 +8,7 @@ let loaded: Promise<SwfPlayer> | null = null
 function moodPlayer(): Promise<SwfPlayer> {
   if (!loaded) {
     const player = new SwfPlayer(el, { recoverContext: true })
-    loaded = player.load('pet/float/mood.swf').then(() => player).catch((error) => {
+    loaded = player.load('pet/float/mood.swf', undefined, smallStageOptions()).then(() => player).catch((error) => {
       player.destroy()
       loaded = null
       throw error

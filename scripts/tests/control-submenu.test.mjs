@@ -45,10 +45,25 @@ test('menu intro and hover scale icons without animating layout dimensions', () 
   const item = rule('.ui-control .menuItem')
   const icon = rule('.ui-control .menuItemIconBox')
   const hover = rule('.ui-control .menuItem:hover .menuItemIconBox')
-  const intro = rule('.ui-control .hoverMenuItemIcon')
   assert.doesNotMatch(item, /transition:\s*all/)
   assert.match(icon, /transition:\s*transform\s+0\.2s/)
   assert.match(hover, /transform:\s*rotate\(45deg\)\s+scale\(1\.333333\)/)
-  assert.match(intro, /transform:\s*scale\(1\.333333\)/)
-  for (const block of [hover, intro]) assert.doesNotMatch(block, /(?:height|width):\s*40px/)
+  for (const block of [hover, icon]) assert.doesNotMatch(block, /(?:height|width):\s*40px/)
+})
+
+test('the opening wave is a compositor animation, not a timer chain that a loading SWF can stall', () => {
+  const wave = rule('.ui-control .showControl .menuItemIconBox')
+  const glow = rule('.ui-control .showControl .menuItemIconBox:after')
+  assert.match(wave, /animation:\s*menuIntroScale/)
+  assert.match(wave, /var\(--menu-delay/)
+  assert.match(glow, /animation:\s*menuIntroGlow/)
+  assert.match(glow, /var\(--menu-delay/)
+  // Only transform and opacity animate, so the wave never forces layout or a repaint of its own.
+  for (const name of ['menuIntroScale', 'menuIntroGlow']) {
+    const frames = css.slice(css.indexOf(`@keyframes ${name}`))
+    const block = frames.slice(0, frames.indexOf('\n}'))
+    assert.match(block, /transform:\s*scale\(|opacity:\s*[01]/)
+    assert.doesNotMatch(block, /(?:height|width|left|top|background)/)
+  }
+  assert.doesNotMatch(css, /\.ui-control \.hoverMenuItemIcon/)
 })

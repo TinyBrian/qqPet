@@ -136,7 +136,6 @@ document.body.appendChild(div('ui-control', control))
 
 let shown = false
 let hideTimer = 0
-let introTimer = 0
 let open: (Panel & { page: number }) | null = null
 
 /**
@@ -201,12 +200,12 @@ function pick(run: () => void): void {
   if (touch && !open) hide()
 }
 
-const icons: HTMLElement[] = []
 const menus = div(
   'menus fcc',
-  ...MENU.map((g) => {
+  ...MENU.map((g, index) => {
     const icon = div('menuItemIconBox', img('menuItemIcon', ICONS + g.icon))
-    icons.push(icon)
+    // control.css lights the icons up one after another, without a timer chain a loading SWF could stall.
+    icon.style.setProperty('--menu-delay', `${index * 130}ms`)
     const item = div(
       'menuItem fcc focusPress',
       div('menuTip', g.name),
@@ -217,8 +216,9 @@ const menus = div(
     )
     if (g.run) item.addEventListener('click', g.run)
     item.addEventListener('mouseenter', () => {
-      clearTimeout(introTimer)
-      highlight(-1)
+      // A real cursor hovering the bar takes over from the opening wave. A finger has no hover: the
+      // synthetic mouseenter a tap emits must not cut the wave short.
+      if (!touch) control.classList.add('introOff')
       clearTimeout(hideTimer)
     })
     item.addEventListener('mouseleave', scheduleHide)
@@ -227,23 +227,15 @@ const menus = div(
 )
 control.appendChild(menus)
 
-const highlight = (n: number): void => icons.forEach((icon, i) => icon.classList.toggle('hoverMenuItemIcon', i === n))
-
-/** Lights the menu icons up one after another when the bar appears. */
-function intro(n = 0): void {
-  highlight(n)
-  if (n < icons.length) introTimer = window.setTimeout(() => intro(n + 1), 150)
-}
-
 /** Pressing the pet shows the bar. */
 export function showControl(): void {
   if (save.isBury) return
   clearTimeout(hideTimer)
   if (shown) return
   shown = true
+  control.classList.remove('introOff')
   control.classList.add('showControl')
   place()
-  intro()
 }
 
 /** Shows the bar with an everyday goods panel open. */

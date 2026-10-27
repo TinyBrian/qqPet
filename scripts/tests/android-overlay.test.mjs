@@ -60,6 +60,19 @@ test('content leaving the window or leaving it mostly empty moves it with a marg
   assert.deepEqual(nextBounds(cur, box(260, 360, 300, 400), 400, 800), { x: 236, y: 336, w: 88, h: 88 })
 })
 
+test('a busy page only grows its window, so a closing bubble cannot blank the menu animation', () => {
+  const cur = nextBounds({ x: 0, y: 0, w: 0, h: 0 }, box(90, 300, 350, 620), 400, 800)
+  // Content shrinking back inside the window keeps it while busy; the idle pass fits it again.
+  assert.deepEqual(nextBounds(cur, box(120, 340, 320, 600), 400, 800, undefined, false), cur)
+  assert.deepEqual(nextBounds(cur, box(120, 340, 320, 600), 400, 800), { x: 96, y: 316, w: 248, h: 308 })
+  // Growth still happens at once, otherwise a bubble would be cut off.
+  assert.deepEqual(nextBounds(cur, box(90, 120, 350, 620), 400, 800, undefined, false), { x: 66, y: 96, w: 308, h: 548 })
+})
+
+test('the native side only fits the window back once the page has settled', () => {
+  assert.match(bridge, /nextBounds\(bounds, need, innerWidth, innerHeight, MARGIN, now >= busyUntil\)/)
+})
+
 test('page edges clamp the window; a full-page drag window shrinks back afterwards', () => {
   const full = nextBounds({ x: 0, y: 0, w: 0, h: 0 }, box(0, 0, 400, 800), 400, 800)
   assert.deepEqual(full, { x: 0, y: 0, w: 400, h: 800 })

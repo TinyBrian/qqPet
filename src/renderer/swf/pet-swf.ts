@@ -1,5 +1,5 @@
 import { save } from '../pet/store'
-import { SwfPlayer } from './player'
+import { smallStageOptions, SwfPlayer } from './player'
 
 /** Ruffle's :host { all: initial } and SWF cursor commands both beat document CSS. */
 function pinCursor(el: HTMLElement): void {
@@ -51,7 +51,7 @@ export class PetSwf {
     this.applySound()
     const next = this.back
     try {
-      await next.load(url)
+      await next.load(url, undefined, smallStageOptions())
       pinCursor(next.el)
       await next.nextPaint()
       // A drag can end while its movie is loading. Keep the current front

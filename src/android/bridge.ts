@@ -6,7 +6,7 @@ import { aiChat, aiModels } from '../shared/ai'
 import { webSearch } from '../shared/websearch'
 import { calendar } from '../shared/calendar'
 import { abortReason, cloneJson } from '../shared/compat'
-import { nextBounds } from '../mobile/bounds'
+import { MARGIN, nextBounds } from '../mobile/bounds'
 import { cover } from '../mobile/overlay'
 import type { Fetch, Point, QQPetApi, TrayClick, TrayState } from '../shared/ipc'
 import type { SaveData } from '../shared/save'
@@ -211,7 +211,10 @@ function track(now: number): void {
     r = Math.max(r, box.right)
     b = Math.max(b, box.bottom)
   }
-  const next = nextBounds(bounds, r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null, innerWidth, innerHeight)
+  const need = r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null
+  // A touch, a bubble or a menu changes the page for a while: the window only grows until it settles, so a closing
+  // tooltip cannot shrink it (and blank the page) in the middle of the menu's opening animation.
+  const next = nextBounds(bounds, need, innerWidth, innerHeight, MARGIN, now >= busyUntil)
   if (next.x !== bounds.x || next.y !== bounds.y || next.w !== bounds.w || next.h !== bounds.h) {
     native.setBounds(next.x, next.y, next.w, next.h, innerWidth, dragging)
     busyUntil = now + BUSY_MS
@@ -242,7 +245,9 @@ listeners.outside.push(() => {
 })
 
 const api: QQPetApi = {
-  capabilities: { rotatableScreen: native.rotatableScreen?.() ?? false },
+  // Ruffle's default wgpu renderer takes ~450 ms to build an instance in this WebView, and the page rebuilds one for
+  // every pet walk, look, talk or play, and for a bubble whose shape changes; its canvas renderer takes ~30 ms.
+  capabilities: { rotatableScreen: native.rotatableScreen?.() ?? false, swfRenderer: 'canvas' },
   load: async () => cloneJson(save),
   save(patch) {
     if (leaving) return
