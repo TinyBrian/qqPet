@@ -101,16 +101,29 @@
   opacity: 1;
 }
 /* The opening wave: one icon after another. It runs on the compositor, so a tap that has to load an
-   SWF (a few hundred milliseconds of main-thread work on Android) cannot stall it. */
+   SWF (a few hundred milliseconds of main-thread work on Android) cannot stall it. The glow is a filled
+   disc, so it lives on :before, under the artwork: on :after it would hide the icon of a hovered item. */
+.ui-control .menuItemIconBox:before {
+  position: absolute;
+  background-image: url(/pet/control/icons/bk/8.svg);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  content: "";
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  opacity: 0;
+}
 .ui-control .showControl .menuItemIconBox {
   animation: menuIntroScale 460ms ease-in-out var(--menu-delay, 0ms) 1;
 }
-.ui-control .showControl .menuItemIconBox:after {
-  background-image: url(/pet/control/icons/bk/8.svg);
+.ui-control .showControl .menuItemIconBox:before {
   animation: menuIntroGlow 460ms ease-in-out var(--menu-delay, 0ms) 1;
 }
 /* A cursor on the bar takes over from the wave at once. */
 .ui-control .introOff .menuItemIconBox,
+.ui-control .introOff .menuItemIconBox:before,
 .ui-control .introOff .menuItemIconBox:after {
   animation: none;
 }

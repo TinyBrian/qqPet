@@ -53,7 +53,7 @@ test('menu intro and hover scale icons without animating layout dimensions', () 
 
 test('the opening wave is a compositor animation, not a timer chain that a loading SWF can stall', () => {
   const wave = rule('.ui-control .showControl .menuItemIconBox')
-  const glow = rule('.ui-control .showControl .menuItemIconBox:after')
+  const glow = rule('.ui-control .showControl .menuItemIconBox:before')
   assert.match(wave, /animation:\s*menuIntroScale/)
   assert.match(wave, /var\(--menu-delay/)
   assert.match(glow, /animation:\s*menuIntroGlow/)
@@ -66,4 +66,15 @@ test('the opening wave is a compositor animation, not a timer chain that a loadi
     assert.doesNotMatch(block, /(?:height|width|left|top|background)/)
   }
   assert.doesNotMatch(css, /\.ui-control \.hoverMenuItemIcon/)
+})
+
+test('the opening glow sits under the artwork, so a hovered item keeps its icon', () => {
+  // bk/8 is a filled disc: painted over the icon (:after), it hides the icon of the item whose submenu just opened.
+  assert.doesNotMatch(rule('.ui-control .menuItemIconBox:after'), /8\.svg/)
+  assert.doesNotMatch(css, /\.ui-control \.showControl \.menuItemIconBox:after/)
+  const before = rule('.ui-control .menuItemIconBox:before')
+  assert.match(before, /background[^;]*bk\/8\.svg/)
+  assert.match(before, /opacity:\s*0/)
+  // The icon artwork is a child of the box, so :before paints below it.
+  assert.match(readFileSync(new URL('../../src/renderer/ui/control.ts', import.meta.url), 'utf8'), /div\('menuItemIconBox', img\('menuItemIcon'/)
 })
