@@ -258,7 +258,6 @@ const petInput = createPetInput({
   begin: () => {
     clearFacePoints()
     closeMenu()
-    if (save.settings.petBar) showControl()
     catchDiudiule()
   },
   active: (on) => {
@@ -291,9 +290,14 @@ const petInput = createPetInput({
       machine.play({ a: 'normal' })
     } else if (edge) machine.play({ a: edge })
     else if (lifted || machine.pose.a === 'hideleft' || machine.pose.a === 'hideright') machine.play({ a: 'normal' })
+    // A click opens the bar; a drag does not. Opening it on the press grew the overlay window under the finger (and
+    // blanked the page for a frame or two) while the pet was already moving, which read as a flash.
+    if (!lifted && !cancelled) {
+      if (save.settings.petBar) showControl()
+      // A plain click hid the spots on pointerdown; bring them back so the next click can land on one (#113).
+      showFacePointsAfterClick()
+    }
     scheduleHide()
-    // A plain click hid the spots on pointerdown; bring them back so the next click can land on one (#113).
-    if (!lifted && !cancelled) showFacePointsAfterClick()
   },
 }, touch ? HOLD_MS : 0)
 

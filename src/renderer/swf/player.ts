@@ -31,6 +31,32 @@ export function smallStageOptions(): Record<string, unknown> {
   return renderer ? { preferredRenderer: renderer } : {}
 }
 
+/** How many frames to give a freshly loaded movie to draw something before it is swapped in. */
+const FIRST_PAINT_FRAMES = 4
+const PROBE_SIDE = 32
+let probe: HTMLCanvasElement | null = null
+let pen: CanvasRenderingContext2D | null = null
+
+/** Whether the movie has drawn any pixels yet; unknown hosts and unreadable canvases count as painted. */
+function hasPixels(canvas: HTMLCanvasElement | null): boolean {
+  if (!canvas) return true
+  try {
+    if (!probe) {
+      probe = canvas.ownerDocument.createElement('canvas')
+      probe.width = probe.height = PROBE_SIDE
+      pen = probe.getContext('2d')
+    }
+    if (!pen) return true
+    pen.clearRect(0, 0, PROBE_SIDE, PROBE_SIDE)
+    pen.drawImage(canvas, 0, 0, PROBE_SIDE, PROBE_SIDE)
+    const px = pen.getImageData(0, 0, PROBE_SIDE, PROBE_SIDE).data
+    for (let i = 3; i < px.length; i += 4) if (px[i] > 8) return true
+    return false
+  } catch {
+    return true
+  }
+}
+
 interface GlobalListener {
   target: EventTarget
   type: string
@@ -553,6 +579,10 @@ export class SwfPlayer {
       await this.bounded(new Promise<void>((resolve) => {
         first = view.requestAnimationFrame(() => { second = view.requestAnimationFrame(() => resolve()) })
       }), 'SWF paint', LOAD_MS)
+      // Two frames usually show the movie, but a fresh canvas can still be empty for one of them: swapping the
+      // players then flashed the pet away for a frame. Wait for a drawn frame, briefly.
+      for (let attempt = 0; attempt < FIRST_PAINT_FRAMES && !hasPixels(this.canvas); attempt++)
+        await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()))
     } finally {
       view.cancelAnimationFrame(first)
       view.cancelAnimationFrame(second)

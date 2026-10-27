@@ -58,6 +58,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
   let menuCloses = 0
   const clickThrough = []
   const shapes = []
+  let barShows = 0
   let hitAt = null
   let area = initial.area ?? { width: 1920, height: 1080 }
   let cursorListener
@@ -68,7 +69,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     clampVisible,
     petInsets: () => initial.insets ?? { left: 0, right: 0, top: 0, bottom: 0 },
     info,
-    save: { settings: { petBar: false }, petInfo: info, havePet: false },
+    save: { settings: { petBar: false, ...initial.settings }, petInfo: info, havePet: false },
     machine: { pose: { a: initial.pose ?? 'normal' }, play: pose => poses.push(pose) },
     setInfo: (key, value) => {
       info[key] = value
@@ -127,7 +128,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     clearTimeout: id => timers.delete(id),
     adopt: noop,
     closeMenu: () => { menuCloses++ },
-    showControl: noop,
+    showControl: () => { barShows++ },
     clearFacePoints: noop,
     showFacePoints: noop,
     showFacePointsAfterClick: noop,
@@ -166,6 +167,7 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     nativeInput: input => services.window.__qqpetInput(input),
     hiddenChanged: () => windowEvents.dispatchEvent(new Event('qqpet-hidden-change')),
     menuCloses: () => menuCloses,
+    barShows: () => barShows,
     /** Which page points elementFromPoint reports on a [data-hit] element, such as an open menu. */
     hitAt: test => { hitAt = test },
     runTimers: () => {
@@ -289,6 +291,20 @@ test('a late lift animation cannot move a released pet or change a new grab', ()
   // Under the lift threshold the press is still a click and the pet stays put (#113).
   assert.equal(info.lastX, released.lastX)
   assert.equal(info.lastY, released.lastY)
+})
+
+test('a click opens the pet bar, a drag leaves it closed until the pet is clicked', () => {
+  const drag = renderer(144, { x: 0, y: 0 }, null, 'Egg', { settings: { petBar: true } })
+  drag.pointer('pointerdown', 550, 340)
+  drag.pointer('pointermove', 560, 340)
+  drag.pointer('pointermove', 620, 350)
+  drag.pointer('pointerup', 620, 350)
+  assert.equal(drag.barShows(), 0, 'a drag must not grow the overlay window under the finger')
+  const click = renderer(144, { x: 0, y: 0 }, null, 'Egg', { settings: { petBar: true } })
+  click.pointer('pointerdown', 550, 340)
+  click.pointer('pointermove', 552, 341)
+  click.pointer('pointerup', 552, 341)
+  assert.equal(click.barShows(), 1)
 })
 
 test('jitter below the lift threshold does not nudge a clicked pet (#113)', () => {

@@ -20,3 +20,10 @@ test('a host can name a cheaper renderer for the small stages the page rebuilds 
   assert.doesNotMatch(read('src/renderer/ui/smallgame.ts'), /smallStageOptions/)
   assert.doesNotMatch(read('src/renderer/game.ts'), /smallStageOptions/)
 })
+
+test('a movie is only swapped in once it has drawn, so a fresh canvas cannot flash the pet away', () => {
+  assert.match(player, /for \(let attempt = 0; attempt < FIRST_PAINT_FRAMES && !hasPixels\(this\.canvas\); attempt\+\+\)/)
+  // An unreadable canvas (other hosts, lost context) counts as painted instead of stalling the swap.
+  assert.match(player, /function hasPixels\(canvas: HTMLCanvasElement \| null\): boolean \{\s*if \(!canvas\) return true/)
+  assert.match(player, /catch \{\s*return true\s*\}/)
+})
