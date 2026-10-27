@@ -55,7 +55,6 @@
 }
 .ui-control .menuItem {
   margin: 16px 5px 3px;
-  transition: all 0.2s;
   border-radius: 50%;
   position: relative;
 }
@@ -69,7 +68,8 @@
   background-repeat: no-repeat;
   height: 30px;
   width: 30px;
-  transition: all 0.2s;
+  transform: scale(1);
+  transition: transform 0.2s;
   position: relative;
 }
 .ui-control .menuItemIconBox:after {
@@ -86,10 +86,8 @@
   opacity: 0;
 }
 .ui-control .menuItem:hover .menuItemIconBox {
-  transform: rotate(45deg);
+  transform: rotate(45deg) scale(1.333333);
   background-image: url(/pet/control/icons/bk/8.svg);
-  height: 40px;
-  width: 40px;
 }
 .ui-control .menuItem:hover .menuItemIconBox:after {
   height: 120%;
@@ -104,8 +102,7 @@
 }
 .ui-control .hoverMenuItemIcon {
   background-image: url(/pet/control/icons/bk/8.svg);
-  height: 40px;
-  width: 40px;
+  transform: scale(1.333333);
 }
 .ui-control .menuTip {
   position: absolute;

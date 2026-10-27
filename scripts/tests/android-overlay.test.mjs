@@ -17,6 +17,19 @@ test('drag keeps the overlay cropped and applies bounds without hiding the page'
   assert.match(service, /fun setBounds\(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean\)/)
 })
 
+test('native overlay bounds updates coalesce while the UI thread is busy', () => {
+  assert.match(service, /pendingBounds = BoundsRequest\(x, y, w, h, viewport, dragging\)/)
+  assert.match(service, /if \(boundsUpdatePosted\) false else \{\s*boundsUpdatePosted = true/)
+  assert.match(service, /val latest = pendingBounds\s*pendingBounds = null\s*boundsUpdatePosted = false/)
+  assert.match(service, /fun setBounds\(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean\) =\s*requestBounds\(x, y, w, h, viewport, dragging\)/)
+})
+
+test('overlay coverage measures visible roots and outlying content instead of the full DOM', () => {
+  assert.ok(bridge.includes("const COVERAGE_SELECTOR = 'body > *, #pet .point, ruffle-player, .ui-menu .rightMenu, .ui-control .control *'"))
+  assert.match(bridge, /document\.body\.querySelectorAll\(COVERAGE_SELECTOR\)/)
+  assert.doesNotMatch(bridge, /document\.body\.querySelectorAll\('\*'\)/)
+})
+
 test('a far window move hides only the page, never the window (#18: the pet blanked on every tap or menu)', () => {
   assert.ok(place.includes('wm.updateViewLayout(root, params)'))
   assert.doesNotMatch(setBounds, /params\.alpha\s*=/)

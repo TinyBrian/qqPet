@@ -50,6 +50,15 @@ import kotlin.math.floor
  * (bridge.ts), so touches elsewhere reach the apps below.
  */
 class PetService : Service() {
+    private data class BoundsRequest(
+        val x: Double,
+        val y: Double,
+        val w: Double,
+        val h: Double,
+        val viewport: Double,
+        val dragging: Boolean,
+    )
+
     companion object {
         /** The running service, for GameActivity to report play time. */
         var instance: PetService? = null
@@ -67,6 +76,9 @@ class PetService : Service() {
     private lateinit var web: WebView
     private val net = Executors.newCachedThreadPool()
     private val prefs by lazy { getSharedPreferences("qqpet", MODE_PRIVATE) }
+    private val boundsLock = Any()
+    private var pendingBounds: BoundsRequest? = null
+    private var boundsUpdatePosted = false
 
     private val params = LayoutParams(
         1, 1, LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -273,6 +285,26 @@ class PetService : Service() {
 
     private fun quote(s: String?) = if (s == null) "null" else JSONObject.quote(s)
 
+    private fun requestBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean) {
+        val postUpdate = synchronized(boundsLock) {
+            pendingBounds = BoundsRequest(x, y, w, h, viewport, dragging)
+            if (boundsUpdatePosted) false else {
+                boundsUpdatePosted = true
+                true
+            }
+        }
+        if (!postUpdate) return
+        web.post {
+            val request = synchronized(boundsLock) {
+                val latest = pendingBounds
+                pendingBounds = null
+                boundsUpdatePosted = false
+                latest
+            } ?: return@post
+            setBounds(request.x, request.y, request.w, request.h, request.viewport, request.dragging)
+        }
+    }
+
     private fun setFocusable(on: Boolean) {
         params.flags = if (on) params.flags and LayoutParams.FLAG_NOT_FOCUSABLE.inv() else params.flags or LayoutParams.FLAG_NOT_FOCUSABLE
         wm.updateViewLayout(root, params)
@@ -452,7 +484,7 @@ class PetService : Service() {
 
         @JavascriptInterface
         fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean) =
-            web.post { this@PetService.setBounds(x, y, w, h, viewport, dragging) }
+            requestBounds(x, y, w, h, viewport, dragging)
 
         /** "left,top,right,bottom" of the system bars and cutout, in CSS pixels of a page [viewport] pixels wide. Hidden bars count: a swipe brings them back. */
         @JavascriptInterface

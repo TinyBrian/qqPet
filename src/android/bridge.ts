@@ -188,6 +188,10 @@ const sendHidden = (): void => {
 new MutationObserver(sendHidden).observe(document.body, { attributes: true, attributeFilter: ['class'] })
 sendHidden()
 new MutationObserver(() => (busyUntil = performance.now() + BUSY_MS)).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
+// Body-level UI roots bound their own descendants. Only inspect nested content when it can extend
+// beyond a zero-sized root or the pet box; walking every text, icon and layout wrapper every frame
+// repeatedly forced style/layout work on Android's WebView main thread.
+const COVERAGE_SELECTOR = 'body > *, #pet .point, ruffle-player, .ui-menu .rightMenu, .ui-control .control *'
 function track(now: number): void {
   frame(track)
   // A resize under a resting finger skews the next events (a long press reads as a drag); it waits for the lift.
@@ -199,7 +203,7 @@ function track(now: number): void {
   let y = innerHeight
   let r = 0
   let b = 0
-  for (const el of document.body.querySelectorAll('*')) {
+  for (const el of document.body.querySelectorAll(COVERAGE_SELECTOR)) {
     const box = cover(el)
     if (!box) continue
     x = Math.min(x, box.left)

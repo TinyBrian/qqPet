@@ -40,3 +40,15 @@ test('switching to another action button hides the previous submenu at once (#10
   assert.match(other, /opacity:\s*0/)
   assert.match(other, /transition:\s*none/)
 })
+
+test('menu intro and hover scale icons without animating layout dimensions', () => {
+  const item = rule('.ui-control .menuItem')
+  const icon = rule('.ui-control .menuItemIconBox')
+  const hover = rule('.ui-control .menuItem:hover .menuItemIconBox')
+  const intro = rule('.ui-control .hoverMenuItemIcon')
+  assert.doesNotMatch(item, /transition:\s*all/)
+  assert.match(icon, /transition:\s*transform\s+0\.2s/)
+  assert.match(hover, /transform:\s*rotate\(45deg\)\s+scale\(1\.333333\)/)
+  assert.match(intro, /transform:\s*scale\(1\.333333\)/)
+  for (const block of [hover, intro]) assert.doesNotMatch(block, /(?:height|width):\s*40px/)
+})
