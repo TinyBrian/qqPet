@@ -307,6 +307,8 @@ function outside(): void {
   const corners = [{ x: 0, y: 0 }, { x: innerWidth - 1, y: 0 }, { x: 0, y: innerHeight - 1 }, { x: innerWidth - 1, y: innerHeight - 1 }]
   const free = corners.find((p) => p.x < box.x || p.y < box.y || p.x >= box.x + box.width || p.y >= box.y + box.height)
   if (free) emit('cursor', free)
+  // That touch went to the app below, so the page never sees it; the pet's menus still treat it as a tap away.
+  window.dispatchEvent(new Event('qqpet-outside-tap'))
 }
 function setText(payload: unknown): void {
   if (!payload || typeof payload !== 'object') return

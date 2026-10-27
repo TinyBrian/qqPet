@@ -78,3 +78,13 @@ test('the opening glow sits under the artwork, so a hovered item keeps its icon'
   // The icon artwork is a child of the box, so :before paints below it.
   assert.match(readFileSync(new URL('../../src/renderer/ui/control.ts', import.meta.url), 'utf8'), /div\('menuItemIconBox', img\('menuItemIcon'/)
 })
+
+test('a tap away from the bar closes its submenu first, then the bar itself', () => {
+  const source = readFileSync(new URL('../../src/renderer/ui/control.ts', import.meta.url), 'utf8')
+  // The finger has no hover, so closing the submenu it left open needs a class the tap can set.
+  assert.match(source, /export function dismissControl\(\): boolean/)
+  assert.match(source, /if \(open\) \{\s*closePanel\(\)\s*return true/)
+  assert.match(source, /if \(openSubmenu\(\)\) \{\s*control\.classList\.add\('submenuOff'\)\s*return true/)
+  assert.match(source, /control\.addEventListener\('pointerdown', \(\) => \{\s*control\.classList\.remove\('submenuOff'\)/)
+  assert.match(rule('.ui-control .submenuOff .menuItem:hover .childrenMenu'), /visibility:\s*hidden/)
+})

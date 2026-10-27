@@ -239,6 +239,8 @@ listeners.outside.push(() => {
   ]
   const free = corners.find((p) => p.x < bounds.x || p.y < bounds.y || p.x >= bounds.x + bounds.w || p.y >= bounds.y + bounds.h)
   if (free) cursor(free)
+  // That touch went to the app below, so the page never sees it; the pet's menus still treat it as a tap away.
+  window.dispatchEvent(new Event('qqpet-outside-tap'))
 })
 
 const api: QQPetApi = {

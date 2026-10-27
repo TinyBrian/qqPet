@@ -216,9 +216,10 @@ const menus = div(
     )
     if (g.run) item.addEventListener('click', g.run)
     item.addEventListener('mouseenter', () => {
-      // A real cursor hovering the bar takes over from the opening wave. A finger has no hover: the
-      // synthetic mouseenter a tap emits must not cut the wave short.
-      if (!touch) control.classList.add('introOff')
+      // A real cursor hovering the bar takes over from the opening wave and holds the bar open. A finger has no
+      // hover: the synthetic mouseenter a tap emits must not cut the wave short (or cancel the hide timer).
+      if (touch) return
+      control.classList.add('introOff')
       clearTimeout(hideTimer)
     })
     item.addEventListener('mouseleave', scheduleHide)
@@ -226,6 +227,11 @@ const menus = div(
   }),
 )
 control.appendChild(menus)
+// Touching the bar is using it: keep it while the finger picks a level, and a new touch may reopen a submenu.
+control.addEventListener('pointerdown', () => {
+  control.classList.remove('submenuOff')
+  scheduleHide()
+})
 
 /** Pressing the pet shows the bar. */
 export function showControl(): void {
@@ -233,7 +239,7 @@ export function showControl(): void {
   clearTimeout(hideTimer)
   if (shown) return
   shown = true
-  control.classList.remove('introOff')
+  control.classList.remove('introOff', 'submenuOff')
   control.classList.add('showControl')
   place()
 }
@@ -255,6 +261,52 @@ function hide(): void {
   shown = false
   control.classList.remove('showControl')
   place()
+}
+
+/** Whether the bar (or one of its panels) is on screen. */
+export const controlShown = (): boolean => shown
+
+/** The parts of the bar a tap belongs to: the icon row, its tooltips and submenus, and a goods panel. */
+const HIT_PARTS = '.menuItem, .menuTip, .childrenMenu, .goodList'
+
+/** Whether a page point belongs to the bar, so a tap there is using the menu rather than leaving it. */
+export function controlHitAt(x: number, y: number): boolean {
+  if (!shown) return false
+  for (const el of control.querySelectorAll<HTMLElement>(HIT_PARTS)) {
+    const style = getComputedStyle(el)
+    if (style.display === 'none' || style.visibility === 'hidden') continue
+    const r = el.getBoundingClientRect()
+    if (r.width > 0 && r.height > 0 && x >= r.left && x < r.right && y >= r.top && y < r.bottom) return true
+  }
+  return false
+}
+
+/** The menu item whose submenu the cursor or a finger has open. */
+function openSubmenu(): HTMLElement | null {
+  for (const item of control.querySelectorAll<HTMLElement>('.menuItem')) {
+    const menu = item.querySelector<HTMLElement>('.childrenMenu')
+    if (!menu || !item.matches(':hover')) continue
+    if (getComputedStyle(menu).visibility === 'visible') return item
+  }
+  return null
+}
+
+/**
+ * One level back out of the bar, like leaving a menu: a goods panel closes to the icon row, an open submenu closes to
+ * the row, and the row itself closes. False when the bar was not on screen.
+ */
+export function dismissControl(): boolean {
+  if (!shown) return false
+  if (open) {
+    closePanel()
+    return true
+  }
+  if (openSubmenu()) {
+    control.classList.add('submenuOff')
+    return true
+  }
+  hide()
+  return true
 }
 
 let list: HTMLElement | null = null

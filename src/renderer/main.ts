@@ -8,7 +8,7 @@ import type { DesktopCursor } from '../shared/ipc'
 import { pageZoom, setDesktopSize, viewportSize } from './ui/viewport'
 import { adopt } from './ui/adopt'
 import { catchDiudiule, releaseDiudiule } from './ui/diudiule'
-import { scheduleHide, showControl } from './ui/control'
+import { controlHitAt, dismissControl, scheduleHide, showControl } from './ui/control'
 import { div, pageX, pageY, touch } from './ui/dom'
 import './ui/background'
 import './host-pause'
@@ -156,6 +156,18 @@ function petHitBoxes(): Box[] {
   return [petEl, ...petEl.querySelectorAll('ruffle-player')].map((el) => hitCover(el)).filter((box): box is Box => box !== null)
 }
 const overPet = (x: number, y: number): boolean => petHitBoxes().some((r) => x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+
+/**
+ * A tap away from the pet and its bar steps the menu back one level (submenu to icon row, row to closed); a tap on
+ * either one is using it and leaves the bar alone.
+ */
+function tapAway(x: number, y: number): void {
+  if (overPet(x, y) || controlHitAt(x, y)) return
+  dismissControl()
+}
+document.addEventListener('pointerdown', (e) => tapAway(pageX(e), pageY(e)), true)
+// A touch outside the overlay window never reaches the page (Android hands it to the app below); the bridge says so.
+addEventListener('qqpet-outside-tap', () => dismissControl())
 
 const syncDesktop = (p: DesktopCursor): boolean => {
   const area = p.desktop

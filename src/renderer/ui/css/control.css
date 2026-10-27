@@ -145,6 +145,11 @@
     opacity: 1;
   }
 }
+/* A tap away from the bar closes the submenu the finger left open; touching the bar again reopens it. */
+.ui-control .submenuOff .menuItem:hover .childrenMenu {
+  visibility: hidden;
+  opacity: 0;
+}
 .ui-control .menuTip {
   position: absolute;
   left: 50%;

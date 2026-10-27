@@ -59,6 +59,8 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
   const clickThrough = []
   const shapes = []
   let barShows = 0
+  let dismissals = 0
+  const docListeners = []
   let hitAt = null
   let area = initial.area ?? { width: 1920, height: 1080 }
   let cursorListener
@@ -92,6 +94,8 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     pageY: event => event.clientY + crop.y,
     touch: false,
     document: {
+      addEventListener: (type, listener) => { docListeners.push([type, listener]) },
+      removeEventListener: () => {},
       getElementById: () => pet,
       elementFromPoint: (x, y) => hitAt?.(x, y) ? { getRootNode: () => null, closest: selector => selector === '[data-hit]' ? {} : null } : initial.petDOM ? pet : null,
       querySelectorAll: () => [pet, front],
@@ -129,6 +133,12 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     adopt: noop,
     closeMenu: () => { menuCloses++ },
     showControl: () => { barShows++ },
+    dismissControl: () => { dismissals++; return true },
+    /** The bar's own rectangle in page pixels, when the test opens one (initial.controlRect). */
+    controlHitAt: (x, y) => {
+      const r = initial.controlRect
+      return Boolean(r) && x >= r[0] && x < r[2] && y >= r[1] && y < r[3]
+    },
     clearFacePoints: noop,
     showFacePoints: noop,
     showFacePointsAfterClick: noop,
@@ -168,6 +178,15 @@ export function renderer(size, crop = { x: 0, y: 0 }, native = null, stage = 'Eg
     hiddenChanged: () => windowEvents.dispatchEvent(new Event('qqpet-hidden-change')),
     menuCloses: () => menuCloses,
     barShows: () => barShows,
+    dismissals: () => dismissals,
+    /** A pointerdown anywhere in the page (the handlers the renderer put on the document). */
+    backgroundPointer: (x, y) => {
+      clock += 16
+      const event = { clientX: x - crop.x, clientY: y - crop.y, button: 0, pointerId: 1 }
+      for (const [type, listener] of docListeners) if (type === 'pointerdown') listener(event)
+    },
+    /** A touch that landed outside the overlay window; the native bridge reports it, the page never sees it. */
+    outsideTap: () => windowEvents.dispatchEvent(new Event('qqpet-outside-tap')),
     /** Which page points elementFromPoint reports on a [data-hit] element, such as an open menu. */
     hitAt: test => { hitAt = test },
     runTimers: () => {
@@ -305,6 +324,23 @@ test('a click opens the pet bar, a drag leaves it closed until the pet is clicke
   click.pointer('pointermove', 552, 341)
   click.pointer('pointerup', 552, 341)
   assert.equal(click.barShows(), 1)
+})
+
+test('a tap away from the pet and its bar steps the menu back, a tap on either keeps it', () => {
+  // Pet box is (500, 300) 144 px; the bar in this case sits under its feet.
+  const app = renderer(144, { x: 0, y: 0 }, null, 'Egg', { controlRect: [400, 300, 700, 560] })
+  app.backgroundPointer(520, 320)
+  assert.equal(app.dismissals(), 0, 'a tap on the pet is using it')
+  app.backgroundPointer(600, 520)
+  assert.equal(app.dismissals(), 0, 'a tap on the bar is using the menu')
+  app.backgroundPointer(1200, 100)
+  assert.equal(app.dismissals(), 1)
+})
+
+test('a touch outside the overlay window steps the menu back too', () => {
+  const app = renderer(144, { x: 0, y: 0 }, null, 'Egg')
+  app.outsideTap()
+  assert.equal(app.dismissals(), 1)
 })
 
 test('jitter below the lift threshold does not nudge a clicked pet (#113)', () => {
