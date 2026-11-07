@@ -2,6 +2,7 @@ import { elapsed, stopTask } from '../pet/activity'
 import { goodOf, type TimedType } from '../pet/data/goods'
 import { pay, payDiamond } from '../pet/items'
 import { pinkCost, pinkDays, sweetDays, SWEET_DAYS_PER_DIAMOND } from '../pet/diamond'
+import { careHalt } from '../pet/mood'
 import { speak } from '../pet/pet'
 import { activity, growthPerMinute, info, onInfoChange, save, setInfo } from '../pet/store'
 import { addSweetHeart, openPinkDiamond } from '../pet/vip'
@@ -49,13 +50,14 @@ function stop(): void {
 
 /** What the pet is doing; busy states come with a stop button. */
 export function status(): (Node | string)[] {
-  if (save.settings.paused) return ['暂停成长']
   if (info.health === 0) return ['已死亡']
+  // 饿着或脏着会按「暂停成长」处理，这里说清楚是谁把成长停掉的。
+  const halt = careHalt(info)
+  if (halt === 'hunger') return ['饿坏了，暂停成长']
+  if (halt === 'clean') return ['脏兮兮，暂停成长']
+  if (save.settings.paused) return ['暂停成长']
   if (activity('ill')) return ['生病了']
   const b = BUSY.find((x) => activity(x.key))
-  // 饿着或脏着就不长了，先说清楚为什么。
-  if (!b && info.hunger <= 0) return ['饿坏了，停止成长']
-  if (!b && info.clean <= 0) return ['脏兮兮，停止成长']
   if (!b) return ['正在成长']
   return [`${b.name} `, div('fc', ` (${elapsed() | 0}分钟) `, button('stopDoActive butDo', stop, ' 停止 '))]
 }

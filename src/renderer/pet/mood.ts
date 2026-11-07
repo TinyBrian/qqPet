@@ -30,3 +30,13 @@ export function growMinutes(
   const left = Math.min(stats.mood / rates.mood, stats.hunger / rates.hunger, stats.clean / rates.clean)
   return Math.max(0, Math.min(dt, left))
 }
+
+/**
+ * The stat that ran out, which pauses growth the way the tray menu's own pause does: 'hunger' when the pet is
+ * starving, 'clean' when it is filthy, '' when both are fine. Mood only stops activities, not growth.
+ */
+export function careHalt(stats: { hunger: number; clean: number }): 'hunger' | 'clean' | '' {
+  if (stats.hunger <= 0) return 'hunger'
+  if (stats.clean <= 0) return 'clean'
+  return ''
+}

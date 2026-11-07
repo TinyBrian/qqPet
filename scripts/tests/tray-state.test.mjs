@@ -40,7 +40,7 @@ function statePanel(focused = false) {
     button: (cls, click, ...children) => Object.assign(element(cls, ...children), { click }),
     frame: content => content, progress: () => '',
     info: { health: 5 }, save: { settings: {}, petComputedlInfo: { level: 1 }, selfGoodUseOption: {} },
-    activity: () => false, growthPerMinute: () => 1, onInfoChange() {},
+    activity: () => false, growthPerMinute: () => 1, onInfoChange() {}, careHalt: () => '',
     openPetInfo: () => profiles.push(focus.at(-1)),
     touch: false, mouseDrag: (el, touch) => drags.push([el, touch]),
   })

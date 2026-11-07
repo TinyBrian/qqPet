@@ -17,7 +17,7 @@ import { doctor, useItem, useItemQuietly } from './items'
 import { deliverMails } from './mail'
 import { Machine, type Pose } from './machine'
 import { petInsets } from './edges'
-import { growMinutes, moodDecayPerMinute } from './mood'
+import { careHalt, growMinutes, moodDecayPerMinute } from './mood'
 import { rand } from './rand'
 import { lookUrl, restPlan, SINGLE_FRAME_HOLD, walkUrl } from './router'
 import {
@@ -37,6 +37,7 @@ import {
   save,
   setActivity,
   setInfo,
+  setPaused,
   setTray,
   stage,
   syncLevel,
@@ -403,6 +404,13 @@ function tick(): void {
       addInfo('growth', +(growthPerMinute() * g).toFixed(8))
       grown += g
       if (info.sweetHeart) selfCare(i < steps - 1)
+      // 饿扁了或者脏透了：直接按托盘菜单里的「暂停成长」处理，喂饱洗干净后手动恢复（值为 0 时会马上再暂停）。
+      const halt = careHalt(info)
+      if (halt) {
+        setPaused(true)
+        speak({ s: halt === 'hunger' ? '[host]，我饿扁啦，成长先暂停一下~~' : '[host]，我身上好脏呀，成长先暂停一下~~', now: true, ai: false }, 'speak')
+        break
+      }
     }
     for (const type of tickTimed(grown)) speak({ c: 'state', s: `${type}Over`, now: true }, 'speak')
     advanceTask(grown)

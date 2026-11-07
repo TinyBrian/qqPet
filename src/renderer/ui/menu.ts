@@ -107,7 +107,7 @@ function items(adopt: () => void): Item[] {
     { label: save.settings.hidden ? '显示宠物' : '隐藏宠物', run: toggleHidden },
     help,
     state,
-    { label: save.settings.paused ? '开始成长' : '停止成长', on: save.settings.paused, run: togglePaused },
+    { label: save.settings.paused ? '恢复成长' : '暂停成长', on: save.settings.paused, run: togglePaused },
     {
       label: '一起玩耍',
       children: [

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { growMinutes, moodDecayPerMinute, pokeMoodGain } from '../../src/renderer/pet/mood.ts'
+import { careHalt, growMinutes, moodDecayPerMinute, pokeMoodGain } from '../../src/renderer/pet/mood.ts'
 
 test('face poke mood follows classic bands (#131)', () => {
   assert.equal(pokeMoodGain(1000), 5)
@@ -33,6 +33,14 @@ test('a hungry or dirty pet stops growing', () => {
   assert.equal(growMinutes(5, { mood: 900, hunger: 900, clean: 900 }, rates), 5)
 })
 
+test('the stat that ran out names the pause reason', () => {
+  assert.equal(careHalt({ hunger: 900, clean: 900 }), '')
+  assert.equal(careHalt({ hunger: 0, clean: 900 }), 'hunger')
+  assert.equal(careHalt({ hunger: 900, clean: 0 }), 'clean')
+  // Hungry and dirty both at zero: hunger is the one that gets named.
+  assert.equal(careHalt({ hunger: 0, clean: 0 }), 'hunger')
+})
+
 test('the growth tick budgets the same hunger and cleanliness it drains', () => {
   const pet = readFileSync(new URL('../../src/renderer/pet/pet.ts', import.meta.url), 'utf8')
   assert.match(pet, /const hungerRate = rand\(2, 3\) \+ extra/)
@@ -40,8 +48,18 @@ test('the growth tick budgets the same hunger and cleanliness it drains', () => 
   assert.match(pet, /growMinutes\(dt, info, \{ mood: moodRate, hunger: hungerRate, clean: cleanRate \}\)/)
   assert.match(pet, /setInfo\('hunger', Math\.max\(info\.hunger - hungerRate \* dt, 0\)\)/)
   assert.match(pet, /setInfo\('clean', Math\.max\(info\.clean - cleanRate \* dt, 0\)\)/)
+  // Running out calls the same pause the tray menu's 暂停成长 does.
+  assert.match(pet, /const halt = careHalt\(info\)/)
+  assert.match(pet, /setPaused\(true\)/)
+  assert.match(pet, /break/)
   // A starving duck must not keep levelling: the base rate reads zero too.
   const store = readFileSync(new URL('../../src/renderer/pet/store.ts', import.meta.url), 'utf8')
   assert.match(store, /if \(info\.mood <= 0 \|\| info\.hunger <= 0 \|\| info\.clean <= 0\) return 0/)
+  // The state panel says who paused it, and the menu offers to resume.
+  const state = readFileSync(new URL('../../src/renderer/ui/state.ts', import.meta.url), 'utf8')
+  assert.match(state, /if \(halt === 'hunger'\) return \['饿坏了，暂停成长'\]/)
+  assert.match(state, /if \(halt === 'clean'\) return \['脏兮兮，暂停成长'\]/)
+  const menu = readFileSync(new URL('../../src/renderer/ui/menu.ts', import.meta.url), 'utf8')
+  assert.match(menu, /save\.settings\.paused \? '恢复成长' : '暂停成长'/)
 })
 
