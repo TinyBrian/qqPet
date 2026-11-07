@@ -64,26 +64,55 @@ export const diploma = (k: string, v: number): string => school(v).name && schoo
 
 export const workGoods = (): Good[] => allGoods('work')
 
-export function describeWork(g: Good): string[] {
-  const edu = Object.entries(g.education ?? {})
-    .map(([k, v]) => diploma(k, v))
-    .filter(Boolean)
-    .join('、')
-  const req = (['charm', 'intel', 'strong'] as const)
-    .filter((k) => g.useArtt?.[k])
-    .map((k) => ` ${{ charm: '魅力', intel: '智力', strong: '武力' }[k]}：${g.useArtt![k]}`)
-    .join('')
+const ARTT_NAME = { charm: '魅力', intel: '智力', strong: '武力' } as const
+
+/**
+ * A line of the job tip: plain text, or a requirement the pet does not meet yet. The panel greys a job with any
+ * `bad` line and paints those lines red, so the tip says what is missing instead of only what the job pays.
+ */
+export type WorkLine = string | { text: string; bad: boolean }
+
+/** Why the pet cannot work at all right now, as the line the job panel shows; '' when it can. */
+export function workBlocker(): string {
+  const doing = (['work', 'study', 'trip'] as const).find((k) => activity(k))
+  if (info.health === 0) return '生命值为 0，无法工作'
+  if (info.health !== 5) return '生病中，无法工作'
+  if (save.settings.paused) return '已暂停成长，无法工作'
+  if (info.mood <= 0) return '心情为 0，无法工作'
+  if (doing) return doing === 'work' ? '正在打工，等下班再说' : doing === 'study' ? '正在上课，等下课再说' : '正在旅游，等回来再说'
+  return ''
+}
+
+/** The level, diploma and attribute requirements of a job, with the ones the pet falls short of flagged. */
+export function jobLines(
+  g: Good,
+  pet: { level: number; study: Partial<StudyInfo>; attrs: Partial<Record<'charm' | 'intel' | 'strong', number>> },
+): WorkLine[] {
+  const lines: WorkLine[] = []
+  const needLevel = g.needLevel ?? 0
+  lines.push({ text: needLevel ? `需要大于${needLevel}级~` : '无等级要求~', bad: needLevel > pet.level })
+  // One line per requirement the job states, so only the shortfall turns red instead of a whole group.
+  for (const [k, v] of Object.entries(g.education ?? {})) {
+    const name = v ? diploma(k, v) : ''
+    if (name) lines.push({ text: `学历要求：${name}`, bad: v! > (pet.study[k as Subject] ?? 0) })
+  }
+  for (const [k, v] of Object.entries(g.useArtt ?? {})) {
+    if (v) lines.push({ text: `属性要求：${ARTT_NAME[k as keyof typeof ARTT_NAME]}：${v}`, bad: v > (pet.attrs[k as keyof typeof ARTT_NAME] ?? 0) })
+  }
+  return lines
+}
+
+export function describeWork(g: Good): WorkLine[] {
+  const lines: WorkLine[] = []
+  const why = workBlocker()
+  if (why) lines.push({ text: why, bad: true })
+  if (g.desc) lines.push(g.desc)
+  if (g.yb) lines.push(`元宝：${g.yb}`)
+  lines.push(...jobLines(g, { level: save.petComputedlInfo.level, study: save.studyInfo, attrs: info }))
+  lines.push(`工作时长：${g.useTime}分钟`)
   const a = attrs(g)
-  const lines = [
-    g.desc,
-    g.yb && `元宝：${g.yb}`,
-    g.needLevel ? `需要大于${g.needLevel}级~` : '无等级要求~',
-    edu && `学历要求：${edu}`,
-    req && `属性要求：${req}`,
-    `工作时长：${g.useTime}分钟`,
-    a && `属性：${a}`,
-  ]
-  return lines.filter((l): l is string => Boolean(l))
+  if (a) lines.push(`属性：${a}`)
+  return lines
 }
 
 /** The pet meets a job's level, stat and diploma requirements. */

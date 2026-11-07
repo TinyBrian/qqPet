@@ -36,11 +36,14 @@ const PAGE = 4
 
 type Stat = 'hunger' | 'clean' | 'health' | 'mood'
 
+/** A tip line: plain text, or a requirement the pet does not meet, which greys the icon and turns red. */
+type PanelLine = string | { text: string; bad?: boolean }
+
 /** A list of goods to pick from, 4 per page. */
 interface Panel {
   icon: string
   list: (page: number) => Page
-  lines: (g: Good) => string[]
+  lines: (g: Good) => PanelLine[]
   /** Returns true when the panel should close. */
   use: (g: Good) => boolean
   /** Everyday panels: the inventory type shown, with the bar of the stat it restores and a shop link. */
@@ -324,12 +327,15 @@ function openPanel(p: Panel, page = 1): void {
   const turn = (d: number) => (): void => {
     if (page + d >= 1 && page + d <= totalPage) openPanel(p, page + d)
   }
-  const items = goods.map((g: Good) =>
-    div(
-      'goodItem',
+  const items = goods.map((g: Good) => {
+    const lines = p.lines(g).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
+    // A job whose requirements the pet misses greys its icon; its tip paints the missed lines red.
+    const locked = lines.some((line) => line.bad)
+    return div(
+      `goodItem${locked ? ' locked' : ''}`,
       div(
         'goodItemIconBox fcc',
-        div('goodInfo', div('goodName', g.name), ...p.lines(g).map((l) => div('goodDatas', l))),
+        div('goodInfo', div('goodName', g.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text))),
         Object.assign(img('goodItemIcon', g.url), {
           onclick: () => {
             // A tap hovers what it touches: the first one shows the good's info, the next uses it.
@@ -339,8 +345,8 @@ function openPanel(p: Panel, page = 1): void {
           },
         }),
       ),
-    ),
-  )
+    )
+  })
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),

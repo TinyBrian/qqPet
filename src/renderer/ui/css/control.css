@@ -369,6 +369,14 @@
   font-size: 11px;
   padding-top: 2px;
 }
+/* A job the pet cannot take yet: grey icon, and the tip paints the requirements it misses red. */
+.ui-control .goodItem.locked .goodItemIcon {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.ui-control .goodDatas.bad {
+  color: #ff5a5a;
+}
 .ui-control .progress {
   margin-top: 3px;
   margin-bottom: 3px;
