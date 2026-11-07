@@ -17,3 +17,16 @@ export function pokeMoodGain(value: number): number {
 export function moodDecayPerMinute(busy: boolean): number {
   return 1 + (busy ? 1 : 0)
 }
+
+/**
+ * Minutes of growth the pet gets this tick. Mood, hunger and cleanliness at zero all stop it, so a starving or dirty
+ * pet stops growing instead of levelling up on an empty stomach; `rates` are the per-minute drains of the same tick.
+ */
+export function growMinutes(
+  dt: number,
+  stats: { mood: number; hunger: number; clean: number },
+  rates: { mood: number; hunger: number; clean: number },
+): number {
+  const left = Math.min(stats.mood / rates.mood, stats.hunger / rates.hunger, stats.clean / rates.clean)
+  return Math.max(0, Math.min(dt, left))
+}

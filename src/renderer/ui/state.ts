@@ -53,6 +53,9 @@ export function status(): (Node | string)[] {
   if (info.health === 0) return ['已死亡']
   if (activity('ill')) return ['生病了']
   const b = BUSY.find((x) => activity(x.key))
+  // 饿着或脏着就不长了，先说清楚为什么。
+  if (!b && info.hunger <= 0) return ['饿坏了，停止成长']
+  if (!b && info.clean <= 0) return ['脏兮兮，停止成长']
   if (!b) return ['正在成长']
   return [`${b.name} `, div('fc', ` (${elapsed() | 0}分钟) `, button('stopDoActive butDo', stop, ' 停止 '))]
 }

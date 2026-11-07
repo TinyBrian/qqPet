@@ -124,7 +124,8 @@ export function applyEdge(): 'hideleft' | 'hideright' | null {
 }
 
 export function growthPerMinute(): number {
-  if (info.mood <= 0) return 10 / 60
+  // Starving, dirty or in no mood: growth stops (the tick also gates the minutes, this keeps the UI honest).
+  if (info.mood <= 0 || info.hunger <= 0 || info.clean <= 0) return 0
   const rate = MOODS.find(([min]) => info.mood >= min)![2]
   let perHour = 80 * rate + (info.pinkDiamond ? 10 : 0)
   for (const [type, t] of Object.entries(save.selfGoodUseOption)) if (t) perHour += goodOf(type as TimedType, t.id).group ?? 0

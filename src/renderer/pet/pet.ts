@@ -17,7 +17,7 @@ import { doctor, useItem, useItemQuietly } from './items'
 import { deliverMails } from './mail'
 import { Machine, type Pose } from './machine'
 import { petInsets } from './edges'
-import { moodDecayPerMinute } from './mood'
+import { growMinutes, moodDecayPerMinute } from './mood'
 import { rand } from './rand'
 import { lookUrl, restPlan, SINGLE_FRAME_HOLD, walkUrl } from './router'
 import {
@@ -385,17 +385,20 @@ function tick(): void {
       // Work, study and travel wear the pet out faster.
       const extra = busy() ? 1 : 0
       const moodRate = moodDecayPerMinute(Boolean(extra))
-      // Growth only counts the minutes the mood lasted; an activity stops when it runs out.
-      const g = Math.min(dt, info.mood / moodRate)
-      if (g < dt) {
+      const hungerRate = rand(2, 3) + extra
+      const cleanRate = rand(2, 3) + extra
+      // An activity stops once the mood runs out.
+      if (info.mood / moodRate < dt) {
         const stopped = stopTask()
         if (stopped) speak({ c: 'state', s: MOOD_OUT[stopped], now: true }, 'speak')
       }
+      // Growth only counts minutes the pet is fed, clean and in a mood: any of the three at zero stops it.
+      const g = growMinutes(dt, info, { mood: moodRate, hunger: hungerRate, clean: cleanRate })
       // 作弊「冻结状态」: hunger, cleanliness and mood stay put.
       if (!frozen()) {
         setInfo('mood', Math.max(info.mood - moodRate * dt, 0))
-        setInfo('hunger', Math.max(info.hunger - (rand(2, 3) + extra) * dt, 0))
-        setInfo('clean', Math.max(info.clean - (rand(2, 3) + extra) * dt, 0))
+        setInfo('hunger', Math.max(info.hunger - hungerRate * dt, 0))
+        setInfo('clean', Math.max(info.clean - cleanRate * dt, 0))
       }
       addInfo('growth', +(growthPerMinute() * g).toFixed(8))
       grown += g
