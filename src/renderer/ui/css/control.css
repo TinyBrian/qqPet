@@ -244,6 +244,33 @@
   left: 0;
   top: 0;
 }
+/* 学习面板顶部的学校筛选：一排等宽小按钮，选中的那只高亮。 */
+.ui-control .goodTabs {
+  position: absolute;
+  left: 27px;
+  right: 27px;
+  top: 2px;
+  height: 21px;
+  gap: 3px;
+}
+.ui-control .goodTab {
+  flex: 1;
+  height: 21px;
+  font-size: 11px;
+  line-height: 21px;
+  color: #7a3b00;
+  background-color: #ffffff99;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ui-control .goodTab:hover {
+  background-color: #ffffffd0;
+}
+.ui-control .goodTab.on {
+  color: #fff;
+  background-color: #ff8a1f;
+  font-weight: bold;
+}
 .ui-control .goodListMain {
   position: absolute;
   left: 0;

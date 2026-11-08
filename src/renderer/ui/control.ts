@@ -2,7 +2,7 @@ import { describe, type Good, type GoodType } from '../pet/data/goods'
 import { toolbarScaleFor } from '../../shared/layout'
 import { listGoods, onGoodsChange, pageOf, type Page } from '../pet/goods'
 import { doctor, useItem } from '../pet/items'
-import { describeStudy, describeWork, study, studyGoods, work, workGoods } from '../pet/jobs'
+import { describeStudy, describeWork, majorSchool, schoolOf, STUDY_SCHOOLS, study, studyGoods, work, workGoods } from '../pet/jobs'
 import { info, onInfoChange, petSize, save } from '../pet/store'
 import { viewportSize } from './viewport'
 import './css/control.css'
@@ -49,6 +49,8 @@ interface Panel {
   /** Everyday panels: the inventory type shown, with the bar of the stat it restores and a shop link. */
   type?: GoodType
   stat?: Stat
+  /** A row of small buttons across the top, e.g. the study panel's school filter; built per render so the active one moves. */
+  tabs?: () => { label: string; on: boolean; run: () => void }[]
 }
 
 interface Entry {
@@ -103,7 +105,7 @@ const MENU: { name: string; icon: string; children?: Entry[]; run?: () => void }
       {
         name: '学习',
         icon: 'xuexi.png',
-        run: () => openPanel({ icon: activeIcon(24), list: (page) => pageOf(studyGoods(), page, PAGE), lines: describeStudy, use: study }),
+        run: openStudy,
       },
       { name: '旅游', icon: 'lvyou.png', run: openTravel },
       { name: '看病', icon: 'zhibing.png', run: doctor },
@@ -350,6 +352,7 @@ function openPanel(p: Panel, page = 1): void {
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),
+    ...(p.tabs ? [div('goodTabs fc', ...p.tabs().map((tab) => button(`goodTab${tab.on ? ' on' : ''}`, tab.run, tab.label)))] : []),
     ...(p.stat ? [button('toShoppingMall', openShop, '去购物')] : []),
     button('goodClose', closePanel),
     div(
@@ -367,6 +370,27 @@ function openPanel(p: Panel, page = 1): void {
   else control.appendChild(next)
   list = next
   place()
+}
+
+/** Which school's lessons the study panel shows; '' until it opens, then it sticks to the last choice. */
+let studyTab = ''
+/** Picks a school tab, back on the first page. */
+const pickSchool = (panel: Panel, key: string): void => {
+  studyTab = key
+  openPanel(panel, 1)
+}
+
+/** The study panel: a school tab row on top, each tab holding the subjects that are at that school right now. */
+function openStudy(): void {
+  studyTab ||= majorSchool(studyGoods().map(schoolOf))
+  const panel: Panel = {
+    icon: activeIcon(24),
+    list: (page) => pageOf(studyGoods().filter((g) => schoolOf(g) === studyTab), page, PAGE),
+    lines: describeStudy,
+    use: study,
+    tabs: () => STUDY_SCHOOLS.map(([key, label]) => ({ label, on: key === studyTab, run: () => pickSchool(panel, key) })),
+  }
+  openPanel(panel, 1)
 }
 
 function closePanel(): void {

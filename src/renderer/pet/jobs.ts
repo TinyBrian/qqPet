@@ -35,6 +35,34 @@ const SCHOOLS = [
 ]
 const school = (v: number) => SCHOOLS.find((s) => v <= s.max)!
 
+/** The schools a lesson can belong to, in the order they are studied; the labels come from the goods' 名称. */
+export const STUDY_SCHOOLS: readonly [string, string][] = [
+  ['xx', '小学'],
+  ['zx', '中学'],
+  ['dx', '大学'],
+  ['yjs', '研究生'],
+  ['xwzj', '学无止境'],
+]
+
+/** The school a lesson belongs to, e.g. "zx" for 中学语文. */
+export const schoolOf = (g: Good): string => g.id.split('-')[0]
+
+/** The school most subjects sit at: what the study panel opens on, so the common case needs no tab press. */
+export function majorSchool(schools: string[]): string {
+  const counts = new Map<string, number>()
+  for (const key of schools) counts.set(key, (counts.get(key) ?? 0) + 1)
+  let best = STUDY_SCHOOLS[0][0]
+  let most = 0
+  for (const [key] of STUDY_SCHOOLS) {
+    const n = counts.get(key) ?? 0
+    if (n > most) {
+      most = n
+      best = key
+    }
+  }
+  return best
+}
+
 /** Study goods are `<school>-<subject>`. */
 const subjectOf = (g: Good): Subject => g.id.split('-')[1] as Subject
 /** Lessons done at the current school. */
