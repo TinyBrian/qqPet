@@ -123,10 +123,11 @@ export function openPetInfo(): void {
     if (portrait.getAttribute('src') !== src) portrait.src = src
     const bg = save.selfGoodUseOption.background
     head.style.backgroundImage = `url(${bg ? goodOf('background', bg.id).url : 'pet/info/16.svg'})`
-    pd.style.display = info.PDiamondLevel ? '' : 'none'
+    // 没开粉钻也显示那颗图标，只是换成灰色的 n*.svg；只有成长数值那一截隐藏。
     diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
     // The original drew a 年 mark on a yearly member's badge; no asset for it survived, so it is drawn in CSS.
     diamond.className = info.pinkDiamond && info.PDiamondYear ? 'pinkDiamond pdYear' : 'pinkDiamond'
+    pdGrowth.style.display = info.pinkDiamond ? '' : 'none'
     pdGrowth.className = info.pinkDiamond ? 'pinkDiamondUP px8 pinkDiamondUPs' : 'pinkDiamondUP px8'
     pdGrowth.textContent = `${info.PDgrowth} / ${info.PDgrowthValue_next}`
     pd.title = info.pinkDiamond ? `当前成长速度：${info.PDgrowthValue}/每天,到期时间：${formatDate(info.PDiamondExpirationDate)}` : '当前未开通粉钻'

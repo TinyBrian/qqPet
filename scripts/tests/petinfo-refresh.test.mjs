@@ -115,7 +115,9 @@ test('an open profile refreshes growing readouts and memberships without replaci
   input.selectionStart = 2
   input.selectionEnd = 5
   input.focus()
-  assert.ok(!app.find('pinkDiamondMain') || app.find('pinkDiamondMain').style.display === 'none')
+  // Non-members still see the badge, in its grey variant; only the growth numbers stay hidden.
+  assert.equal(app.find('pinkDiamond').style.backgroundImage, 'url(pet/info/n1.svg)')
+  assert.equal(app.find('pinkDiamondUP').style.display, 'none')
   assert.equal(app.find('level').textContent, '等级：1')
 
   Object.assign(app.info, {
@@ -133,15 +135,18 @@ test('an open profile refreshes growing readouts and memberships without replaci
   assert.match(app.find('luckyFatigue').textContent, /幸运值：7.*疲倦值：3/)
   assert.equal(app.find('penguin_breathe').src, 'pet/avatar/GGAdult.png')
   assert.equal(app.find('headImg').style.backgroundImage, 'url(pet/info/16.svg)')
-  assert.equal(app.find('pinkDiamondMain').style.display, '')
+  // The badge block is never hidden now; only its growth numbers depend on membership.
+  assert.notEqual(app.find('pinkDiamondMain').style.display, 'none')
   assert.equal(app.find('pinkDiamond').style.backgroundImage, 'url(pet/info/u2.svg)')
   assert.equal(app.find('pinkDiamondUP').textContent, '120 / 300')
+  assert.notEqual(app.find('pinkDiamondUP').style.display, 'none')
   assert.match(app.find('pinkDiamondMain').title, /date-999/)
   assert.equal(app.find('sweetHeart').style.backgroundImage, 'url(pet/stateInfo/h_up.png)')
 
   Object.assign(app.info, { pinkDiamond: false, sweetHeart: false, sweetHeartOverTime: 0 })
   app.refresh()
   assert.equal(app.find('pinkDiamond').style.backgroundImage, 'url(pet/info/n2.svg)')
+  assert.equal(app.find('pinkDiamondUP').style.display, 'none')
   assert.equal(app.find('pinkDiamondMain').title, '当前未开通粉钻')
   assert.equal(app.find('sweetHeart').style.backgroundImage, 'url(pet/stateInfo/h_down.png)')
   assert.equal(app.find('sweetHeart').title, '当前未开启贴心宝贝')

@@ -22,3 +22,12 @@ test('both pink diamonds show the pointer cursor', () => {
   assert.match(state, /\.ui-state \.pinkDiamond \{[^}]*cursor:\s?pointer/)
   assert.match(petinfo, /\.ui-petinfo \.pinkDiamond \{[^}]*cursor:\s?pointer/)
 })
+
+test('a pet without pink diamond still shows the grey badge in 档案', () => {
+  const petinfo = ui('petinfo.ts')
+  // The whole badge used to be hidden for non-members; only the growth numbers are hidden now.
+  assert.doesNotMatch(petinfo, /pd\.style\.display/)
+  assert.match(petinfo, /pdGrowth\.style\.display = info\.pinkDiamond \? '' : 'none'/)
+  // n*.svg is the grey variant, u*.svg the pink one.
+  assert.match(petinfo, /\$\{info\.pinkDiamond \? 'u' : 'n'\}/)
+})
