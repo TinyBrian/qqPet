@@ -109,20 +109,29 @@ test('stage buttons sit inside the brown bar without covering the close button',
   assert.match(close.slice(0, close.indexOf('}')), /width: 25px/)
 })
 
-test('the transparent seam and the corner sliver behind the icon are patched over', () => {
+test('the panel is title bar + content box with no seam, and no CSS patches on top', () => {
   const panel = css.slice(css.indexOf('.ui-control .goodList {'))
   const panelBody = panel.slice(0, panel.indexOf('}'))
-  // A cream fill under the art closes the 2px seam; the rounded radius keeps the square corners off.
-  assert.match(panelBody, /background-color: #fee8d6/)
-  assert.match(panelBody, /border-radius: 9px/)
-  const corner = css.slice(css.indexOf('.ui-control .goodList::before {'))
-  const cornerBody = corner.slice(0, corner.indexOf('}'))
-  assert.match(cornerBody, /background-color: #9d775b/)
-  assert.match(cornerBody, /border-radius: 8px 0 0 0/)
-  assert.match(cornerBody, /height: 21px/)
-  assert.match(cornerBody, /pointer-events: none/)
-  const icon = css.slice(css.indexOf('.ui-control .goodTypeIcon {'))
-  assert.match(icon.slice(0, icon.indexOf('}')), /z-index: 2/)
+  // The art itself carries title bar, seam-free body and the icon notch: no fill, no overlays.
+  assert.match(panelBody, /height: 136px/)
+  assert.match(panelBody, /background-image: url\(\/pet\/control\/icons\/active\/2\.svg\)/)
+  assert.doesNotMatch(panelBody, /background-color:/)
+  assert.doesNotMatch(css, /\.goodList::before/)
+  assert.doesNotMatch(css, /\.goodList::after/)
+  // Title bar 0..20, content box from row 21.
+  const main = css.slice(css.indexOf('.ui-control .goodListMain {'))
+  const mainBody = main.slice(0, main.indexOf('}'))
+  assert.match(mainBody, /top: 21px/)
+  assert.match(mainBody, /height: calc\(100% - 21px\)/)
+})
+
+test('the panel art dropped its transparent seam and cuts a clean icon notch', () => {
+  const art = readFileSync(new URL('../../resources/pet/control/icons/active/2.svg', import.meta.url), 'utf8')
+  // 136 rows: the old art's rows 21..22 were a fully transparent seam between title bar and content.
+  assert.match(art, /height="136\.0px" width="314\.0px"/)
+  assert.match(art, /viewBox="0 0 314 136"/)
+  assert.match(art, /M314\.0 136\.0 L0\.0 136\.0 0\.0 0\.0 314\.0 0\.0 314\.0 136\.0/)
+  assert.doesNotMatch(art, /138/)
 })
 
 test('stage buttons centre their text and switch from light to deep yellow', () => {

@@ -226,32 +226,17 @@
   background-size: 100% 100%;
   background-repeat: no-repeat;
 }
+/* 面板 = 图标 + 标题栏 + 内容框：底色、缝、圆角都在 2.svg 里，标题栏 0~20 行、内容框 21 行起。 */
 .ui-control .goodList {
   position: absolute;
   left: 0;
   top: 5px;
   transform: translate(-50%);
   width: 314px;
-  height: 138px;
-  /* 原图标题条和内容框之间留了 2px 透明缝、四周还留了给图标挖的缺口：
-     底下垫一层内容框底色，圆角裁掉方角，缝里就不会透出背景。 */
-  background-color: #fee8d6;
-  border-radius: 9px;
+  height: 136px;
   background-image: url(/pet/control/icons/active/2.svg);
   background-size: 100% 100%;
   background-repeat: no-repeat;
-}
-/* 左上角缺口用标题条的棕色补一块，圆角跟面板一致，图标压在上面就看不到那条竖线了。 */
-.ui-control .goodList::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 30px;
-  height: 21px;
-  background-color: #9d775b;
-  border-radius: 8px 0 0 0;
-  pointer-events: none;
 }
 .ui-control .goodTypeIcon {
   width: 25px;
@@ -259,7 +244,6 @@
   position: absolute;
   left: 0;
   top: 0;
-  z-index: 2;
 }
 /* 学习阶段按钮：整排落在顶部棕色条里（条高 21px，上下各留 2px），左右各让出 6px。 */
 .ui-control .goodTabs {
@@ -336,9 +320,9 @@
 .ui-control .goodListMain {
   position: absolute;
   left: 0;
-  top: 25px;
+  top: 21px;
   width: 100%;
-  height: calc(100% - 25px);
+  height: calc(100% - 21px);
   padding: 5px;
 }
 .ui-control .toLeft,
