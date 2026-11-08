@@ -104,8 +104,9 @@ export function sweetHeart(): void {
   })
 }
 
-/** Opening or extending pink diamond with 钻石 (#75): 10 a month; 12 months make the yearly membership. */
-function pinkDiamond(): void {
+/** Opening or extending pink diamond with 钻石 (#75): 10 a month; 12 months make the yearly membership.
+ *  Shared by the tray panel's diamond and the 档案 window's diamond. */
+export function pinkDiamondDialog(): void {
   windowView({
     title: '粉钻贵族',
     msg: `${info.pinkDiamond ? `粉钻${formatDate(info.PDiamondExpirationDate)}到期，续费` : '开通粉钻'}：10钻石/月，开通12个月即为年费粉钻（现有${info.diamond}颗钻石）`,
@@ -131,7 +132,7 @@ function bar(label: string, n: number, m: number, onClick: () => void, text?: st
 function render(): void {
   if (!panel) return
   const c = save.petComputedlInfo
-  const diamond = button('pinkDiamond', pinkDiamond)
+  const diamond = button('pinkDiamond', pinkDiamondDialog)
   diamond.title = info.pinkDiamond ? '续费粉钻' : '开通粉钻'
   diamond.style.backgroundImage = `url(pet/info/${info.pinkDiamond ? 'u' : 'n'}${info.PDiamondLevel || 1}.svg)`
   if (info.pinkDiamond && info.PDiamondYear) diamond.className += ' pdYear'

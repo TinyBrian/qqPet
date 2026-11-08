@@ -71,6 +71,8 @@ function profile() {
     progress: (_n, _m, options) => div('progress', options.text ?? ''),
     formatDate: seconds => `date-${seconds}`,
     age: minutes => `${minutes}分钟`, status: () => ['健康'], growthPerMinute: () => 1,
+    // Shared with the tray panel: clicking the 档案 diamond opens the same dialog.
+    pinkDiamondDialog: () => {},
     avatar: () => `pet/avatar/GG${save.petComputedlInfo.level >= 10 ? 'Adult' : 'Kid'}.png`,
     luck: () => info.luck, fatigue: () => info.fatigue,
     diploma: () => null,

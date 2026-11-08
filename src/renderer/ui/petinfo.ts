@@ -6,7 +6,7 @@ import './css/petinfo.css'
 import { formatDate } from './date'
 import { button, div, img, typeable } from './dom'
 import { progress } from './progress'
-import { age, status } from './state'
+import { age, pinkDiamondDialog, status } from './state'
 
 let close = (): void => {}
 
@@ -64,7 +64,9 @@ export function openPetInfo(): void {
     portrait,
   )
 
-  const diamond = div('pinkDiamond')
+  // 粉钻图标和托盘面板里那个是同一个入口：点了开「开通/续费粉钻」对话框。
+  const diamond = button('pinkDiamond', pinkDiamondDialog)
+  diamond.title = info.pinkDiamond ? '续费粉钻' : '开通粉钻'
   const pdGrowth = div('pinkDiamondUP px8')
   const pd = div('pinkDiamondMain fcc', diamond, pdGrowth)
 
