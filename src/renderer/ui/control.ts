@@ -12,6 +12,7 @@ import {
   schoolDone,
   STUDY_SCHOOLS,
   study,
+  examPending,
   studyDone,
   studyGoods,
   studyLessons,
@@ -467,7 +468,7 @@ function openStudy(): void {
   const panel: Panel = {
     icon: activeIcon(24),
     list: (page) => pageOf(studyLessons(studyTab), page, PAGE),
-    lines: (g) => [...describeStudy(g), ...(studyDone(g) ? ['已完成'] : [])],
+    lines: (g) => [...describeStudy(g), ...(studyDone(g) ? ['已完成'] : examPending(g) ? ['课程已学完，点击参加考试'] : [])],
     empty: '快去完成之前学业吧~',
     done: studyDone,
     use: (g) => {

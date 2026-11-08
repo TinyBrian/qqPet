@@ -32,7 +32,7 @@ function schoolModule(studyInfo = {}) {
     .replace(/^export \{.*\}$/gm, '')
     .replace(/^export (?=(?:async )?(?:function|const|let|var|class|type|interface))/gm, '')
   runInNewContext(
-    `${stripTypeScriptTypes(source)}\nthis.schoolOf = schoolOf; this.majorSchool = majorSchool; this.STUDY_SCHOOLS = STUDY_SCHOOLS; this.studyLessons = studyLessons; this.studyDone = studyDone; this.nextSchool = nextSchool; this.schoolDone = schoolDone`,
+    `${stripTypeScriptTypes(source)}\nthis.schoolOf = schoolOf; this.majorSchool = majorSchool; this.STUDY_SCHOOLS = STUDY_SCHOOLS; this.studyLessons = studyLessons; this.studyDone = studyDone; this.examPending = examPending; this.nextSchool = nextSchool; this.schoolDone = schoolDone`,
     context,
   )
   return context
@@ -78,6 +78,21 @@ test('the school after this one is empty at 学无止境', () => {
   assert.equal(app.nextSchool('xx'), 'zx')
   assert.equal(app.nextSchool('yjs'), 'xwzj')
   assert.equal(app.nextSchool('xwzj'), '')
+})
+
+test('the certificate waits for the exam, not just the lessons', () => {
+  // 9 lessons done: the exam is waiting, so the lesson is not finished yet.
+  const pending = schoolModule({ chinese: 9, mathematics: 9, politics: 9, music: 9, art: 9, manner: 9, pe: 9, labouring: 9, wushu: 9 })
+  const [waiting] = Array.from(pending.studyLessons('xx'), (g) => g).filter((g) => g.id === 'xx-chinese')
+  assert.equal(pending.examPending(waiting), true)
+  assert.equal(pending.studyDone(waiting), false)
+  assert.equal(pending.schoolDone('xx'), false, 'no star before the exams')
+  // Passing the exam moves studyInfo one past the last lesson.
+  const passed = schoolModule({ chinese: 10, mathematics: 10, politics: 10, music: 10, art: 10, manner: 10, pe: 10, labouring: 10, wushu: 10 })
+  const [done] = Array.from(passed.studyLessons('xx'), (g) => g).filter((g) => g.id === 'xx-chinese')
+  assert.equal(passed.studyDone(done), true)
+  assert.equal(passed.examPending(done), false)
+  assert.equal(passed.schoolDone('xx'), true, 'all nine exams passed earn the star')
 })
 
 test('stage buttons sit inside the brown bar without covering the close button', () => {

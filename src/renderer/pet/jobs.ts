@@ -189,19 +189,25 @@ export function studyLessons(key: string): Good[] {
     .map((g) => ({ ...g, name: g.tolkName! }))
 }
 
-/** This lesson's whole course is done and the diploma earned. */
-export const studyDone = (g: Good): boolean => save.studyInfo[subjectOf(g)] >= g.classNumUp! + g.classNum!
+/** Every lesson of this school is taken, so the exam is waiting: clicking the lesson sits it. */
+export const examPending = (g: Good): boolean => lessons(g) === g.classNum
+
+/**
+ * The lesson's exam is passed: studyInfo moved one past the last lesson of the school. Merely finishing the
+ * lessons is `examPending`, not done — the certificate follows the exam, like the diploma it stands for.
+ */
+export const studyDone = (g: Good): boolean => save.studyInfo[subjectOf(g)] > g.classNumUp! + g.classNum!
 
 /** The school studied after this one; '' at 学无止境. */
 export function nextSchool(key: string): string {
   return STUDY_SCHOOLS[STUDY_SCHOOLS.findIndex(([k]) => k === key) + 1]?.[0] ?? ''
 }
 
-/** The whole school is done: every subject has passed it, so the stage tab earns its star. */
+/** The whole school is done: every subject has passed its exam there, so the stage tab earns its star. */
 export const schoolDone = (key: string): boolean =>
   SUBJECTS.every((s) => {
     const g = goodOf('study', `${key}-${s}`)
-    return save.studyInfo[s] >= g.classNumUp! + g.classNum!
+    return save.studyInfo[s] > g.classNumUp! + g.classNum!
   })
 
 export function describeStudy(g: Good): string[] {
