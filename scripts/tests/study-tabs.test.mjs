@@ -32,7 +32,7 @@ function schoolModule(studyInfo = {}) {
     .replace(/^export \{.*\}$/gm, '')
     .replace(/^export (?=(?:async )?(?:function|const|let|var|class|type|interface))/gm, '')
   runInNewContext(
-    `${stripTypeScriptTypes(source)}\nthis.schoolOf = schoolOf; this.majorSchool = majorSchool; this.STUDY_SCHOOLS = STUDY_SCHOOLS; this.studyLessons = studyLessons; this.studyDone = studyDone; this.nextSchool = nextSchool`,
+    `${stripTypeScriptTypes(source)}\nthis.schoolOf = schoolOf; this.majorSchool = majorSchool; this.STUDY_SCHOOLS = STUDY_SCHOOLS; this.studyLessons = studyLessons; this.studyDone = studyDone; this.nextSchool = nextSchool; this.schoolDone = schoolDone`,
     context,
   )
   return context
@@ -83,13 +83,31 @@ test('the school after this one is empty at 学无止境', () => {
 test('stage buttons sit inside the brown bar without covering the close button', () => {
   const tabs = css.slice(css.indexOf('.ui-control .goodTabs {'))
   const body = tabs.slice(0, tabs.indexOf('}'))
-  // 3px margin on every side of the 25px header strip; the close button starts at 25px.
-  assert.match(body, /left: 28px/)
-  assert.match(body, /right: 28px/)
-  assert.match(body, /top: 3px/)
-  assert.match(body, /height: 19px/)
+  // The header strip is rows 0..20 of the art: 2px above and below a 17px row, 31px in from both ends.
+  assert.match(body, /left: 31px/)
+  assert.match(body, /right: 31px/)
+  assert.match(body, /top: 2px/)
+  assert.match(body, /height: 17px/)
+  const tab = css.slice(css.indexOf('.ui-control .goodTab {'))
+  assert.match(tab.slice(0, tab.indexOf('}')), /height: 17px/)
   const close = css.slice(css.indexOf('.ui-control .goodClose {'))
   assert.match(close.slice(0, close.indexOf('}')), /width: 25px/)
+})
+
+test('the transparent seam and the corner sliver behind the icon are patched over', () => {
+  const panel = css.slice(css.indexOf('.ui-control .goodList {'))
+  const panelBody = panel.slice(0, panel.indexOf('}'))
+  // A cream fill under the art closes the 2px seam; the rounded radius keeps the square corners off.
+  assert.match(panelBody, /background-color: #fee8d6/)
+  assert.match(panelBody, /border-radius: 9px/)
+  const corner = css.slice(css.indexOf('.ui-control .goodList::before {'))
+  const cornerBody = corner.slice(0, corner.indexOf('}'))
+  assert.match(cornerBody, /background-color: #9d775b/)
+  assert.match(cornerBody, /border-radius: 8px 0 0 0/)
+  assert.match(cornerBody, /height: 21px/)
+  assert.match(cornerBody, /pointer-events: none/)
+  const icon = css.slice(css.indexOf('.ui-control .goodTypeIcon {'))
+  assert.match(icon.slice(0, icon.indexOf('}')), /z-index: 2/)
 })
 
 test('stage buttons centre their text and switch from light to deep yellow', () => {
@@ -101,6 +119,25 @@ test('stage buttons centre their text and switch from light to deep yellow', () 
   assert.match(body, /background-color: #fdf0c2/)
   const on = css.slice(css.indexOf('.ui-control .goodTab.on {'))
   assert.match(on.slice(0, on.indexOf('}')), /background-color: #f0a91b/)
+})
+
+test('a finished school earns a faceted golden star before its label', () => {
+  const app = schoolModule({ chinese: 50, mathematics: 50, politics: 50, music: 50, art: 50, manner: 50, pe: 50, labouring: 50, wushu: 50 })
+  assert.equal(app.schoolDone('xx'), true, 'all nine passed 小学')
+  assert.equal(app.schoolDone('zx'), true, 'and 中学 at 30')
+  assert.equal(app.schoolDone('dx'), false, '大学 runs to 71')
+  const partial = schoolModule({ chinese: 50 })
+  assert.equal(partial.schoolDone('xx'), false, 'one subject still at 小学 keeps the star off')
+  // The star itself: ten facet triangles, alternating light yellow and gold.
+  assert.match(control, /star: schoolDone\(key\)/)
+  assert.match(control, /\.\.\.\(tab\.star \? \[star\(\)\] : \[\]\)/)
+  assert.equal((control.match(/<polygon points="12,12 /g) ?? []).length, 10)
+  assert.match(control, /fill="#FEE662"/)
+  assert.match(control, /fill="#FEBE00"/)
+  const star = css.slice(css.indexOf('.ui-control .goodTabStar {'))
+  const starBody = star.slice(0, star.indexOf('}'))
+  assert.match(starBody, /width: 11px/)
+  assert.match(starBody, /margin-right: 3px/)
 })
 
 test('an overflowing stage row scrolls with yellow triangles', () => {

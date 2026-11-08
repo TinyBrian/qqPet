@@ -197,6 +197,13 @@ export function nextSchool(key: string): string {
   return STUDY_SCHOOLS[STUDY_SCHOOLS.findIndex(([k]) => k === key) + 1]?.[0] ?? ''
 }
 
+/** The whole school is done: every subject has passed it, so the stage tab earns its star. */
+export const schoolDone = (key: string): boolean =>
+  SUBJECTS.every((s) => {
+    const g = goodOf('study', `${key}-${s}`)
+    return save.studyInfo[s] >= g.classNumUp! + g.classNum!
+  })
+
 export function describeStudy(g: Good): string[] {
   const a = attrs(g)
   const lines = [g.desc, `课时：${g.classNum}`, `已学课时：${lessons(g)}`, a && `属性：${a}`, `学习时长：${g.useTime}分钟`]

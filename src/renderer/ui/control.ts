@@ -9,6 +9,7 @@ import {
   majorSchool,
   nextSchool,
   schoolOf,
+  schoolDone,
   STUDY_SCHOOLS,
   study,
   studyDone,
@@ -397,12 +398,45 @@ function openPanel(p: Panel, page = 1): void {
  * The stage buttons: a clipped strip between two yellow triangles, so a row that does not fit can be scrolled
  * instead of covering the close button.
  */
-function tabBar(tabs: { label: string; on: boolean; run: () => void }[]): HTMLElement {
-  const strip = div('tabStrip', ...tabs.map((tab) => button(`goodTab${tab.on ? ' on' : ''}`, tab.run, tab.label)))
+function tabBar(tabs: Tab[]): HTMLElement {
+  const strip = div('tabStrip', ...tabs.map((tab) => button(`goodTab${tab.on ? ' on' : ''}`, tab.run, ...(tab.star ? [star()] : []), tab.label)))
   const scroll = (dir: number) => (): void => {
     strip.scrollLeft += dir * Math.max(48, strip.clientWidth * 0.7)
   }
   return div('goodTabs fc', button('tabArrow left', scroll(-1)), strip, button('tabArrow right', scroll(1)))
+}
+
+/** One stage button: a label, lit while it is the open stage, starred once the whole school is done. */
+interface Tab {
+  label: string
+  on: boolean
+  star?: boolean
+  run: () => void
+}
+
+/**
+ * The star the finished stages wear: five points cut into ten facets from the middle, light yellow alternating
+ * with gold, drawn as one tiny SVG so it stays crisp at 11px. Colours sampled from the reference artwork.
+ */
+const STAR_SVG =
+  '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+  '<polygon points="12,12 12.00,0.00 16.05,6.43" fill="#FEE662"/>' +
+  '<polygon points="12,12 16.05,6.43 23.41,8.29" fill="#FDBE01"/>' +
+  '<polygon points="12,12 23.41,8.29 18.55,14.13" fill="#FED439"/>' +
+  '<polygon points="12,12 18.55,14.13 19.05,21.71" fill="#FEBE00"/>' +
+  '<polygon points="12,12 19.05,21.71 12.00,18.88" fill="#FEE461"/>' +
+  '<polygon points="12,12 12.00,18.88 4.95,21.71" fill="#FFBD01"/>' +
+  '<polygon points="12,12 4.95,21.71 5.45,14.13" fill="#FEE661"/>' +
+  '<polygon points="12,12 5.45,14.13 0.59,8.29" fill="#FBD73C"/>' +
+  '<polygon points="12,12 0.59,8.29 7.95,6.43" fill="#FEE661"/>' +
+  '<polygon points="12,12 7.95,6.43 12.00,0.00" fill="#FEBE00"/>' +
+  '</svg>'
+
+/** The star element to put in front of a stage label. */
+function star(): HTMLElement {
+  const el = div('goodTabStar')
+  el.innerHTML = STAR_SVG
+  return el
 }
 
 /** Shows the triangles only when the stage row overflows, and keeps the chosen stage in view. */
@@ -445,7 +479,7 @@ function openStudy(): void {
       if (label) pickSchool(panel, next)
       return false
     },
-    tabs: () => STUDY_SCHOOLS.map(([key, label]) => ({ label, on: key === studyTab, run: () => pickSchool(panel, key) })),
+    tabs: () => STUDY_SCHOOLS.map(([key, label]) => ({ label, on: key === studyTab, star: schoolDone(key), run: () => pickSchool(panel, key) })),
   }
   openPanel(panel, 1)
 }

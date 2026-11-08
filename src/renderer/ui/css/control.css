@@ -233,9 +233,25 @@
   transform: translate(-50%);
   width: 314px;
   height: 138px;
+  /* 原图标题条和内容框之间留了 2px 透明缝、四周还留了给图标挖的缺口：
+     底下垫一层内容框底色，圆角裁掉方角，缝里就不会透出背景。 */
+  background-color: #fee8d6;
+  border-radius: 9px;
   background-image: url(/pet/control/icons/active/2.svg);
   background-size: 100% 100%;
   background-repeat: no-repeat;
+}
+/* 左上角缺口用标题条的棕色补一块，圆角跟面板一致，图标压在上面就看不到那条竖线了。 */
+.ui-control .goodList::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 21px;
+  background-color: #9d775b;
+  border-radius: 8px 0 0 0;
+  pointer-events: none;
 }
 .ui-control .goodTypeIcon {
   width: 25px;
@@ -243,14 +259,15 @@
   position: absolute;
   left: 0;
   top: 0;
+  z-index: 2;
 }
-/* 学习阶段按钮：整排落在顶部棕色条里，四边各留 3px；底条不够宽时两端出现黄色三角翻页。 */
+/* 学习阶段按钮：整排落在顶部棕色条里（条高 21px，上下各留 2px），左右各让出 6px。 */
 .ui-control .goodTabs {
   position: absolute;
-  left: 28px;
-  right: 28px;
-  top: 3px;
-  height: 19px;
+  left: 31px;
+  right: 31px;
+  top: 2px;
+  height: 17px;
   gap: 3px;
 }
 .ui-control .tabStrip {
@@ -265,10 +282,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 19px;
-  padding: 0 7px;
+  height: 17px;
+  padding: 0 5px;
   font-size: 11px;
-  line-height: 19px;
+  line-height: 17px;
   text-align: center;
   color: #8a5a00;
   background-color: #fdf0c2;
@@ -282,6 +299,22 @@
   color: #fff;
   background-color: #f0a91b;
   font-weight: bold;
+}
+/* 整个阶段学完的按钮，文字前带一颗折纸质感的金色星星。 */
+.ui-control .goodTabStar {
+  display: inline-flex;
+  width: 11px;
+  height: 11px;
+  margin-right: 3px;
+}
+.ui-control .goodTabStar svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* 选中的按钮是深黄底，星星也是黄的：加一点描边才看得清。 */
+.ui-control .goodTab.on .goodTabStar svg {
+  filter: drop-shadow(0 0 1px #8a5a00);
 }
 .ui-control .tabArrow {
   display: none;
