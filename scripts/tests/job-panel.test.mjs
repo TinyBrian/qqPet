@@ -74,7 +74,7 @@ test('work is greyed while the pet cannot work, and the tip says why in red', ()
 
 test('a locked job greys its icon and paints the missed lines red', () => {
   assert.match(control, /const locked = lines\.some\(\(line\) => line\.bad\)/)
-  assert.match(control, /`goodItem\$\{locked \? ' locked' : ''\}`/)
+  assert.match(control, /`goodItem\$\{locked \? ' locked' : ''\}\$\{done \? ' done' : ''\}`/)
   assert.match(control, /`goodDatas\$\{line\.bad \? ' bad' : ''\}`/)
   const locked = css.slice(css.indexOf('.ui-control .goodItem.locked .goodItemIcon {'))
   assert.match(locked.slice(0, locked.indexOf('}')), /filter:\s*grayscale\(1\)/)

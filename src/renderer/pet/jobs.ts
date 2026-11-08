@@ -182,6 +182,21 @@ export const studyGoods = (): Good[] =>
     return { ...g, name: g.tolkName! }
   })
 
+/** One school's lessons the pet has already reached, done ones included; a school still ahead of it yields none. */
+export function studyLessons(key: string): Good[] {
+  return SUBJECTS.map((k) => goodOf('study', `${key}-${k}`))
+    .filter((g) => save.studyInfo[subjectOf(g)] >= g.classNumUp!)
+    .map((g) => ({ ...g, name: g.tolkName! }))
+}
+
+/** This lesson's whole course is done and the diploma earned. */
+export const studyDone = (g: Good): boolean => save.studyInfo[subjectOf(g)] >= g.classNumUp! + g.classNum!
+
+/** The school studied after this one; '' at 学无止境. */
+export function nextSchool(key: string): string {
+  return STUDY_SCHOOLS[STUDY_SCHOOLS.findIndex(([k]) => k === key) + 1]?.[0] ?? ''
+}
+
 export function describeStudy(g: Good): string[] {
   const a = attrs(g)
   const lines = [g.desc, `课时：${g.classNum}`, `已学课时：${lessons(g)}`, a && `属性：${a}`, `学习时长：${g.useTime}分钟`]

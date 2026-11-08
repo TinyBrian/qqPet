@@ -244,32 +244,61 @@
   left: 0;
   top: 0;
 }
-/* 学习面板顶部的学校筛选：一排等宽小按钮，选中的那只高亮。 */
+/* 学习阶段按钮：整排落在顶部棕色条里，四边各留 3px；底条不够宽时两端出现黄色三角翻页。 */
 .ui-control .goodTabs {
   position: absolute;
-  left: 27px;
-  right: 27px;
-  top: 2px;
-  height: 21px;
+  left: 28px;
+  right: 28px;
+  top: 3px;
+  height: 19px;
   gap: 3px;
 }
-.ui-control .goodTab {
+.ui-control .tabStrip {
   flex: 1;
-  height: 21px;
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+  scroll-behavior: smooth;
+}
+.ui-control .goodTab {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 19px;
+  padding: 0 7px;
   font-size: 11px;
-  line-height: 21px;
-  color: #7a3b00;
-  background-color: #ffffff99;
+  line-height: 19px;
+  text-align: center;
+  color: #8a5a00;
+  background-color: #fdf0c2;
   border-radius: 4px;
   white-space: nowrap;
 }
 .ui-control .goodTab:hover {
-  background-color: #ffffffd0;
+  background-color: #fff7dc;
 }
 .ui-control .goodTab.on {
   color: #fff;
-  background-color: #ff8a1f;
+  background-color: #f0a91b;
   font-weight: bold;
+}
+.ui-control .tabArrow {
+  display: none;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+.ui-control .tabArrow.left {
+  border-right: 7px solid #f0a91b;
+}
+.ui-control .tabArrow.right {
+  border-left: 7px solid #f0a91b;
+}
+.ui-control .goodTabs.overflow .tabArrow {
+  display: block;
 }
 .ui-control .goodListMain {
   position: absolute;
@@ -352,6 +381,34 @@
   width: 100%;
   height: 100%;
   position: relative;
+}
+/* 已完成的学业不会消失，左上角盖一枚金色证书。 */
+.ui-control .goodItem.done .goodItemIconBox::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #f0a91b 70%);
+  border: 1px solid #a86c10;
+  box-shadow: 0 1px 2px #0005;
+  z-index: 4;
+}
+.ui-control .goodItem.done .goodItemIconBox::after {
+  content: '证';
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: #6b3f00;
+  z-index: 5;
 }
 .ui-control .goodInfo {
   position: absolute;

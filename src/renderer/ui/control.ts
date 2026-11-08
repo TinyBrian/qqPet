@@ -2,7 +2,21 @@ import { describe, type Good, type GoodType } from '../pet/data/goods'
 import { toolbarScaleFor } from '../../shared/layout'
 import { listGoods, onGoodsChange, pageOf, type Page } from '../pet/goods'
 import { doctor, useItem } from '../pet/items'
-import { describeStudy, describeWork, majorSchool, schoolOf, STUDY_SCHOOLS, study, studyGoods, work, workGoods } from '../pet/jobs'
+import { speak } from '../pet/pet'
+import {
+  describeStudy,
+  describeWork,
+  majorSchool,
+  nextSchool,
+  schoolOf,
+  STUDY_SCHOOLS,
+  study,
+  studyDone,
+  studyGoods,
+  studyLessons,
+  work,
+  workGoods,
+} from '../pet/jobs'
 import { info, onInfoChange, petSize, save } from '../pet/store'
 import { viewportSize } from './viewport'
 import './css/control.css'
@@ -51,6 +65,10 @@ interface Panel {
   stat?: Stat
   /** A row of small buttons across the top, e.g. the study panel's school filter; built per render so the active one moves. */
   tabs?: () => { label: string; on: boolean; run: () => void }[]
+  /** Items that are finished but stay in the list, marked with a certificate, e.g. a passed school course. */
+  done?: (g: Good) => boolean
+  /** What an empty page says instead of 空空如也~~. */
+  empty?: string
 }
 
 interface Entry {
@@ -333,8 +351,10 @@ function openPanel(p: Panel, page = 1): void {
     const lines = p.lines(g).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
     // A job whose requirements the pet misses greys its icon; its tip paints the missed lines red.
     const locked = lines.some((line) => line.bad)
+    // A lesson already finished keeps its place, with a certificate in the corner (see `done` in the panel).
+    const done = p.done?.(g) ?? false
     return div(
-      `goodItem${locked ? ' locked' : ''}`,
+      `goodItem${locked ? ' locked' : ''}${done ? ' done' : ''}`,
       div(
         'goodItemIconBox fcc',
         div('goodInfo', div('goodName', g.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text))),
@@ -352,7 +372,7 @@ function openPanel(p: Panel, page = 1): void {
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),
-    ...(p.tabs ? [div('goodTabs fc', ...p.tabs().map((tab) => button(`goodTab${tab.on ? ' on' : ''}`, tab.run, tab.label)))] : []),
+    ...(p.tabs ? [tabBar(p.tabs())] : []),
     ...(p.stat ? [button('toShoppingMall', openShop, '去购物')] : []),
     button('goodClose', closePanel),
     div(
@@ -360,7 +380,7 @@ function openPanel(p: Panel, page = 1): void {
       button('toLeft', turn(-1)),
       div(
         'goods f1 fC h100',
-        div('fc f1', ...(items.length ? items : [div('goodsNone tc w100', ' 空空如也~~ ')])),
+        div('fc f1', ...(items.length ? items : [div('goodsNone tc w100', p.empty ?? ' 空空如也~~ ')])),
         ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
       ),
       button('toRight', turn(1)),
@@ -370,6 +390,30 @@ function openPanel(p: Panel, page = 1): void {
   else control.appendChild(next)
   list = next
   place()
+  fitTabs()
+}
+
+/**
+ * The stage buttons: a clipped strip between two yellow triangles, so a row that does not fit can be scrolled
+ * instead of covering the close button.
+ */
+function tabBar(tabs: { label: string; on: boolean; run: () => void }[]): HTMLElement {
+  const strip = div('tabStrip', ...tabs.map((tab) => button(`goodTab${tab.on ? ' on' : ''}`, tab.run, tab.label)))
+  const scroll = (dir: number) => (): void => {
+    strip.scrollLeft += dir * Math.max(48, strip.clientWidth * 0.7)
+  }
+  return div('goodTabs fc', button('tabArrow left', scroll(-1)), strip, button('tabArrow right', scroll(1)))
+}
+
+/** Shows the triangles only when the stage row overflows, and keeps the chosen stage in view. */
+function fitTabs(): void {
+  const strip = list?.querySelector<HTMLElement>('.tabStrip')
+  if (!strip) return
+  const bar = strip.parentElement
+  const over = strip.scrollWidth > strip.clientWidth + 1
+  bar?.classList.toggle('overflow', over)
+  const active = strip.querySelector<HTMLElement>('.goodTab.on')
+  if (active && over) strip.scrollLeft = Math.max(0, active.offsetLeft - 8)
 }
 
 /** Which school's lessons the study panel shows; '' until it opens, then it sticks to the last choice. */
@@ -380,14 +424,27 @@ const pickSchool = (panel: Panel, key: string): void => {
   openPanel(panel, 1)
 }
 
-/** The study panel: a school tab row on top, each tab holding the subjects that are at that school right now. */
+/**
+ * The study panel: a stage tab row on top. Each tab lists the lessons of that school the pet has reached, so a
+ * finished course still shows with a certificate instead of vanishing; a school still ahead asks for the last one.
+ */
 function openStudy(): void {
   studyTab ||= majorSchool(studyGoods().map(schoolOf))
   const panel: Panel = {
     icon: activeIcon(24),
-    list: (page) => pageOf(studyGoods().filter((g) => schoolOf(g) === studyTab), page, PAGE),
-    lines: describeStudy,
-    use: study,
+    list: (page) => pageOf(studyLessons(studyTab), page, PAGE),
+    lines: (g) => [...describeStudy(g), ...(studyDone(g) ? ['已完成'] : [])],
+    empty: '快去完成之前学业吧~',
+    done: studyDone,
+    use: (g) => {
+      if (!studyDone(g)) return study(g)
+      const next = nextSchool(studyTab)
+      const label = STUDY_SCHOOLS.find(([key]) => key === next)?.[1]
+      speak({ s: label ? `[host]，${g.name}我已经学完啦，接下来去学${label}的吧~~` : `[host]，${g.name}我已经学到头啦~~`, now: true, ai: false }, 'speak')
+      // 引导到下个阶段：直接切到下一个学校的标签。
+      if (label) pickSchool(panel, next)
+      return false
+    },
     tabs: () => STUDY_SCHOOLS.map(([key, label]) => ({ label, on: key === studyTab, run: () => pickSchool(panel, key) })),
   }
   openPanel(panel, 1)
