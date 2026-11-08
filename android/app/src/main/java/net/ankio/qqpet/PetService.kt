@@ -68,6 +68,8 @@ class PetService : Service() {
         /** A window move this far (px) is hidden until the page is drawn at the new origin. */
         private const val JUMP_PX = 4
         private const val REVEAL_MS = 200L
+        /** Slack (screen px) around the content rectangle a fingertip may still count as on the pet. */
+        private const val TOUCH_SLOP = 4
         private const val TRAY_ICON_PX = 96
     }
 
@@ -133,10 +135,23 @@ class PetService : Service() {
             }
         }
         root = object : FrameLayout(this) {
+            /** The gesture under way started on the page's content; touches beside it belong to the app below. */
+            private var onPet = false
+
             override fun dispatchTouchEvent(e: MotionEvent): Boolean {
-                if (e.actionMasked != MotionEvent.ACTION_OUTSIDE) return super.dispatchTouchEvent(e)
-                emit("outside", "undefined")
-                return true
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_OUTSIDE -> {
+                        emit("outside", "undefined")
+                        return true
+                    }
+                    MotionEvent.ACTION_DOWN -> onPet = onTouchArea(e.rawX, e.rawY)
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        val mine = onPet
+                        onPet = false
+                        return if (mine) super.dispatchTouchEvent(e) else false
+                    }
+                }
+                return if (onPet) super.dispatchTouchEvent(e) else false
             }
 
             // A focusable overlay takes the back key from the app below; give it back.
@@ -308,6 +323,30 @@ class PetService : Service() {
     private fun setFocusable(on: Boolean) {
         params.flags = if (on) params.flags and LayoutParams.FLAG_NOT_FOCUSABLE.inv() else params.flags or LayoutParams.FLAG_NOT_FOCUSABLE
         wm.updateViewLayout(root, params)
+    }
+
+    /**
+     * Screen-space rectangle touches may reach the page, from the content rectangle the page reports. The window keeps a
+     * margin around the content (and keeps its size while the content still fits), so without this a swipe beside the pet
+     * — or the system's edge swipe next to a pet that hid at the screen edge — was swallowed by the overlay. Null until
+     * the page reports one: older pages keep the whole window.
+     */
+    private var touchArea: IntArray? = null
+
+    private fun setTouch(left: Double, top: Double, right: Double, bottom: Double, viewport: Double) {
+        if (viewport <= 0.0) return
+        val scale = web.layoutParams.width / viewport
+        touchArea = if (left < 0 || right <= left || bottom <= top) IntArray(0) else intArrayOf(
+            floor(left * scale).toInt(), floor(top * scale).toInt(),
+            ceil(right * scale).toInt(), ceil(bottom * scale).toInt(),
+        )
+    }
+
+    /** Whether a screen point lies on the page's content, with a little slack for a fingertip. */
+    private fun onTouchArea(x: Float, y: Float): Boolean {
+        val area = touchArea ?: return true
+        if (area.isEmpty()) return false
+        return x >= area[0] - TOUCH_SLOP && x < area[2] + TOUCH_SLOP && y >= area[1] - TOUCH_SLOP && y < area[3] + TOUCH_SLOP
     }
 
     /** Moves the window onto CSS rectangle (x, y, w, h) of the page, keeping the page in place on screen. */
@@ -485,6 +524,14 @@ class PetService : Service() {
         @JavascriptInterface
         fun setBounds(x: Double, y: Double, w: Double, h: Double, viewport: Double, dragging: Boolean) =
             requestBounds(x, y, w, h, viewport, dragging)
+
+        /**
+         * Where touches belong: "left,top,right,bottom" in CSS pixels of a page [viewport] pixels wide, or -1s for none.
+         * Absent in older pages, which get the whole window.
+         */
+        @JavascriptInterface
+        fun setTouch(left: Double, top: Double, right: Double, bottom: Double, viewport: Double) =
+            web.post { this@PetService.setTouch(left, top, right, bottom, viewport) }
 
         /** "left,top,right,bottom" of the system bars and cutout, in CSS pixels of a page [viewport] pixels wide. Hidden bars count: a swipe brings them back. */
         @JavascriptInterface

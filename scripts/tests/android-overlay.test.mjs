@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { nextBounds } from '../../src/mobile/bounds.ts'
+import { nextBounds, touchRect } from '../../src/mobile/bounds.ts'
 
 const service = readFileSync(new URL('../../android/app/src/main/java/net/ankio/qqpet/PetService.kt', import.meta.url), 'utf8')
 const setBounds = service.slice(service.indexOf('private fun setBounds('), service.indexOf('private fun http('))
@@ -85,4 +85,21 @@ test('page edges clamp the window; a full-page drag window shrinks back afterwar
 test('nothing to show empties the window', () => {
   assert.deepEqual(nextBounds({ x: 5, y: 5, w: 50, h: 50 }, null, 400, 800), { x: 0, y: 0, w: 0, h: 0 })
   assert.deepEqual(nextBounds({ x: 5, y: 5, w: 50, h: 50 }, box(10, 10, 10, 30), 400, 800), { x: 0, y: 0, w: 0, h: 0 })
+})
+test('touches outside the content fall through to the app below (swipes beside the pet were swallowed)', () => {
+  // The content rectangle, clamped to the page and without the window's 24px margin.
+  assert.deepEqual(touchRect(box(200, 300, 346, 447), 400, 800), { x: 200, y: 300, w: 146, h: 147 })
+  // A pet that hid at the screen edge: the touch area is the visible sliver, not the idle window around it.
+  assert.deepEqual(touchRect(box(-60, 300, 40, 420), 400, 800), { x: 0, y: 300, w: 40, h: 120 })
+  // Nothing visible means nothing touchable.
+  assert.equal(touchRect(null, 400, 800), null)
+  assert.equal(touchRect(box(200, 300, 200, 500), 400, 800), null)
+  // The page reports it, and the overlay only takes touches inside it.
+  assert.match(bridge, /native\.setTouch\?\.\(touch\.x, touch\.y, touch\.x \+ touch\.w, touch\.y \+ touch\.h, innerWidth\)/)
+  assert.match(bridge, /const touch = touchRect\(need, innerWidth, innerHeight\)/)
+  assert.match(service, /fun setTouch\(left: Double, top: Double, right: Double, bottom: Double, viewport: Double\)/)
+  assert.match(service, /ACTION_DOWN -> onPet = onTouchArea\(e\.rawX, e\.rawY\)/)
+  assert.match(service, /return if \(onPet\) super\.dispatchTouchEvent\(e\) else false/)
+  // A gesture that started on the pet keeps the whole stream, so a drag may leave the content.
+  assert.match(service, /val mine = onPet\s*onPet = false\s*return if \(mine\) super\.dispatchTouchEvent\(e\) else false/)
 })

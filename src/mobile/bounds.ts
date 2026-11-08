@@ -46,3 +46,23 @@ export function nextBounds(
   const y = Math.max(Math.floor(t - margin), 0)
   return { x, y, w: Math.min(Math.ceil(r + margin), vw) - x, h: Math.min(Math.ceil(b + margin), vh) - y }
 }
+
+/**
+ * The rectangle the overlay window may take touches in: the content itself, clamped to the page and without the
+ * window's margin. The window is deliberately bigger than the pet (and keeps its size while the content still fits,
+ * to avoid blank frames), so everything outside this rectangle has to fall through to the app below — otherwise a
+ * swipe beside the pet, or the system's edge gesture near a pet that hid at the screen edge, is swallowed.
+ */
+export function touchRect(
+  need: { left: number; top: number; right: number; bottom: number } | null,
+  vw: number,
+  vh: number,
+): Rect | null {
+  if (!need) return null
+  const l = Math.max(need.left, 0)
+  const t = Math.max(need.top, 0)
+  const r = Math.min(need.right, vw)
+  const b = Math.min(need.bottom, vh)
+  if (r <= l || b <= t) return null
+  return { x: l, y: t, w: r - l, h: b - t }
+}

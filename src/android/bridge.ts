@@ -6,7 +6,7 @@ import { aiChat, aiModels } from '../shared/ai'
 import { webSearch } from '../shared/websearch'
 import { calendar } from '../shared/calendar'
 import { abortReason, cloneJson } from '../shared/compat'
-import { MARGIN, nextBounds } from '../mobile/bounds'
+import { MARGIN, nextBounds, touchRect } from '../mobile/bounds'
 import { cover } from '../mobile/overlay'
 import type { Fetch, Point, QQPetApi, TrayClick, TrayState } from '../shared/ipc'
 import type { SaveData } from '../shared/save'
@@ -40,6 +40,11 @@ interface Native {
   setHidden?(on: boolean): void
   /** The overlay window's rectangle, in CSS pixels of a page `viewport` pixels wide. */
   setBounds(x: number, y: number, w: number, h: number, viewport: number, dragging: boolean): void
+  /**
+   * The area touches belong to: "left,top,right,bottom" in CSS pixels of a page `viewport` pixels wide, or -1s for
+   * none. Outside it the overlay lets touches through to the app below. Absent on older shells.
+   */
+  setTouch?(left: number, top: number, right: number, bottom: number, viewport: number): void
   /** "left,top,right,bottom" of the system bars and cutout, in CSS pixels of a page `viewport` pixels wide. */
   safeArea(viewport: number): string
 }
@@ -169,6 +174,8 @@ for (const type of ['pointerup', 'pointercancel'] as const)
   )
 
 let bounds = { x: 0, y: 0, w: 0, h: 0 }
+/** Last content rectangle sent to the host; empty when none. */
+let touchSent = ''
 // Measuring every element each frame kept the phone busy while nothing changed (#119): right after a touch or a
 // window change the window follows every frame, otherwise a few times a second (a bubble or an animation that
 // outgrows the window catches up within IDLE_MS).
@@ -212,6 +219,16 @@ function track(now: number): void {
     b = Math.max(b, box.bottom)
   }
   const need = r > x && b > y ? { left: x, top: y, right: r, bottom: b } : null
+  // The window carries a margin and keeps its size while the content still fits, so it is bigger than the pet (much
+  // bigger right after the pet walked to the screen edge): the host takes touches only inside the content rectangle
+  // and lets everything else through to the app below.
+  const touch = touchRect(need, innerWidth, innerHeight)
+  const key = touch ? `${touch.x},${touch.y},${touch.w},${touch.h}` : ''
+  if (key !== touchSent) {
+    touchSent = key
+    if (touch) native.setTouch?.(touch.x, touch.y, touch.x + touch.w, touch.y + touch.h, innerWidth)
+    else native.setTouch?.(-1, -1, -1, -1, innerWidth)
+  }
   // A touch, a bubble or a menu changes the page for a while: the window only grows until it settles, so a closing
   // tooltip cannot shrink it (and blank the page) in the middle of the menu's opening animation.
   const next = nextBounds(bounds, need, innerWidth, innerHeight, MARGIN, now >= busyUntil)
