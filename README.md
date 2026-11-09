@@ -2,7 +2,7 @@
 
 QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS / iOS），基于 Arctic Penguin T800 逆向重建。Flash 内容由 [Ruffle](https://ruffle.rs) 播放。
 
-> **版权声明**：QQ 宠物的美术资源与 SWF 版权归腾讯所有；旅行照片素材版权归《旅行青蛙·中国之旅》所有。本项目仅供学习交流，请勿用于商业用途。腾讯你别搞我，你要是自己重新开服我回去冲粉钻的。
+> **版权声明**：QQ 宠物的美术资源与 SWF 版权归腾讯所有；旅行照片素材版权归《旅行青蛙·中国之旅》所有。本项目仅供学习交流，请勿用于商业用途。这个项目本来是Ankio大佬的，但是大佬貌似维护不了了，我这边单独维护一个分支。腾讯大佬别搞。
 
 ## 截图
 
@@ -84,7 +84,7 @@ GitHub Actions 打 `v*` 标签时产出未签名 HAP 并放进 Release。和桌�
 
 ## 下载安装
 
-从 [Releases](https://github.com/AnkioTomas/qqpet/releases/latest) 下载对应平台的安装包：
+从 [Releases](https://github.com/TinyBrian/qqPet/releases) 下载对应平台的安装包：
 
 | 平台 | 文件 |
 |---|---|
@@ -157,7 +157,7 @@ curl -X POST 'http://127.0.0.1:17788/hook?token=<token>' \
 
 社区场景的贴图原本是客户端运行时从服务器下载的，安装包里没有。如果你有当年的 QQ 宠物或 QQ 缓存目录（尤其是 `petsoc` 相关文件），会很有帮助。
 
-提交方式：在 [Issues](https://github.com/AnkioTomas/qqpet/issues) 发帖说明你有什么，文件较大可附网盘链接。提交的素材版权仍归腾讯所有，只用于本项目的学习复刻。
+提交方式：在 [Issues](https://github.com/TinyBrian/qqPet/issues) 发帖说明你有什么，文件较大可附网盘链接。提交的素材版权仍归腾讯所有，只用于本项目的学习复刻。
 
 ## 开发
 
