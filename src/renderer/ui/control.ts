@@ -438,7 +438,9 @@ function swipePages(
   let dx = 0
   let vx = 0
   let swiped = false
-  const width = (): number => goods.clientWidth || 1
+  /** Page width on screen, in the same pixels the pointer reports (`clientWidth` is in element pixels and the toolbar
+   *  is scaled on a phone, which made every real swipe look too short and snap back). */
+  const width = (): number => goods.getBoundingClientRect().width || 1
   /** The toolbar is scaled on a small screen: element pixels are not viewport pixels. */
   const scaled = (): number => {
     const box = goods.getBoundingClientRect().width

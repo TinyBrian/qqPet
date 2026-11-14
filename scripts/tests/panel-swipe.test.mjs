@@ -6,13 +6,12 @@ import { rubberBand, snapPage } from '../../src/renderer/ui/swipe.ts'
 const control = readFileSync(new URL('../../src/renderer/ui/control.ts', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../../src/renderer/ui/css/control.css', import.meta.url), 'utf8')
 
-test('a release snaps to the nearest page, so the strip can stop anywhere while dragging', () => {
-  // 35% of a 282px row is still closer to this page than the next one.
-  assert.equal(snapPage(-99, 282, 0.05, 2, 9), 2)
-  assert.equal(snapPage(-141, 282, 0.05, 2, 9), 3)
-  assert.equal(snapPage(141, 282, -0.05, 2, 9), 1)
-  // A whole page or more moves that many pages.
-  assert.equal(snapPage(-564, 282, 0.05, 3, 9), 5)
+test('a slow drag turns the page after a third of its width, either way', () => {
+  assert.equal(snapPage(-60, 282, 0.05, 2, 9), 2)
+  assert.equal(snapPage(-90, 282, 0.05, 2, 9), 3)
+  assert.equal(snapPage(90, 282, -0.05, 2, 9), 1)
+  // One page at a time: the strip only holds the pages either side.
+  assert.equal(snapPage(-564, 282, 0.05, 3, 9), 4)
 })
 
 test('a flick turns one page even when the finger barely moved', () => {
@@ -43,6 +42,7 @@ test('the previous and next pages are built with the current one and slide with 
   // The bar is scaled on a small screen, so viewport pixels are divided back into element pixels: the strip keeps up
   // with the finger instead of drifting behind it.
   assert.match(control, /const scaled = \(\): number => \{/)
+  // Pointer and page width must share a unit: clientWidth is element pixels, which scale on a phone.\n  assert.match(control, /const width = \(\): number => goods\\.getBoundingClientRect\\(\\)\\.width \\|\\| 1/)
   assert.match(control, /rubberBand\(dx, view\.page === 1, view\.page === view\.total\) \/ scaled\(\)/)
   // A rebuild mid-drag would replace the strip and drop the gesture.
   assert.match(control, /if \(open\?\.type === type && !pageBusy\(\)\)/)
