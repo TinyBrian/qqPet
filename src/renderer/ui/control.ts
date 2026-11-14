@@ -163,7 +163,7 @@ document.body.appendChild(div('ui-control', control))
 
 let shown = false
 let hideTimer = 0
-let open: (Panel & { page: number }) | null = null
+let open: (Panel & { page: number; offset: number }) | null = null
 
 /**
  * Visible page box the bar must stay inside. Desktop uses the overlay size; when Android zooms the
@@ -348,7 +348,7 @@ let picked: string | null = null
 
 function openPanel(p: Panel, page = 1, offset = 0): void {
   if (open?.type !== p.type || open?.icon !== p.icon) picked = null
-  open = { ...p, page }
+  open = { ...p, page, offset }
   bar = null
   menus.style.display = 'none'
   const { totalPage } = p.list(page)
@@ -713,5 +713,11 @@ onInfoChange((key) => {
 })
 onGoodsChange((type) => {
   // 手指正在拖这一行时不重建：重建会把轨道换掉，拖到一半的手势就断了。
-  if (open?.type === type && !pageBusy()) openPanel(open, Math.min(open.page, Math.max(open.list(1).totalPage, 1)))
+  // Rebuilding after a count changes (eating, using an item) must keep the list where it was scrolled to, not jump
+  // back to the start of the page.
+  if (open?.type === type && !pageBusy()) {
+    const total = Math.max(open.list(1).totalPage, 1)
+    const page = Math.min(open.page, total)
+    openPanel(open, page, page === open.page ? open.offset : 0)
+  }
 })

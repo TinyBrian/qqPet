@@ -98,3 +98,10 @@ test('the row keeps one option per slot and never shrinks them', () => {
   assert.match(css, /\.ui-control \.goodsTrack \{\s*display: flex;/)
   assert.match(css, /\.ui-control \.goodsTrack > \* \{\s*flex: 0 0 auto;/)
 })
+
+test('using an option rebuilds the panel where it was scrolled to, not back at the page start', () => {
+  // The item offset lives in the open panel state and is handed back on a goods-change rebuild.
+  assert.match(control, /let open: \(Panel & \{ page: number; offset: number \}\) \| null = null/)
+  assert.match(control, /open = \{ \.\.\.p, page, offset \}/)
+  assert.match(control, /openPanel\(open, page, page === open\.page \? open\.offset : 0\)/)
+})
