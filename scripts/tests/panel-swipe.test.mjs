@@ -65,8 +65,9 @@ test('a tap still presses the option, and a drag does not', () => {
   assert.match(control, /event\.stopPropagation\(\)\s*event\.preventDefault\(\)/)
 })
 
-test('the stage strip scrolls with a finger as well', () => {
-  assert.match(control, /strip\.addEventListener\('pointermove', \(event\) => \{\s*if \(from\) strip\.scrollLeft = from\.left - \(event\.clientX - from\.x\)/)
+test('the stage strip scrolls with a finger as well, without eating the button clicks', () => {
+  assert.match(control, /if \(Math\.abs\(moved\) <= 6\) return\s*dragging = true\s*strip\.setPointerCapture\(event\.pointerId\)/)
+  assert.match(control, /strip\.scrollLeft = from\.left - moved/)
 })
 
 test('the list is a flat row of options that clips only while dragged, with fades on the edges', () => {

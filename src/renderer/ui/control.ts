@@ -572,14 +572,39 @@ function tabBar(tabs: Tab[]): HTMLElement {
     strip.scrollLeft += dir * Math.max(48, strip.clientWidth * 0.7)
   }
   let from: { x: number; left: number } | null = null
+  let dragging = false
   strip.addEventListener('pointerdown', (event) => {
     from = { x: event.clientX, left: strip.scrollLeft }
-    strip.setPointerCapture(event.pointerId)
+    dragging = false
   })
   strip.addEventListener('pointermove', (event) => {
-    if (from) strip.scrollLeft = from.left - (event.clientX - from.x)
+    if (!from) return
+    const moved = event.clientX - from.x
+    if (!dragging) {
+      // Only a clear sideways move scrolls the strip: capturing on the press retargets the click and the stage button
+      // under the finger would never be pressed.
+      if (Math.abs(moved) <= 6) return
+      dragging = true
+      strip.setPointerCapture(event.pointerId)
+    }
+    strip.scrollLeft = from.left - moved
   })
-  for (const type of ['pointerup', 'pointercancel'] as const) strip.addEventListener(type, () => (from = null))
+  const end = (): void => {
+    from = null
+    // Only this gesture's own click is eaten: the next tap is a tap again.
+    setTimeout(() => (dragging = false), 0)
+  }
+  for (const type of ['pointerup', 'pointercancel'] as const) strip.addEventListener(type, end)
+  strip.addEventListener(
+    'click',
+    (event) => {
+      if (!dragging) return
+      dragging = false
+      event.stopPropagation()
+      event.preventDefault()
+    },
+    true,
+  )
   return div('goodTabs fc', button('tabArrow left', scroll(-1)), strip, button('tabArrow right', scroll(1)))
 }
 
