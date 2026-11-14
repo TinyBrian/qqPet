@@ -100,16 +100,25 @@ const ARTT_NAME = { charm: '魅力', intel: '智力', strong: '武力' } as cons
  */
 export type WorkLine = string | { text: string; bad: boolean }
 
-/** Why the pet cannot work at all right now, as the line the job panel shows; '' when it can. */
-export function workBlocker(): string {
+/**
+ * Why the pet cannot start 工作 or 学习 at all right now, as the line a panel shows; '' when it can. Both panels
+ * grey their entries with it, so a running task blocks the other kind of entry the same way.
+ */
+function blocker(what: '工作' | '学习'): string {
   const doing = (['work', 'study', 'trip'] as const).find((k) => activity(k))
-  if (info.health === 0) return '生命值为 0，无法工作'
-  if (info.health !== 5) return '生病中，无法工作'
-  if (save.settings.paused) return '已暂停成长，无法工作'
-  if (info.mood <= 0) return '心情为 0，无法工作'
+  if (info.health === 0) return `生命值为 0，无法${what}`
+  if (info.health !== 5) return `生病中，无法${what}`
+  if (save.settings.paused) return `已暂停成长，无法${what}`
+  if (info.mood <= 0) return `心情为 0，无法${what}`
   if (doing) return doing === 'work' ? '正在打工，等下班再说' : doing === 'study' ? '正在上课，等下课再说' : '正在旅游，等回来再说'
   return ''
 }
+
+/** Why the pet cannot work at all right now, as the line the job panel shows; '' when it can. */
+export const workBlocker = (): string => blocker('工作')
+
+/** Why the pet cannot study at all right now, as the line the study panel shows; '' when it can. */
+export const studyBlocker = (): string => blocker('学习')
 
 /** The level, diploma and attribute requirements of a job, with the ones the pet falls short of flagged. */
 export function jobLines(

@@ -16,6 +16,7 @@ import {
   studyDone,
   studyGoods,
   studyMenu,
+  studyBlocker,
   work,
   workGoods,
 } from '../pet/jobs'
@@ -669,7 +670,12 @@ function openStudy(): void {
   const panel: Panel = {
     icon: activeIcon(24),
     list: (page) => pageOf(studyMenu(studyTab), page, PAGE),
-    lines: (g) => [...describeStudy(g), ...(studyDone(g) ? ['已完成'] : examPending(g) ? ['课程已学完，点击参加考试'] : [])],
+    // 正在打工/上课/旅游时，和打工面板一样把选项变灰，并把原因写在提示里。
+    lines: (g) => [
+      ...(studyBlocker() ? [{ text: studyBlocker(), bad: true }] : []),
+      ...describeStudy(g),
+      ...(studyDone(g) ? ['已完成'] : examPending(g) ? ['课程已学完，点击参加考试'] : []),
+    ],
     empty: '快去完成之前学业吧~',
     done: studyDone,
     use: (g) => {

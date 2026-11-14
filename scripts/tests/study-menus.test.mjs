@@ -12,11 +12,11 @@ const SCHOOLS = { xx: [9, 0], zx: [20, 10], dx: [40, 31], yjs: [95, 72], xwzj: [
 const KEYS = ['xx', 'zx', 'dx', 'yjs', 'xwzj']
 
 /** A stub of the pet around jobs.ts: enough for the study helpers, nothing else. */
-function schoolModule(studyInfo) {
+function schoolModule(studyInfo, doing = '' ) {
   const context = {
     save: { settings: {}, studyInfo, petComputedlInfo: { level: 1 } },
     info: { health: 5, mood: 500 },
-    activity: () => null,
+    activity: (key) => (doing && doing === key ? { key } : null),
     goodOf: (type, id) => ({
       id,
       type,
@@ -37,6 +37,7 @@ this.studyLessons = studyLessons
 this.describeStudy = describeStudy
 this.studyDone = studyDone
 this.studyMenu = studyMenu
+this.studyBlocker = studyBlocker
 this.examPending = examPending
 this.STUDY_SCHOOLS = STUDY_SCHOOLS
 this.PAGE = 4`,
@@ -118,4 +119,32 @@ test('a stage with nothing finished keeps its subject order, and so does one wit
 test('a stage still ahead shows nothing, so the order there is empty too', () => {
   const m = schoolModule({ chinese: 10, mathematics: 10, politics: 10, music: 10, art: 10, manner: 10, pe: 10, labouring: 10, wushu: 10 })
   assert.equal(m.studyMenu('dx').length, 0)
+})
+
+test('while the pet is busy, the study menu greys its options with the same reason the job menu does', () => {
+  // Idle: no blocker line, so every option stays available.
+  assert.equal(schoolModule({}).studyBlocker(), '' )
+  // A running task blocks the study panel exactly like it blocks the job panel.
+  assert.equal(schoolModule({}, 'work').studyBlocker(), '正在打工，等下班再说')
+  assert.equal(schoolModule({}, 'study').studyBlocker(), '正在上课，等下课再说')
+  assert.equal(schoolModule({}, 'trip').studyBlocker(), '正在旅游，等回来再说')
+})
+
+test('being ill, paused or out of mood greys the study menu as well', () => {
+  const ill = schoolModule({})
+  ill.info.health = 4
+  assert.equal(ill.studyBlocker(), '生病中，无法学习')
+  const dead = schoolModule({})
+  dead.info.health = 0
+  assert.equal(dead.studyBlocker(), '生命值为 0，无法学习')
+  const paused = schoolModule({})
+  paused.save.settings.paused = true
+  assert.equal(paused.studyBlocker(), '已暂停成长，无法学习')
+  const sad = schoolModule({})
+  sad.info.mood = 0
+  assert.equal(sad.studyBlocker(), '心情为 0，无法学习')
+})
+
+test('the study panel turns the blocker into a bad line, which is what greys an option', () => {
+  assert.match(control, /\.\.\.\(studyBlocker\(\) \? \[\{ text: studyBlocker\(\), bad: true \}\] : \[\]\),/)
 })
