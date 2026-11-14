@@ -86,7 +86,7 @@ test('only the row window clips and fades, so the status bar and the tips stay w
 
 test('the item tip lives at panel level so the clipping cannot cut it', () => {
   assert.match(control, /const tip = div\('goodTip'\)/)
-  assert.match(control, /tip\.replaceChildren\(div\('goodName', data\.name\)/)
+  assert.match(control, /tip\.replaceChildren\(div\('goodName', good\.name\)/)
   // Placed beside the option, flipped to the other side when it would leave the panel.
   assert.match(control, /if \(left \+ width > panel\.width - 4\) left = box\.left - panel\.left - width - 6/)
   assert.match(control, /tip\.style\.top = `\$\{Math\.max\(2, Math\.min\(box\.top - panel\.top, panel\.height - tip\.offsetHeight - 2\)\)\}px`/)
@@ -101,7 +101,17 @@ test('the row keeps one option per slot and never shrinks them', () => {
 
 test('using an option rebuilds the panel where it was scrolled to, not back at the page start', () => {
   // The item offset lives in the open panel state and is handed back on a goods-change rebuild.
-  assert.match(control, /let open: \(Panel & \{ page: number; offset: number \}\) \| null = null/)
-  assert.match(control, /open = \{ \.\.\.p, page, offset \}/)
+  assert.match(control, /let open: \(Panel & \{ page: number; offset: number; ids: string \}\) \| null = null/)
+  assert.match(control, /open = \{ \.\.\.p, page, offset, ids: panelIds\(p, page, totalPage\) \}/)
   assert.match(control, /openPanel\(open, page, page === open\.page \? open\.offset : 0\)/)
+})
+
+test('eating changes only a count: the panel is not rebuilt, so the menu cannot jump', () => {
+  // The rendered option ids are remembered, and a goods change with the same ids returns without rebuilding.
+  assert.match(control, /function panelIds\(p: Panel, page: number, total: number\): string \{/)
+  assert.match(control, /open = \{ \.\.\.p, page, offset, ids: panelIds\(p, page, totalPage\) \}/)
+  assert.match(control, /if \(panelIds\(open, Math\.min\(open\.page, total\), total\) === open\.ids\) return/)
+  // Tips are built on hover from the good as it is then, so a count change needs no rebuild to show.
+  assert.match(control, /const lines = p\.lines\(good\)\.map/)
+  assert.doesNotMatch(control, /tips\.set\(el, \{ name: g\.name, lines \}\)/)
 })

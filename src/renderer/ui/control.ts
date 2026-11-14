@@ -163,7 +163,7 @@ document.body.appendChild(div('ui-control', control))
 
 let shown = false
 let hideTimer = 0
-let open: (Panel & { page: number; offset: number }) | null = null
+let open: (Panel & { page: number; offset: number; ids: string }) | null = null
 
 /**
  * Visible page box the bar must stay inside. Desktop uses the overlay size; when Android zooms the
@@ -346,14 +346,22 @@ const pageBusy = (): boolean => pageDragging
 /** The good a touch already previewed; it survives rebuilds of the same panel (a count change, a page turn). */
 let picked: string | null = null
 
+/** The option ids of the pages a panel renders, so a count change can be told from a list change. */
+function panelIds(p: Panel, page: number, total: number): string {
+  const first = page > 1 ? page - 1 : page
+  const ids: string[] = []
+  for (let n = first; n <= Math.min(page + 1, total); n++) ids.push(...p.list(n).list.map((g) => g.id))
+  return ids.join('|')
+}
+
 function openPanel(p: Panel, page = 1, offset = 0): void {
   if (open?.type !== p.type || open?.icon !== p.icon) picked = null
-  open = { ...p, page, offset }
   bar = null
   menus.style.display = 'none'
   const { totalPage } = p.list(page)
+  open = { ...p, page, offset, ids: panelIds(p, page, totalPage) }
   /** Item tips live at panel level: the row clips its own overflow, so a tip inside an item would be cut off. */
-  const tips = new Map<HTMLElement, { name: string; lines: { text: string; bad: boolean }[] }>()
+  const tips = new Map<HTMLElement, Good>()
   /** The options of one page, as a flat list: the row is continuous, so neighbours slide in one option at a time. */
   const options = (n: number): HTMLElement[] =>
     p.list(n).list.map((g: Good) => {
@@ -376,7 +384,7 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
           }),
         ),
       )
-      tips.set(el, { name: g.name, lines })
+      tips.set(el, g)
       return el
     })
   // The previous page is in the row too, so the list can be dragged back into it; the next one likewise.
@@ -405,9 +413,11 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
   // Hovering an option shows its tip beside it, flipped to the other side when it would leave the panel.
   const tip = div('goodTip')
   const showTip = (el: HTMLElement): void => {
-    const data = tips.get(el)
-    if (!data) return
-    tip.replaceChildren(div('goodName', data.name), ...data.lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text)))
+    const good = tips.get(el)
+    if (!good) return
+    // Built on every hover from the good as it is now, so a count change needs no panel rebuild.
+    const lines = p.lines(good).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
+    tip.replaceChildren(div('goodName', good.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text)))
     tip.style.display = 'block'
     const panel = next.getBoundingClientRect()
     const box = el.getBoundingClientRect()
@@ -712,12 +722,11 @@ onInfoChange((key) => {
   }
 })
 onGoodsChange((type) => {
-  // 手指正在拖这一行时不重建：重建会把轨道换掉，拖到一半的手势就断了。
-  // Rebuilding after a count changes (eating, using an item) must keep the list where it was scrolled to, not jump
-  // back to the start of the page.
-  if (open?.type === type && !pageBusy()) {
-    const total = Math.max(open.list(1).totalPage, 1)
-    const page = Math.min(open.page, total)
-    openPanel(open, page, page === open.page ? open.offset : 0)
-  }
+  if (open?.type !== type || pageBusy()) return
+  const total = Math.max(open.list(1).totalPage, 1)
+  // 只是数量变了（吃掉一个、用一个）：提示在悬停时按现在的好物现算，所以不用重建面板，菜单也不会跳。
+  if (panelIds(open, Math.min(open.page, total), total) === open.ids) return
+  // 列表真的变了（某个物品用完消失、或有新物品）：重建，并保留原来的页码和格位。
+  const page = Math.min(open.page, total)
+  openPanel(open, page, page === open.page ? open.offset : 0)
 })
