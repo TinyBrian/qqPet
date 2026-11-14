@@ -37,7 +37,7 @@ import { openSignIn } from './signin'
 import { setBubbleLift } from './talk'
 import { openTask } from './task'
 import { openTravel } from './travel'
-import { rubberBand, swipePage } from './swipe'
+import { rubberBand, snapPage } from './swipe'
 
 const ICONS = 'pet/control/icons/'
 const BAR_HEIGHT = 180
@@ -338,6 +338,10 @@ export function dismissControl(): boolean {
 let list: HTMLElement | null = null
 /** The stat bar of the open panel, updated in place so a tick does not rebuild the goods under a finger. */
 let bar: HTMLElement | null = null
+/** A finger is dragging the option strip; a rebuild now would drop the gesture. */
+let pageDragging = false
+const pageBusy = (): boolean => pageDragging
+
 /** The good a touch already previewed; it survives rebuilds of the same panel (a count change, a page turn). */
 let picked: string | null = null
 
@@ -346,47 +350,68 @@ function openPanel(p: Panel, page = 1): void {
   open = { ...p, page }
   bar = null
   menus.style.display = 'none'
-  const { list: goods, totalPage } = p.list(page)
-  const turn = (d: number) => (): void => {
-    if (page + d >= 1 && page + d <= totalPage) openPanel(p, page + d)
-  }
-  const items = goods.map((g: Good) => {
-    const lines = p.lines(g).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
-    // A job whose requirements the pet misses greys its icon; its tip paints the missed lines red.
-    const locked = lines.some((line) => line.bad)
-    // A lesson already finished keeps its place, with a certificate in the corner (see `done` in the panel).
-    const done = p.done?.(g) ?? false
+  const { totalPage } = p.list(page)
+  // One page of up to four options. The previous and next pages are built too, so a drag pulls them in instead of
+  // jumping a whole page at a time: any option can follow the finger to any position before it snaps.
+  const renderPage = (n: number): HTMLElement => {
+    const { list: goods } = p.list(n)
+    const items = goods.map((g: Good) => {
+      const lines = p.lines(g).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
+      // A job whose requirements the pet misses greys its icon; its tip paints the missed lines red.
+      const locked = lines.some((line) => line.bad)
+      // A lesson already finished keeps its place, with a certificate in the corner (see `done` in the panel).
+      const done = p.done?.(g) ?? false
+      return div(
+        `goodItem${locked ? ' locked' : ''}${done ? ' done' : ''}`,
+        div(
+          'goodItemIconBox fcc',
+          div('goodInfo', div('goodName', g.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text))),
+          Object.assign(img('goodItemIcon', g.url), {
+            onclick: () => {
+              // A tap hovers what it touches: the first one shows the good's info, the next uses it.
+              if (touch && picked !== g.id) return void (picked = g.id)
+              picked = null
+              if (p.use(g)) closePanel()
+            },
+          }),
+        ),
+      )
+    })
     return div(
-      `goodItem${locked ? ' locked' : ''}${done ? ' done' : ''}`,
-      div(
-        'goodItemIconBox fcc',
-        div('goodInfo', div('goodName', g.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text))),
-        Object.assign(img('goodItemIcon', g.url), {
-          onclick: () => {
-            // A tap hovers what it touches: the first one shows the good's info, the next uses it.
-            if (touch && picked !== g.id) return void (picked = g.id)
-            picked = null
-            if (p.use(g)) closePanel()
-          },
-        }),
-      ),
+      `goodPage fc${n === page ? ' on' : ''}`,
+      ...(items.length ? items : [div('goodsNone tc w100', p.empty ?? ' 空空如也~~ ')]),
     )
-  })
-  const row = div('fc f1', ...(items.length ? items : [div('goodsNone tc w100', p.empty ?? ' 空空如也~~ ')]))
+  }
+  const pages = [page - 1, page, page + 1].filter((n) => n >= 1 && n <= totalPage)
+  const shown = pages.indexOf(page)
+  const track = div(
+    'goodsTrack',
+    ...pages.map((n, i) => {
+      const el = renderPage(n)
+      // One page to either side of the current one; the strip slides between them.
+      el.style.left = `${(i - shown) * 100}%`
+      return el
+    }),
+  )
   const goodsBox = div(
     'goods f1 fC h100',
-    row,
+    track,
     ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
   )
-  // A finger drags the row across; the release turns the page exactly like the triangles do.
-  swipePanel(goodsBox, row, { prev: turn(-1), next: turn(1), canPrev: page > 1, canNext: page < totalPage })
+  // A finger drags the strip across; the release snaps to the nearest page, like the triangles do.
+  const pager = swipePages(goodsBox, track, { pages, page, total: totalPage, go: (n) => openPanel(p, n) })
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),
     ...(p.tabs ? [tabBar(p.tabs())] : []),
     ...(p.stat ? [button('toShoppingMall', openShop, '去购物')] : []),
     button('goodClose', closePanel),
-    div('goodListMain fcc', button('toLeft', turn(-1)), goodsBox, button('toRight', turn(1))),
+    div(
+      'goodListMain fcc',
+      button('toLeft', () => pager.slide(-1)),
+      goodsBox,
+      button('toRight', () => pager.slide(1)),
+    ),
   )
   if (list) list.replaceWith(next)
   else control.appendChild(next)
@@ -396,24 +421,47 @@ function openPanel(p: Panel, page = 1): void {
 }
 
 /**
- * Drag paging for the goods row: the row follows the finger, the release turns the page like the triangles do, and
- * a tap still uses the item under it. A drag never counts as a tap.
+/**
+ * Drag paging for the strip of pages: the strip follows the finger (the neighbouring pages are already built, so they
+ * slide in with it), the release snaps to the nearest page, and a tap still uses the item under it. The triangles call
+ * `slide` and take the same path.
  */
-function swipePanel(
+function swipePages(
   goods: HTMLElement,
-  row: HTMLElement,
-  turn: { prev: () => void; next: () => void; canPrev: boolean; canNext: boolean },
-): void {
-  const width = (): number => goods.clientWidth
+  track: HTMLElement,
+  view: { pages: number[]; page: number; total: number; go: (page: number) => void },
+): { slide: (dir: number) => void } {
+  /** Which rendered page is in view; the others sit a page to either side. */
+  const shown = view.pages.indexOf(view.page)
   let from: { x: number; y: number } | null = null
   let last = { x: 0, t: 0 }
   let dx = 0
   let vx = 0
   let swiped = false
-  const follow = (offset: string, transition: string): void => {
-    row.style.transition = transition
-    row.style.transform = offset
+  const width = (): number => goods.clientWidth || 1
+  /** The toolbar is scaled on a small screen: element pixels are not viewport pixels. */
+  const scaled = (): number => {
+    const box = goods.getBoundingClientRect().width
+    return box > 0 && goods.offsetWidth > 0 ? box / goods.offsetWidth : 1
   }
+  track.style.transition = 'none'
+  track.style.transform = ''
+  /** Slides one page over, then rebuilds the panel there (the DOM is replaced, so the strip recentres). */
+  const settle = (index: number): void => {
+    if (index === shown || index < 0 || index >= view.pages.length) return
+    const target = view.pages[index]
+    goods.classList.add('swiping')
+    track.style.transition = 'transform .18s ease-out'
+    track.style.transform = `translateX(${index > shown ? -100 : 100}%)`
+    const done = (event: TransitionEvent): void => {
+      if (event.propertyName !== 'transform') return
+      track.removeEventListener('transitionend', done)
+      pageDragging = false
+      view.go(target)
+    }
+    track.addEventListener('transitionend', done)
+  }
+  const slide = (dir: number): void => settle(shown + dir)
   goods.addEventListener('pointerdown', (event) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return
     from = { x: event.clientX, y: event.clientY }
@@ -430,35 +478,40 @@ function swipePanel(
       // A slow start stays a tap; only a clear sideways move takes over, so the item's own click survives.
       if (Math.abs(movedX) <= 6 || Math.abs(movedX) <= Math.abs(movedY)) return
       swiped = true
-      // Capture only once it is a drag: capturing on the press retargets the release and click to the row, and the
+      pageDragging = true
+      // Capture only once it is a drag: capturing on the press retargets the release and click to the strip, and the
       // item under the finger would never be pressed.
       goods.setPointerCapture(event.pointerId)
       goods.classList.add('swiping')
-      follow('', 'none')
+      track.style.transition = 'none'
     }
     const now = performance.now()
     const dt = Math.max(1, now - last.t)
     vx = (event.clientX - last.x) / dt
     last = { x: event.clientX, t: now }
     dx = movedX
-    follow(`translateX(${rubberBand(dx, !turn.canPrev, !turn.canNext)}px)`, 'none')
+    track.style.transform = `translateX(${rubberBand(dx, view.page === 1, view.page === view.total) / scaled()}px)`
   })
   const release = (event: PointerEvent): void => {
     if (!from) return
     from = null
     if (goods.hasPointerCapture(event.pointerId)) goods.releasePointerCapture(event.pointerId)
     if (!swiped) return
-    const dir = swipePage(dx, width(), vx)
-    if (dir === 0 || (dir > 0 && !turn.canNext) || (dir < 0 && !turn.canPrev)) {
-      follow('', 'transform .16s ease-out')
-      setTimeout(() => goods.classList.remove('swiping'), 200)
+    const target = snapPage(dx, width(), vx, view.page, view.total)
+    // The strip only holds the pages either side, so a long throw still lands one page over at most.
+    const nearest = Math.min(Math.max(target, view.page - 1), view.page + 1)
+    const index = view.pages.indexOf(nearest)
+    if (index === shown || index < 0) {
+      // Snap back to where it was.
+      track.style.transition = 'transform .18s ease-out'
+      track.style.transform = ''
+      setTimeout(() => goods.classList.remove('swiping'), 220)
       // Only this gesture's own click is eaten: the next tap is a tap again.
       setTimeout(() => (swiped = false), 0)
+      pageDragging = false
       return
     }
-    // Slide the whole row out, then rebuild the panel on the new page — the same path the triangles take.
-    follow(`translateX(${dir > 0 ? -width() : width()}px)`, 'transform .16s ease-out')
-    row.addEventListener('transitionend', () => (dir > 0 ? turn.next() : turn.prev()), { once: true })
+    settle(index)
   }
   goods.addEventListener('pointerup', release)
   goods.addEventListener('pointercancel', release)
@@ -473,6 +526,7 @@ function swipePanel(
     },
     true,
   )
+  return { slide }
 }
 
 /**
@@ -594,5 +648,6 @@ onInfoChange((key) => {
   }
 })
 onGoodsChange((type) => {
-  if (open?.type === type) openPanel(open, Math.min(open.page, Math.max(open.list(1).totalPage, 1)))
+  // 手指正在拖这一行时不重建：重建会把轨道换掉，拖到一半的手势就断了。
+  if (open?.type === type && !pageBusy()) openPanel(open, Math.min(open.page, Math.max(open.list(1).totalPage, 1)))
 })

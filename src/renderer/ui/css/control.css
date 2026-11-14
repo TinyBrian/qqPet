@@ -314,17 +314,39 @@
   height: calc(100% - 21px);
   padding: 5px;
 }
-/* 商品行：手指可以横向拖拽翻页（三角翻页同时保留）。纵向手势留给系统，行只在拖动时裁剪，
-   这样平时右上角弹出的物品提示不会被切掉。 */
+/* 商品行：手指可以横向拖拽翻页（三角翻页同时保留）。纵向手势留给系统，行只在拖动/翻页时裁剪，
+   这样平时物品右上角的提示不会被切掉。 */
 .ui-control .goods {
   position: relative;
   touch-action: pan-y;
+  /* 三页宽的轨道会撑大 min-content，这里必须允许收缩回一行宽。 */
+  min-width: 0;
+  min-height: 0;
 }
 .ui-control .goods.swiping {
   overflow: hidden;
 }
-.ui-control .goods.swiping > .fc {
+/* 一页四个选项：上一页和下一页也一起建好，拖动时跟着手指滑进来，而不是整页跳。 */
+.ui-control .goodsTrack {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
   will-change: transform;
+}
+.ui-control .goodPage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  /* 静态时只显示当前页（visibility 也不吃点击），相邻页留到拖动/翻页时再露面。 */
+  visibility: hidden;
+}
+.ui-control .goodPage.on,
+.ui-control .goods.swiping .goodPage {
+  visibility: visible;
 }
 .ui-control .toLeft,
 .ui-control .toRight {
