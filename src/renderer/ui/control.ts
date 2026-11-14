@@ -37,7 +37,7 @@ import { openSignIn } from './signin'
 import { setBubbleLift } from './talk'
 import { openTask } from './task'
 import { openTravel } from './travel'
-import { rubberBand, snapPage } from './swipe'
+import { rubberBand, snapStep } from './swipe'
 
 const ICONS = 'pet/control/icons/'
 const BAR_HEIGHT = 180
@@ -345,17 +345,15 @@ const pageBusy = (): boolean => pageDragging
 /** The good a touch already previewed; it survives rebuilds of the same panel (a count change, a page turn). */
 let picked: string | null = null
 
-function openPanel(p: Panel, page = 1): void {
+function openPanel(p: Panel, page = 1, offset = 0): void {
   if (open?.type !== p.type || open?.icon !== p.icon) picked = null
   open = { ...p, page }
   bar = null
   menus.style.display = 'none'
   const { totalPage } = p.list(page)
-  // One page of up to four options. The previous and next pages are built too, so a drag pulls them in instead of
-  // jumping a whole page at a time: any option can follow the finger to any position before it snaps.
-  const renderPage = (n: number): HTMLElement => {
-    const { list: goods } = p.list(n)
-    const items = goods.map((g: Good) => {
+  /** The options of one page, as a flat list: the row is continuous, so neighbours slide in one option at a time. */
+  const options = (n: number): HTMLElement[] =>
+    p.list(n).list.map((g: Good) => {
       const lines = p.lines(g).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
       // A job whose requirements the pet misses greys its icon; its tip paints the missed lines red.
       const locked = lines.some((line) => line.bad)
@@ -377,29 +375,34 @@ function openPanel(p: Panel, page = 1): void {
         ),
       )
     })
-    return div(
-      `goodPage fc${n === page ? ' on' : ''}`,
-      ...(items.length ? items : [div('goodsNone tc w100', p.empty ?? ' 空空如也~~ ')]),
-    )
-  }
-  const pages = [page - 1, page, page + 1].filter((n) => n >= 1 && n <= totalPage)
-  const shown = pages.indexOf(page)
-  const track = div(
-    'goodsTrack',
-    ...pages.map((n, i) => {
-      const el = renderPage(n)
-      // One page to either side of the current one; the strip slides between them.
-      el.style.left = `${(i - shown) * 100}%`
-      return el
-    }),
-  )
+  // The previous page is in the row too, so the list can be dragged back into it; the next one likewise.
+  const first = page > 1 ? page - 1 : page
+  const row: HTMLElement[] = []
+  for (let n = first; n <= Math.min(page + 1, totalPage); n++) row.push(...options(n))
+  if (!row.length) row.push(div('goodsNone tc w100', p.empty ?? ' 空空如也~~ '))
+  const start = (page - first) * PAGE + offset
+  const track = div('goodsTrack', ...row)
+  track.style.marginLeft = `${(-start / PAGE) * 100}%`
   const goodsBox = div(
     'goods f1 fC h100',
     track,
     ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
   )
-  // A finger drags the strip across; the release snaps to the nearest page, like the triangles do.
-  const pager = swipePages(goodsBox, track, { pages, page, total: totalPage, go: (n) => openPanel(p, n) })
+  // The list is clipped to the window, so a tip that would run past the right edge opens to the left instead.
+  for (const el of row) {
+    el.addEventListener('mouseenter', () => {
+      const box = goodsBox.getBoundingClientRect()
+      el.classList.toggle('flip', el.getBoundingClientRect().right + 110 > box.right)
+    })
+  }
+  // A finger drags the list across; the release snaps it to the nearest option, the triangles turn whole pages.
+  const pager = swipeItems(goodsBox, track, {
+    start,
+    count: row.length,
+    first,
+    total: totalPage,
+    go: (next, nextOffset) => openPanel(p, next, nextOffset),
+  })
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),
@@ -408,9 +411,9 @@ function openPanel(p: Panel, page = 1): void {
     button('goodClose', closePanel),
     div(
       'goodListMain fcc',
-      button('toLeft', () => pager.slide(-1)),
+      button('toLeft', () => pager.page(-1)),
       goodsBox,
-      button('toRight', () => pager.slide(1)),
+      button('toRight', () => pager.page(1)),
     ),
   )
   if (list) list.replaceWith(next)
@@ -421,49 +424,59 @@ function openPanel(p: Panel, page = 1): void {
 }
 
 /**
-/**
- * Drag paging for the strip of pages: the strip follows the finger (the neighbouring pages are already built, so they
- * slide in with it), the release snaps to the nearest page, and a tap still uses the item under it. The triangles call
- * `slide` and take the same path.
+ * Drag paging for a horizontal list of options. The list follows the finger; on release it snaps to the nearest
+ * option (a flick carries up to three more), and a tap still uses the option under it. The triangles move it by a
+ * whole page through the same `go`, and the edge fades say whether there is more in that direction.
  */
-function swipePages(
+function swipeItems(
   goods: HTMLElement,
   track: HTMLElement,
-  view: { pages: number[]; page: number; total: number; go: (page: number) => void },
-): { slide: (dir: number) => void } {
-  /** Which rendered page is in view; the others sit a page to either side. */
-  const shown = view.pages.indexOf(view.page)
+  view: { start: number; count: number; first: number; total: number; go: (page: number, offset: number) => void },
+): { page: (dir: number) => void } {
+  /** Which option sits at the left edge of the window. */
+  let shown = view.start
   let from: { x: number; y: number } | null = null
   let last = { x: 0, t: 0 }
   let dx = 0
   let vx = 0
   let swiped = false
-  /** Page width on screen, in the same pixels the pointer reports (`clientWidth` is in element pixels and the toolbar
-   *  is scaled on a phone, which made every real swipe look too short and snap back). */
-  const width = (): number => goods.getBoundingClientRect().width || 1
-  /** The toolbar is scaled on a small screen: element pixels are not viewport pixels. */
+  /** One option's width on screen, in the pixels the pointer reports (the toolbar is scaled on a phone). */
+  const pitch = (): number => goods.getBoundingClientRect().width / PAGE || 1
+  /** The toolbar scale: element pixels are not viewport pixels. */
   const scaled = (): number => {
     const box = goods.getBoundingClientRect().width
     return box > 0 && goods.offsetWidth > 0 ? box / goods.offsetWidth : 1
   }
+  const place = (index: number): void => void (track.style.marginLeft = `${(-index / PAGE) * 100}%`)
+  /** The fades only show where there is something more to see. */
+  const edges = (index: number): void => {
+    goods.classList.toggle('moreLeft', index > 0)
+    goods.classList.toggle('moreRight', index + PAGE < view.count)
+  }
   track.style.transition = 'none'
   track.style.transform = ''
-  /** Slides one page over, then rebuilds the panel there (the DOM is replaced, so the strip recentres). */
+  place(shown)
+  edges(shown)
+  /** Slides to the option that should sit at the left edge, then rebuilds the panel there. */
   const settle = (index: number): void => {
-    if (index === shown || index < 0 || index >= view.pages.length) return
-    const target = view.pages[index]
+    const page = view.first + Math.floor(index / PAGE)
+    const offset = index % PAGE
     goods.classList.add('swiping')
-    track.style.transition = 'transform .18s ease-out'
-    track.style.transform = `translateX(${index > shown ? -100 : 100}%)`
+    track.style.transition = 'margin-left .18s ease-out, transform .18s ease-out'
+    track.style.transform = ''
+    place(index)
     const done = (event: TransitionEvent): void => {
-      if (event.propertyName !== 'transform') return
+      if (event.propertyName !== 'margin-left') return
       track.removeEventListener('transitionend', done)
       pageDragging = false
-      view.go(target)
+      view.go(Math.min(Math.max(page, 1), view.total), offset)
     }
     track.addEventListener('transitionend', done)
   }
-  const slide = (dir: number): void => settle(shown + dir)
+  const page = (dir: number): void => {
+    const index = Math.min(Math.max(shown + dir * PAGE, 0), Math.max(view.count - 1, 0))
+    if (index !== shown) settle(index)
+  }
   goods.addEventListener('pointerdown', (event) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return
     from = { x: event.clientX, y: event.clientY }
@@ -477,12 +490,12 @@ function swipePages(
     const movedX = event.clientX - from.x
     const movedY = event.clientY - from.y
     if (!swiped) {
-      // A slow start stays a tap; only a clear sideways move takes over, so the item's own click survives.
+      // A slow start stays a tap; only a clear sideways move takes over, so the option's own click survives.
       if (Math.abs(movedX) <= 6 || Math.abs(movedX) <= Math.abs(movedY)) return
       swiped = true
       pageDragging = true
-      // Capture only once it is a drag: capturing on the press retargets the release and click to the strip, and the
-      // item under the finger would never be pressed.
+      // Capture only once it is a drag: capturing on the press retargets the release and click to the list, and the
+      // option under the finger would never be pressed.
       goods.setPointerCapture(event.pointerId)
       goods.classList.add('swiping')
       track.style.transition = 'none'
@@ -492,18 +505,18 @@ function swipePages(
     vx = (event.clientX - last.x) / dt
     last = { x: event.clientX, t: now }
     dx = movedX
-    track.style.transform = `translateX(${rubberBand(dx, view.page === 1, view.page === view.total) / scaled()}px)`
+    const atStart = shown <= 0
+    const atEnd = shown + PAGE > view.count
+    track.style.transform = `translateX(${rubberBand(dx, atStart, atEnd) / scaled()}px)`
   })
   const release = (event: PointerEvent): void => {
     if (!from) return
     from = null
     if (goods.hasPointerCapture(event.pointerId)) goods.releasePointerCapture(event.pointerId)
     if (!swiped) return
-    const target = snapPage(dx, width(), vx, view.page, view.total)
-    // The strip only holds the pages either side, so a long throw still lands one page over at most.
-    const nearest = Math.min(Math.max(target, view.page - 1), view.page + 1)
-    const index = view.pages.indexOf(nearest)
-    if (index === shown || index < 0) {
+    const step = snapStep(dx, pitch(), vx)
+    const target = Math.min(Math.max(shown + step, 0), Math.max(view.count - 1, 0))
+    if (target === shown) {
       // Snap back to where it was.
       track.style.transition = 'transform .18s ease-out'
       track.style.transform = ''
@@ -513,11 +526,11 @@ function swipePages(
       pageDragging = false
       return
     }
-    settle(index)
+    settle(target)
   }
   goods.addEventListener('pointerup', release)
   goods.addEventListener('pointercancel', release)
-  // The click that follows a drag must not also use the item it started on.
+  // The click that follows a drag must not also use the option it started on.
   goods.addEventListener(
     'click',
     (event) => {
@@ -528,7 +541,7 @@ function swipePages(
     },
     true,
   )
-  return { slide }
+  return { page }
 }
 
 /**

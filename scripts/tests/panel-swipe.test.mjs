@@ -1,64 +1,64 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { rubberBand, snapPage } from '../../src/renderer/ui/swipe.ts'
+import { MAX_FLING, rubberBand, snapStep } from '../../src/renderer/ui/swipe.ts'
 
 const control = readFileSync(new URL('../../src/renderer/ui/control.ts', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../../src/renderer/ui/css/control.css', import.meta.url), 'utf8')
+const pitch = 282 / 4
 
-test('a slow drag turns the page after a third of its width, either way', () => {
-  assert.equal(snapPage(-60, 282, 0.05, 2, 9), 2)
-  assert.equal(snapPage(-90, 282, 0.05, 2, 9), 3)
-  assert.equal(snapPage(90, 282, -0.05, 2, 9), 1)
-  // One page at a time: the strip only holds the pages either side.
-  assert.equal(snapPage(-564, 282, 0.05, 3, 9), 4)
+test('a release snaps to the nearest option, one option per step', () => {
+  // Dragging left reveals the options after it; a little over half an option is enough.
+  assert.equal(snapStep(-35, pitch, 0.05), 0)
+  assert.equal(snapStep(-36, pitch, 0.05), 1)
+  assert.equal(snapStep(-141, pitch, 0.05), 2)
+  assert.equal(snapStep(36, pitch, -0.05), -1)
+  assert.equal(snapStep(141, pitch, -0.05), -2)
 })
 
-test('a flick turns one page even when the finger barely moved', () => {
-  assert.equal(snapPage(-8, 282, -0.6, 2, 9), 3)
-  assert.equal(snapPage(8, 282, 0.6, 2, 9), 1)
-  assert.equal(snapPage(-8, 282, -0.2, 2, 9), 2)
+test('a flick carries up to three options, and nothing moves without one', () => {
+  assert.equal(snapStep(-10, pitch, 0.1), 0)
+  assert.equal(snapStep(-10, pitch, -0.6), 2)
+  assert.equal(snapStep(-10, pitch, -0.9), 3)
+  assert.equal(snapStep(-10, pitch, 0.9), -3)
+  // Even a huge throw stops at the cap: the row only holds the neighbouring pages.
+  assert.equal(snapStep(-700, pitch, 0.05), MAX_FLING)
+  assert.equal(snapStep(700, pitch, -0.05), -MAX_FLING)
 })
 
-test('the first and last page clamp, and a zero-width row does not divide by zero', () => {
-  assert.equal(snapPage(600, 282, 0, 1, 9), 1)
-  assert.equal(snapPage(-600, 282, 0, 9, 9), 9)
-  assert.equal(snapPage(-600, 0, 0, 4, 9), 4)
-  assert.equal(snapPage(-600, 282, 0, 3, 1), 1)
-})
-
-test('dragging past the first or last page only moves a third of the way', () => {
+test('dragging past the first or last option only moves a third of the way', () => {
   assert.equal(rubberBand(-60, false, false), -60)
   assert.equal(rubberBand(60, true, false), 21)
   assert.equal(rubberBand(-60, false, true), -21)
   assert.equal(rubberBand(-60, true, false), -60)
 })
 
-test('the previous and next pages are built with the current one and slide with the finger', () => {
-  // Three pages in the strip, placed a page apart, so a drag pulls the neighbours in instead of jumping a page.
-  assert.match(control, /const pages = \[page - 1, page, page \+ 1\]\.filter\(\(n\) => n >= 1 && n <= totalPage\)/)
-  assert.match(control, /el\.style\.left = `\$\{\(i - shown\) \* 100\}%`/)
-  assert.match(control, /const pager = swipePages\(goodsBox, track, \{ pages, page, total: totalPage, go: \(n\) => openPanel\(p, n\) \}\)/)
-  // The bar is scaled on a small screen, so viewport pixels are divided back into element pixels: the strip keeps up
-  // with the finger instead of drifting behind it.
-  assert.match(control, /const scaled = \(\): number => \{/)
-  // Pointer and page width must share a unit: clientWidth is element pixels, which scale on a phone.\n  assert.match(control, /const width = \(\): number => goods\\.getBoundingClientRect\\(\\)\\.width \\|\\| 1/)
-  assert.match(control, /rubberBand\(dx, view\.page === 1, view\.page === view\.total\) \/ scaled\(\)/)
-  // A rebuild mid-drag would replace the strip and drop the gesture.
-  assert.match(control, /if \(open\?\.type === type && !pageBusy\(\)\)/)
-  // Release: nearest page, then a slide and a rebuild on that page.
-  assert.match(control, /const target = snapPage\(dx, width\(\), vx, view\.page, view\.total\)/)
-  assert.match(control, /track\.style\.transform = `translateX\(\$\{index > shown \? -100 : 100\}%\)`/)
-  assert.match(control, /view\.go\(target\)/)
-  // The triangles use the same path.
-  assert.match(control, /const slide = \(dir: number\): void => settle\(shown \+ dir\)/)
-  assert.match(control, /button\('toLeft', \(\) => pager\.slide\(-1\)\)/)
-  assert.match(control, /button\('toRight', \(\) => pager\.slide\(1\)\)/)
+test('the panel is one continuous row: the previous and next pages are in it too', () => {
+  assert.match(control, /const first = page > 1 \? page - 1 : page/)
+  assert.match(control, /for \(let n = first; n <= Math\.min\(page \+ 1, totalPage\); n\+\+\) row\.push\(\.\.\.options\(n\)\)/)
+  assert.match(control, /const start = \(page - first\) \* PAGE \+ offset/)
+  assert.match(control, /track\.style\.marginLeft = `\$\{\(-start \/ PAGE\) \* 100\}%`/)
 })
 
-test('a tap still presses the item, and a drag does not', () => {
+test('the row follows the finger and snaps by option, in the same pixels the pointer reports', () => {
+  assert.match(control, /const pitch = \(\): number => goods\.getBoundingClientRect\(\)\.width \/ PAGE \|\| 1/)
+  assert.match(control, /translateX\(\$\{rubberBand\(dx, atStart, atEnd\) \/ scaled\(\)\}px\)/)
+  assert.match(control, /const step = snapStep\(dx, pitch\(\), vx\)/)
+  assert.match(control, /const target = Math\.min\(Math\.max\(shown \+ step, 0\), Math\.max\(view\.count - 1, 0\)\)/)
+  // The triangles still turn whole pages, through the same settle path.
+  assert.match(control, /const page = \(dir: number\): void => \{\s*const index = Math\.min\(Math\.max\(shown \+ dir \* PAGE, 0\), Math\.max\(view\.count - 1, 0\)\)/)
+  assert.match(control, /button\('toLeft', \(\) => pager\.page\(-1\)\)/)
+  assert.match(control, /button\('toRight', \(\) => pager\.page\(1\)\)/)
+})
+
+test('the edge fades follow how much is left on either side', () => {
+  assert.match(control, /goods\.classList\.toggle\('moreLeft', index > 0\)/)
+  assert.match(control, /goods\.classList\.toggle\('moreRight', index \+ PAGE < view\.count\)/)
+})
+
+test('a tap still presses the option, and a drag does not', () => {
   assert.match(control, /goods\.setPointerCapture\(event\.pointerId\)/)
-  // Capture happens only after the move is clearly a drag; capturing on the press retargets click to the strip.
+  // Capture happens only after the move is clearly a drag; capturing on the press retargets click to the list.
   const capture = control.indexOf('goods.setPointerCapture')
   const guard = control.indexOf('if (Math.abs(movedX) <= 6')
   assert.ok(guard >= 0 && guard < capture)
@@ -69,12 +69,16 @@ test('the stage strip scrolls with a finger as well', () => {
   assert.match(control, /strip\.addEventListener\('pointermove', \(event\) => \{\s*if \(from\) strip\.scrollLeft = from\.left - \(event\.clientX - from\.x\)/)
 })
 
-test('pages stack a page apart, hidden until dragged, and only then does the row clip', () => {
+test('the list is a flat row of options that clips only while dragged, with fades on the edges', () => {
   assert.match(css, /\.ui-control \.goods \{[^}]*touch-action: pan-y/)
-  assert.match(css, /\.ui-control \.goodsTrack \{\s*position: relative;/)
-  assert.match(css, /\.ui-control \.goodPage \{\s*position: absolute;[\s\S]*?visibility: hidden;/)
-  assert.match(css, /\.ui-control \.goodPage\.on,\s*\.ui-control \.goods\.swiping \.goodPage \{\s*visibility: visible;/)
-  assert.match(css, /\.ui-control \.goods\.swiping \{\s*overflow: hidden/)
-  assert.doesNotMatch(css, /\.ui-control \.goods \{[^}]*overflow: hidden/)
-  assert.match(css, /\.ui-control \.tabStrip \{[^}]*touch-action: pan-y/)
+  assert.match(css, /\.ui-control \.goodsTrack \{\s*display: flex;/)
+  assert.match(css, /\.ui-control \.goodsTrack > \* \{\s*flex: 0 0 auto;/)
+  // The list is wider than the window at all times, so it is always clipped.
+  assert.match(css, /\.ui-control \.goods \{[^}]*overflow: hidden/)
+  assert.doesNotMatch(css, /\.ui-control \.goods\.swiping \{\s*overflow: hidden/)
+  // A tip that would run past the right edge opens to the left instead of being cut.
+  assert.match(control, /el\.classList\.toggle\('flip', el\.getBoundingClientRect\(\)\.right \+ 110 > box\.right\)/)
+  assert.match(css, /\.ui-control \.goodItem\.flip \.goodInfo \{[^}]*left: auto;/)
+  assert.doesNotMatch(css, /\.ui-control \.goodPage\b/)
+  assert.match(css, /\.ui-control \.goods\.moreLeft::before,\s*\.ui-control \.goods\.moreRight::after \{\s*opacity: 1;/)
 })

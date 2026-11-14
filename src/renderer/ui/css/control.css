@@ -314,39 +314,52 @@
   height: calc(100% - 21px);
   padding: 5px;
 }
-/* 商品行：手指可以横向拖拽翻页（三角翻页同时保留）。纵向手势留给系统，行只在拖动/翻页时裁剪，
-   这样平时物品右上角的提示不会被切掉。 */
+/* 商品行：一条连续的横向列表，一格一个物品。手指跟手拖动、松手按格吸附；三角仍按一页翻。
+   纵向手势留给系统；列表永远比窗口宽，所以一直裁剪，静止时也只看到这一格的物品。 */
 .ui-control .goods {
   position: relative;
   touch-action: pan-y;
-  /* 三页宽的轨道会撑大 min-content，这里必须允许收缩回一行宽。 */
+  /* 一行十几个物品会撑大 min-content，这里必须允许收缩回一页宽。 */
   min-width: 0;
   min-height: 0;
-}
-.ui-control .goods.swiping {
   overflow: hidden;
 }
-/* 一页四个选项：上一页和下一页也一起建好，拖动时跟着手指滑进来，而不是整页跳。 */
 .ui-control .goodsTrack {
-  position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
   flex: 1;
   min-height: 0;
   will-change: transform;
 }
-.ui-control .goodPage {
+/* 一格一个物品，不许收缩：pitch 才是吸附的基准。 */
+.ui-control .goodsTrack > * {
+  flex: 0 0 auto;
+}
+/* 两边渐隐：只在那个方向还有物品时出现，暗示还能滑。 */
+.ui-control .goods::before,
+.ui-control .goods::after {
+  content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  /* 静态时只显示当前页（visibility 也不吃点击），相邻页留到拖动/翻页时再露面。 */
-  visibility: hidden;
+  width: 18px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+  z-index: 3;
 }
-.ui-control .goodPage.on,
-.ui-control .goods.swiping .goodPage {
-  visibility: visible;
+.ui-control .goods::before {
+  left: 0;
+  background: linear-gradient(to right, #fee8d6, #fee8d600);
+}
+.ui-control .goods::after {
+  right: 0;
+  background: linear-gradient(to left, #fee8d6, #fee8d600);
+}
+.ui-control .goods.moreLeft::before,
+.ui-control .goods.moreRight::after {
+  opacity: 1;
 }
 .ui-control .toLeft,
 .ui-control .toRight {
@@ -449,6 +462,11 @@
   font-weight: bold;
   color: #6b3f00;
   z-index: 5;
+}
+/* 右侧放不下时提示向左开，不会被窗口裁掉。 */
+.ui-control .goodItem.flip .goodInfo {
+  left: auto;
+  right: 100%;
 }
 .ui-control .goodInfo {
   position: absolute;
