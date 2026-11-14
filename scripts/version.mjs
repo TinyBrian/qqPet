@@ -7,7 +7,8 @@ const repository = fileURLToPath(new URL('..', import.meta.url))
 const semantic = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
 
 function versionString(value) {
-  const version = String(value).trim().replace(/^v/, '')
+  // Tags exist as both v0.8.1 and V0.8.1; either has to resolve, or the build stamps an older tag version.
+  const version = String(value).trim().replace(/^[vV]/, '')
   const match = semantic.exec(version)
   if (!match || match[4]?.split('.').some(part => /^0\d+$/.test(part))) throw new Error('Version must be a semantic version such as 0.6.4 or 0.7.0-beta.1.')
   return version
