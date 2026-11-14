@@ -198,6 +198,15 @@ export const examPending = (g: Good): boolean => lessons(g) === g.classNum
  */
 export const studyDone = (g: Good): boolean => save.studyInfo[subjectOf(g)] > g.classNumUp! + g.classNum!
 
+/**
+ * The study panel's order: the lessons still to do come first (subject order), the ones with a certificate after
+ * them. A lesson studied but not yet examined has no certificate, so it stays in the first group.
+ */
+export const studyMenu = (key: string): Good[] => {
+  const lessons = studyLessons(key)
+  return [...lessons.filter((g) => !studyDone(g)), ...lessons.filter(studyDone)]
+}
+
 /** The school studied after this one; '' at 学无止境. */
 export function nextSchool(key: string): string {
   return STUDY_SCHOOLS[STUDY_SCHOOLS.findIndex(([k]) => k === key) + 1]?.[0] ?? ''

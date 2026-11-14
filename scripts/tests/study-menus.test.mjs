@@ -36,6 +36,7 @@ function schoolModule(studyInfo) {
 this.studyLessons = studyLessons
 this.describeStudy = describeStudy
 this.studyDone = studyDone
+this.studyMenu = studyMenu
 this.examPending = examPending
 this.STUDY_SCHOOLS = STUDY_SCHOOLS
 this.PAGE = 4`,
@@ -97,4 +98,24 @@ test('the stage buttons stay pressable: the strip only captures the pointer once
 test('every stage button is wired to the panel it belongs to', () => {
   assert.match(control, /tabs: \(\) => STUDY_SCHOOLS\.map\(\(\[key, label\]\) => \(\{ label, on: key === studyTab, star: schoolDone\(key\), run: \(\) => pickSchool\(panel, key\) \}\)\)/)
   assert.match(control, /const pickSchool = \(panel: Panel, key: string\): void => \{\s*studyTab = key\s*openPanel\(panel, 1\)/)
+})
+
+test('a stage lists the lessons still to do first, the certified ones after them', () => {
+  // 语文/数学 passed (certificates), 政治 studied but not examined, the rest untouched.
+  const m = schoolModule({ chinese: 10, mathematics: 10, politics: 9, music: 5, art: 0, manner: 0, pe: 0, labouring: 0, wushu: 0 })
+  const ids = m.studyMenu('xx').map((g) => g.id)
+  // Unfinished first, in subject order (政治 学完未考 counts as unfinished, no certificate yet), then the certified.
+  assert.equal(ids.join(','), 'xx-politics,xx-music,xx-art,xx-manner,xx-pe,xx-labouring,xx-wushu,xx-chinese,xx-mathematics')
+})
+
+test('a stage with nothing finished keeps its subject order, and so does one with everything done', () => {
+  const fresh = schoolModule({ chinese: 0, mathematics: 0, politics: 0, music: 0, art: 0, manner: 0, pe: 0, labouring: 0, wushu: 0 })
+  assert.equal(fresh.studyMenu('xx').map((g) => g.id).join(','), 'xx-chinese,xx-mathematics,xx-politics,xx-music,xx-art,xx-manner,xx-pe,xx-labouring,xx-wushu')
+  const all = schoolModule({ chinese: 10, mathematics: 10, politics: 10, music: 10, art: 10, manner: 10, pe: 10, labouring: 10, wushu: 10 })
+  assert.equal(all.studyMenu('xx').map((g) => g.id).join(','), 'xx-chinese,xx-mathematics,xx-politics,xx-music,xx-art,xx-manner,xx-pe,xx-labouring,xx-wushu')
+})
+
+test('a stage still ahead shows nothing, so the order there is empty too', () => {
+  const m = schoolModule({ chinese: 10, mathematics: 10, politics: 10, music: 10, art: 10, manner: 10, pe: 10, labouring: 10, wushu: 10 })
+  assert.equal(m.studyMenu('dx').length, 0)
 })
