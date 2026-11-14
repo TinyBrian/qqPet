@@ -351,6 +351,8 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
   bar = null
   menus.style.display = 'none'
   const { totalPage } = p.list(page)
+  /** Item tips live at panel level: the row clips its own overflow, so a tip inside an item would be cut off. */
+  const tips = new Map<HTMLElement, { name: string; lines: { text: string; bad: boolean }[] }>()
   /** The options of one page, as a flat list: the row is continuous, so neighbours slide in one option at a time. */
   const options = (n: number): HTMLElement[] =>
     p.list(n).list.map((g: Good) => {
@@ -359,11 +361,10 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
       const locked = lines.some((line) => line.bad)
       // A lesson already finished keeps its place, with a certificate in the corner (see `done` in the panel).
       const done = p.done?.(g) ?? false
-      return div(
+      const el = div(
         `goodItem${locked ? ' locked' : ''}${done ? ' done' : ''}`,
         div(
           'goodItemIconBox fcc',
-          div('goodInfo', div('goodName', g.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text))),
           Object.assign(img('goodItemIcon', g.url), {
             onclick: () => {
               // A tap hovers what it touches: the first one shows the good's info, the next uses it.
@@ -374,6 +375,8 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
           }),
         ),
       )
+      tips.set(el, { name: g.name, lines })
+      return el
     })
   // The previous page is in the row too, so the list can be dragged back into it; the next one likewise.
   const first = page > 1 ? page - 1 : page
@@ -383,26 +386,40 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
   const start = (page - first) * PAGE + offset
   const track = div('goodsTrack', ...row)
   track.style.marginLeft = `${(-start / PAGE) * 100}%`
+  // Only the row is clipped (and faded at the edges): the status bar under it and the tips above stay whole.
+  const listBox = div('goodsRow', track)
   const goodsBox = div(
     'goods f1 fC h100',
-    track,
+    listBox,
     ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
   )
-  // The list is clipped to the window, so a tip that would run past the right edge opens to the left instead.
-  for (const el of row) {
-    el.addEventListener('mouseenter', () => {
-      const box = goodsBox.getBoundingClientRect()
-      el.classList.toggle('flip', el.getBoundingClientRect().right + 110 > box.right)
-    })
-  }
   // A finger drags the list across; the release snaps it to the nearest option, the triangles turn whole pages.
-  const pager = swipeItems(goodsBox, track, {
+  const pager = swipeItems(listBox, track, {
     start,
     count: row.length,
     first,
     total: totalPage,
     go: (next, nextOffset) => openPanel(p, next, nextOffset),
   })
+  // Hovering an option shows its tip beside it, flipped to the other side when it would leave the panel.
+  const tip = div('goodTip')
+  const showTip = (el: HTMLElement): void => {
+    const data = tips.get(el)
+    if (!data) return
+    tip.replaceChildren(div('goodName', data.name), ...data.lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text)))
+    tip.style.display = 'block'
+    const panel = next.getBoundingClientRect()
+    const box = el.getBoundingClientRect()
+    const width = tip.offsetWidth
+    let left = box.right - panel.left + 6
+    if (left + width > panel.width - 4) left = box.left - panel.left - width - 6
+    tip.style.left = `${Math.max(2, left)}px`
+    tip.style.top = `${Math.max(2, Math.min(box.top - panel.top, panel.height - tip.offsetHeight - 2))}px`
+  }
+  for (const el of row) {
+    el.addEventListener('mouseenter', () => showTip(el))
+    el.addEventListener('mouseleave', () => (tip.style.display = 'none'))
+  }
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),
@@ -415,6 +432,7 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
       goodsBox,
       button('toRight', () => pager.page(1)),
     ),
+    tip,
   )
   if (list) list.replaceWith(next)
   else control.appendChild(next)

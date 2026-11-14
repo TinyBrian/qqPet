@@ -71,14 +71,29 @@ test('the stage strip scrolls with a finger as well', () => {
 
 test('the list is a flat row of options that clips only while dragged, with fades on the edges', () => {
   assert.match(css, /\.ui-control \.goods \{[^}]*touch-action: pan-y/)
+  assert.doesNotMatch(css, /\.ui-control \.goodPage\b/)
+})
+
+test('only the row window clips and fades, so the status bar and the tips stay whole', () => {
+  // The clip belongs to the row window inside `.goods`: the bar below it must not be cut or faded.
+  assert.match(css, /\.ui-control \.goodsRow \{[^}]*overflow: hidden/)
+  assert.doesNotMatch(css, /\.ui-control \.goods \{[^}]*overflow: hidden/)
+  assert.match(css, /\.ui-control \.goodsRow\.moreLeft::before,\s*\.ui-control \.goodsRow\.moreRight::after \{\s*opacity: 1;/)
+  assert.match(control, /const listBox = div\('goodsRow', track\)/)
+  assert.match(control, /const goodsBox = div\(\s*'goods f1 fC h100',\s*listBox,/)
+})
+
+test('the item tip lives at panel level so the clipping cannot cut it', () => {
+  assert.match(control, /const tip = div\('goodTip'\)/)
+  assert.match(control, /tip\.replaceChildren\(div\('goodName', data\.name\)/)
+  // Placed beside the option, flipped to the other side when it would leave the panel.
+  assert.match(control, /if \(left \+ width > panel\.width - 4\) left = box\.left - panel\.left - width - 6/)
+  assert.match(control, /tip\.style\.top = `\$\{Math\.max\(2, Math\.min\(box\.top - panel\.top, panel\.height - tip\.offsetHeight - 2\)\)\}px`/)
+  assert.match(css, /\.ui-control \.goodTip \{\s*position: absolute;/)
+  assert.doesNotMatch(css, /\.ui-control \.goodInfo \{/)
+})
+
+test('the row keeps one option per slot and never shrinks them', () => {
   assert.match(css, /\.ui-control \.goodsTrack \{\s*display: flex;/)
   assert.match(css, /\.ui-control \.goodsTrack > \* \{\s*flex: 0 0 auto;/)
-  // The list is wider than the window at all times, so it is always clipped.
-  assert.match(css, /\.ui-control \.goods \{[^}]*overflow: hidden/)
-  assert.doesNotMatch(css, /\.ui-control \.goods\.swiping \{\s*overflow: hidden/)
-  // A tip that would run past the right edge opens to the left instead of being cut.
-  assert.match(control, /el\.classList\.toggle\('flip', el\.getBoundingClientRect\(\)\.right \+ 110 > box\.right\)/)
-  assert.match(css, /\.ui-control \.goodItem\.flip \.goodInfo \{[^}]*left: auto;/)
-  assert.doesNotMatch(css, /\.ui-control \.goodPage\b/)
-  assert.match(css, /\.ui-control \.goods\.moreLeft::before,\s*\.ui-control \.goods\.moreRight::after \{\s*opacity: 1;/)
 })

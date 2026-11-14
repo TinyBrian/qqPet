@@ -315,30 +315,36 @@
   padding: 5px;
 }
 /* 商品行：一条连续的横向列表，一格一个物品。手指跟手拖动、松手按格吸附；三角仍按一页翻。
-   纵向手势留给系统；列表永远比窗口宽，所以一直裁剪，静止时也只看到这一格的物品。 */
+   纵向手势留给系统。裁剪和渐变只作用在「行窗口」上，下面的状态条、上面的物品提示都不受影响。 */
 .ui-control .goods {
   position: relative;
   touch-action: pan-y;
   /* 一行十几个物品会撑大 min-content，这里必须允许收缩回一页宽。 */
   min-width: 0;
   min-height: 0;
+}
+.ui-control .goodsRow {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  /* 列表永远比窗口宽：只裁这一行，状态条在它外面。 */
   overflow: hidden;
 }
 .ui-control .goodsTrack {
   display: flex;
   align-items: center;
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   will-change: transform;
 }
 /* 一格一个物品，不许收缩：pitch 才是吸附的基准。 */
 .ui-control .goodsTrack > * {
   flex: 0 0 auto;
 }
-/* 两边渐隐：只在那个方向还有物品时出现，暗示还能滑。 */
-.ui-control .goods::before,
-.ui-control .goods::after {
+/* 行窗口两端渐隐：只在那个方向还有物品时出现，暗示还能滑。 */
+.ui-control .goodsRow::before,
+.ui-control .goodsRow::after {
   content: '';
   position: absolute;
   top: 0;
@@ -349,16 +355,16 @@
   transition: opacity 0.15s ease-out;
   z-index: 3;
 }
-.ui-control .goods::before {
+.ui-control .goodsRow::before {
   left: 0;
   background: linear-gradient(to right, #fee8d6, #fee8d600);
 }
-.ui-control .goods::after {
+.ui-control .goodsRow::after {
   right: 0;
   background: linear-gradient(to left, #fee8d6, #fee8d600);
 }
-.ui-control .goods.moreLeft::before,
-.ui-control .goods.moreRight::after {
+.ui-control .goodsRow.moreLeft::before,
+.ui-control .goodsRow.moreRight::after {
   opacity: 1;
 }
 .ui-control .toLeft,
@@ -463,29 +469,15 @@
   color: #6b3f00;
   z-index: 5;
 }
-/* 右侧放不下时提示向左开，不会被窗口裁掉。 */
-.ui-control .goodItem.flip .goodInfo {
-  left: auto;
-  right: 100%;
-}
-.ui-control .goodInfo {
+/* 物品提示放在面板级（不是物品里面）：行窗口会裁剪，提示在里面会被切掉；位置由 JS 按物品位置摆放。 */
+.ui-control .goodTip {
   position: absolute;
-  left: 100%;
+  display: none;
+  z-index: 30;
   background-color: #5b2900b7;
-  top: 0;
   border-radius: 6px;
   padding: 6px 8px 5px;
-  z-index: 10;
-  display: none;
   pointer-events: none;
-}
-.ui-control .goodItemIconBox:hover .goodInfo {
-  display: unset;
-}
-/* Near the right edge, open the good tip to the left so it stays on screen (#124). */
-.ui-control .nearRight .goodInfo {
-  left: auto;
-  right: 100%;
 }
 .ui-control .nearRight .childrenMenu {
   left: auto;
@@ -493,7 +485,6 @@
   padding-left: 0;
   padding-right: 5px;
 }
-
 .ui-control .goodName {
   white-space: nowrap;
   color: #86ff05b9;
