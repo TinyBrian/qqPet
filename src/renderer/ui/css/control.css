@@ -246,6 +246,8 @@
   display: flex;
   gap: 4px;
   overflow: hidden;
+  /* 手指横向拖动滚动这排按钮；三角翻页照旧。 */
+  touch-action: pan-y;
   scroll-behavior: smooth;
 }
 .ui-control .goodTab {
@@ -311,6 +313,18 @@
   width: 100%;
   height: calc(100% - 21px);
   padding: 5px;
+}
+/* 商品行：手指可以横向拖拽翻页（三角翻页同时保留）。纵向手势留给系统，行只在拖动时裁剪，
+   这样平时右上角弹出的物品提示不会被切掉。 */
+.ui-control .goods {
+  position: relative;
+  touch-action: pan-y;
+}
+.ui-control .goods.swiping {
+  overflow: hidden;
+}
+.ui-control .goods.swiping > .fc {
+  will-change: transform;
 }
 .ui-control .toLeft,
 .ui-control .toRight {

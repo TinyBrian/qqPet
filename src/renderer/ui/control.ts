@@ -37,6 +37,7 @@ import { openSignIn } from './signin'
 import { setBubbleLift } from './talk'
 import { openTask } from './task'
 import { openTravel } from './travel'
+import { rubberBand, swipePage } from './swipe'
 
 const ICONS = 'pet/control/icons/'
 const BAR_HEIGHT = 180
@@ -371,22 +372,21 @@ function openPanel(p: Panel, page = 1): void {
       ),
     )
   })
+  const row = div('fc f1', ...(items.length ? items : [div('goodsNone tc w100', p.empty ?? ' 空空如也~~ ')]))
+  const goodsBox = div(
+    'goods f1 fC h100',
+    row,
+    ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
+  )
+  // A finger drags the row across; the release turns the page exactly like the triangles do.
+  swipePanel(goodsBox, row, { prev: turn(-1), next: turn(1), canPrev: page > 1, canNext: page < totalPage })
   const next = div(
     'goodList focusPress',
     img('goodTypeIcon', p.icon),
     ...(p.tabs ? [tabBar(p.tabs())] : []),
     ...(p.stat ? [button('toShoppingMall', openShop, '去购物')] : []),
     button('goodClose', closePanel),
-    div(
-      'goodListMain fcc',
-      button('toLeft', turn(-1)),
-      div(
-        'goods f1 fC h100',
-        div('fc f1', ...(items.length ? items : [div('goodsNone tc w100', p.empty ?? ' 空空如也~~ ')])),
-        ...(p.stat ? [(bar = div('progress', progress(info[p.stat], save.petComputedlInfo[`${p.stat}Max`])))] : []),
-      ),
-      button('toRight', turn(1)),
-    ),
+    div('goodListMain fcc', button('toLeft', turn(-1)), goodsBox, button('toRight', turn(1))),
   )
   if (list) list.replaceWith(next)
   else control.appendChild(next)
@@ -396,14 +396,103 @@ function openPanel(p: Panel, page = 1): void {
 }
 
 /**
+ * Drag paging for the goods row: the row follows the finger, the release turns the page like the triangles do, and
+ * a tap still uses the item under it. A drag never counts as a tap.
+ */
+function swipePanel(
+  goods: HTMLElement,
+  row: HTMLElement,
+  turn: { prev: () => void; next: () => void; canPrev: boolean; canNext: boolean },
+): void {
+  const width = (): number => goods.clientWidth
+  let from: { x: number; y: number } | null = null
+  let last = { x: 0, t: 0 }
+  let dx = 0
+  let vx = 0
+  let swiped = false
+  const follow = (offset: string, transition: string): void => {
+    row.style.transition = transition
+    row.style.transform = offset
+  }
+  goods.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    from = { x: event.clientX, y: event.clientY }
+    last = { x: event.clientX, t: performance.now() }
+    dx = 0
+    vx = 0
+    swiped = false
+  })
+  goods.addEventListener('pointermove', (event) => {
+    if (!from) return
+    const movedX = event.clientX - from.x
+    const movedY = event.clientY - from.y
+    if (!swiped) {
+      // A slow start stays a tap; only a clear sideways move takes over, so the item's own click survives.
+      if (Math.abs(movedX) <= 6 || Math.abs(movedX) <= Math.abs(movedY)) return
+      swiped = true
+      // Capture only once it is a drag: capturing on the press retargets the release and click to the row, and the
+      // item under the finger would never be pressed.
+      goods.setPointerCapture(event.pointerId)
+      goods.classList.add('swiping')
+      follow('', 'none')
+    }
+    const now = performance.now()
+    const dt = Math.max(1, now - last.t)
+    vx = (event.clientX - last.x) / dt
+    last = { x: event.clientX, t: now }
+    dx = movedX
+    follow(`translateX(${rubberBand(dx, !turn.canPrev, !turn.canNext)}px)`, 'none')
+  })
+  const release = (event: PointerEvent): void => {
+    if (!from) return
+    from = null
+    if (goods.hasPointerCapture(event.pointerId)) goods.releasePointerCapture(event.pointerId)
+    if (!swiped) return
+    const dir = swipePage(dx, width(), vx)
+    if (dir === 0 || (dir > 0 && !turn.canNext) || (dir < 0 && !turn.canPrev)) {
+      follow('', 'transform .16s ease-out')
+      setTimeout(() => goods.classList.remove('swiping'), 200)
+      // Only this gesture's own click is eaten: the next tap is a tap again.
+      setTimeout(() => (swiped = false), 0)
+      return
+    }
+    // Slide the whole row out, then rebuild the panel on the new page — the same path the triangles take.
+    follow(`translateX(${dir > 0 ? -width() : width()}px)`, 'transform .16s ease-out')
+    row.addEventListener('transitionend', () => (dir > 0 ? turn.next() : turn.prev()), { once: true })
+  }
+  goods.addEventListener('pointerup', release)
+  goods.addEventListener('pointercancel', release)
+  // The click that follows a drag must not also use the item it started on.
+  goods.addEventListener(
+    'click',
+    (event) => {
+      if (!swiped) return
+      swiped = false
+      event.stopPropagation()
+      event.preventDefault()
+    },
+    true,
+  )
+}
+
+/**
  * The stage buttons: a clipped strip between two yellow triangles, so a row that does not fit can be scrolled
- * instead of covering the close button.
+ * instead of covering the close button. The strip follows a finger sideways too.
  */
 function tabBar(tabs: Tab[]): HTMLElement {
   const strip = div('tabStrip', ...tabs.map((tab) => button(`goodTab${tab.on ? ' on' : ''}`, tab.run, ...(tab.star ? [star()] : []), tab.label)))
   const scroll = (dir: number) => (): void => {
     strip.scrollLeft += dir * Math.max(48, strip.clientWidth * 0.7)
   }
+  let from: { x: number; left: number } | null = null
+  strip.addEventListener('pointerdown', (event) => {
+    from = { x: event.clientX, left: strip.scrollLeft }
+    strip.setPointerCapture(event.pointerId)
+  })
+  strip.addEventListener('pointermove', (event) => {
+    if (from) strip.scrollLeft = from.left - (event.clientX - from.x)
+  })
+  for (const type of ['pointerup', 'pointercancel'] as const) strip.addEventListener(type, () => (from = null))
   return div('goodTabs fc', button('tabArrow left', scroll(-1)), strip, button('tabArrow right', scroll(1)))
 }
 
