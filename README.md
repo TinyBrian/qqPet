@@ -4,6 +4,9 @@ QQ 宠物跨平台复刻（Windows / macOS / Linux / Android / HarmonyOS / iOS�
 
 > **版权声明**：QQ 宠物的美术资源与 SWF 版权归腾讯所有；旅行照片素材版权归《旅行青蛙·中国之旅》所有。本项目仅供学习交流，请勿用于商业用途。这个项目本来是Ankio大佬的，但是大佬貌似维护不了了，我这边单独维护一个分支。腾讯大佬别搞。
 
+#**推荐**
+  默认宠物可能显示比较小，推荐桌面版点击宠物互动菜单进"设置->全局设置->显示"里把界面缩放放大到50%，同时开启高清画质。
+
 ## 截图
 
 <table>
@@ -113,7 +116,8 @@ GitHub Actions 打 `v*` 标签时产出未签名 HAP 并放进 Release。和桌�
   ```
 
   也可以先打开一次，再到「系统设置 → 隐私与安全性」底部点「仍要打开」。
-- **Linux**：AppImage 需要可执行权限，`chmod +x QQPet-*.AppImage` 后运行；Ubuntu 22.04 起若报缺少 FUSE，安装 `libfuse2`（24.04 为 `libfuse2t64`）。deb 包用 `sudo apt install ./qqpet_*_amd64.deb` 安装。
+- **Linux**：AppImage 需要可执行权限，`chmod +x QQPet-*.AppImage` 后运行；Ubuntu 22.04 起若报缺少 FUSE，安装 `libfuse2`（24.04 为 `libfuse2t64`）。deb 包用 `sudo apt install ./qqpet_*_amd64.deb` 安装。Debian系统可能用的Wayland 后端，改用 X11 后端运行：Exec=/opt/QQPet/qqpet --ozone-platform=x11 %U
+- 
 - **Android**：在浏览器或文件管理器中打开 APK，按提示允许「安装未知应用」。
 - **HarmonyOS**：下载 HAP 后用 hdc 安装（需开发者模式）：`hdc install QQPet-*.hap`。未签名，不能走应用市场那套安装。
 - **iOS**：通过 TrollStore 或保留所需权限的越狱 App 安装器安装 IPA；安装器需保留 IPA 内的 entitlement。权限与使用方式见 [iOS 使用说明](ios/README.md)。
