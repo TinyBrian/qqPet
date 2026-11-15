@@ -341,6 +341,8 @@ let list: HTMLElement | null = null
 let bar: HTMLElement | null = null
 /** A finger is dragging the option strip; a rebuild now would drop the gesture. */
 let pageDragging = false
+/** Redraws the tip that is open right now (' when none), so a count change shows while it stays open. */
+let refreshTip: (() => void) | null = null
 const pageBusy = (): boolean => pageDragging
 
 /** The good a touch already previewed; it survives rebuilds of the same panel (a count change, a page turn). */
@@ -361,7 +363,7 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
   const { totalPage } = p.list(page)
   open = { ...p, page, offset, ids: panelIds(p, page, totalPage) }
   /** Item tips live at panel level: the row clips its own overflow, so a tip inside an item would be cut off. */
-  const tips = new Map<HTMLElement, Good>()
+  const tips = new Map<HTMLElement, { page: number; id: string }>()
   /** The options of one page, as a flat list: the row is continuous, so neighbours slide in one option at a time. */
   const options = (n: number): HTMLElement[] =>
     p.list(n).list.map((g: Good) => {
@@ -384,7 +386,7 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
           }),
         ),
       )
-      tips.set(el, g)
+      tips.set(el, { page: n, id: g.id })
       return el
     })
   // The previous page is in the row too, so the list can be dragged back into it; the next one likewise.
@@ -412,10 +414,15 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
   })
   // Hovering an option shows its tip beside it, flipped to the other side when it would leave the panel.
   const tip = div('goodTip')
+  /** The option whose tip is on screen, if any. */
+  let tipFor: HTMLElement | null = null
   const showTip = (el: HTMLElement): void => {
-    const good = tips.get(el)
+    const ref = tips.get(el)
+    if (!ref) return
+    // Read the good again instead of using the object captured at build time: a count change must show here even
+    // though the panel deliberately does not rebuild (that rebuild is what made the menu jump).
+    const good = p.list(ref.page).list.find((g) => g.id === ref.id)
     if (!good) return
-    // Built on every hover from the good as it is now, so a count change needs no panel rebuild.
     const lines = p.lines(good).map((line) => (typeof line === 'string' ? { text: line, bad: false } : { text: line.text, bad: line.bad === true }))
     tip.replaceChildren(div('goodName', good.name), ...lines.map((line) => div(`goodDatas${line.bad ? ' bad' : ''}`, line.text)))
     tip.style.display = 'block'
@@ -428,8 +435,19 @@ function openPanel(p: Panel, page = 1, offset = 0): void {
     tip.style.top = `${Math.max(2, Math.min(box.top - panel.top, panel.height - tip.offsetHeight - 2))}px`
   }
   for (const el of row) {
-    el.addEventListener('mouseenter', () => showTip(el))
-    el.addEventListener('mouseleave', () => (tip.style.display = 'none'))
+    el.addEventListener('mouseenter', () => {
+      tipFor = el
+      showTip(el)
+    })
+    el.addEventListener('mouseleave', () => {
+      if (tipFor === el) tipFor = null
+      tip.style.display = 'none'
+    })
+  }
+  // A use changes a count while the tip may stay open: redraw it from the good as it is now.
+  refreshTip = () => {
+    if (tipFor && tipFor.isConnected) showTip(tipFor)
+    else if (!tipFor) tip.style.display = 'none'
   }
   const next = div(
     'goodList focusPress',
@@ -708,6 +726,7 @@ function closePanel(): void {
   list = null
   bar = null
   picked = null
+  refreshTip = null
   menus.style.display = ''
   scheduleHide()
 }
@@ -725,7 +744,11 @@ onGoodsChange((type) => {
   if (open?.type !== type || pageBusy()) return
   const total = Math.max(open.list(1).totalPage, 1)
   // 只是数量变了（吃掉一个、用一个）：提示在悬停时按现在的好物现算，所以不用重建面板，菜单也不会跳。
-  if (panelIds(open, Math.min(open.page, total), total) === open.ids) return
+  if (panelIds(open, Math.min(open.page, total), total) === open.ids) {
+    // 只变了数量：提示框开着的话就地重画，面板不重建，菜单也不会跳。
+    refreshTip?.()
+    return
+  }
   // 列表真的变了（某个物品用完消失、或有新物品）：重建，并保留原来的页码和格位。
   const page = Math.min(open.page, total)
   openPanel(open, page, page === open.page ? open.offset : 0)

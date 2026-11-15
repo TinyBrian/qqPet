@@ -110,8 +110,20 @@ test('eating changes only a count: the panel is not rebuilt, so the menu cannot 
   // The rendered option ids are remembered, and a goods change with the same ids returns without rebuilding.
   assert.match(control, /function panelIds\(p: Panel, page: number, total: number\): string \{/)
   assert.match(control, /open = \{ \.\.\.p, page, offset, ids: panelIds\(p, page, totalPage\) \}/)
-  assert.match(control, /if \(panelIds\(open, Math\.min\(open\.page, total\), total\) === open\.ids\) return/)
+  assert.match(control, /if \(panelIds\(open, Math\.min\(open\.page, total\), total\) === open\.ids\) \{/)
   // Tips are built on hover from the good as it is then, so a count change needs no rebuild to show.
   assert.match(control, /const lines = p\.lines\(good\)\.map/)
+  // The good is read again by page+id on every hover, so the count is current without a rebuild.
+  assert.match(control, /const tips = new Map<HTMLElement, \{ page: number; id: string \}>\(\)/)
+  assert.match(control, /const good = p\.list\(ref\.page\)\.list\.find\(\(g\) => g\.id === ref\.id\)/)
   assert.doesNotMatch(control, /tips\.set\(el, \{ name: g\.name, lines \}\)/)
+})
+
+test('a tip that stays open refreshes its count after a use, without rebuilding the panel', () => {
+  // A hook published by openPanel redraws the hovered option; a count-only goods change calls it.
+  assert.match(control, /let refreshTip: \(\(\) => void\) \| null = null/)
+  assert.match(control, /refreshTip = \(\) => \{/)
+  assert.match(control, /if \(tipFor && tipFor\.isConnected\) showTip\(tipFor\)/)
+  assert.match(control, /refreshTip\?\.\(\)/)
+  assert.match(control, /refreshTip = null/)
 })
