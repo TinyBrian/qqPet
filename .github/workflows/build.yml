@@ -131,6 +131,9 @@ jobs:
 
   release:
     needs: [build, android, harmony, ios]
+    # android needs signing secrets and ios may be unavailable in a fork: publish whatever was built instead of
+    # skipping the whole release because one platform failed.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

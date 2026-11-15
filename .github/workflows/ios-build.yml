@@ -32,9 +32,14 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0
+          # The fork carries its own v* tags; without this the version resolver falls back to package.json.
+          fetch-tags: true
           persist-credentials: false
       - name: Fetch upstream release tags for fork versions
         if: github.repository != 'AnkioTomas/qqpet'
+        # Only a convenience for forks made before upstream tags existed: the upstream repository may be gone, and
+        # an IPA is a bonus artifact rather than something a release must wait for.
+        continue-on-error: true
         run: |
           git -c 'http.https://github.com/.extraheader=' fetch --no-tags --no-recurse-submodules \
             https://github.com/AnkioTomas/qqpet.git 'refs/tags/v*:refs/tags/v*'
