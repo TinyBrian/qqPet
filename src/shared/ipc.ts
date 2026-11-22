@@ -211,7 +211,7 @@ export interface QQPetApi {
      * mood float). A host whose WebView builds Ruffle's default renderer slowly names a cheaper one here; games keep
      * Ruffle's own choice, and omitting this keeps it for every player.
      */
-    swfRenderer?: 'canvas' | 'webgl'
+    swfRenderer?: 'canvas' | 'webgl' | 'wgpu-webgl' | 'webgpu'
     autoStart?: boolean; autoStartReason?: string
     clipboardWatch?: boolean; clipboardWatchReason?: string
     frontWatch?: boolean; frontWatchReason?: string

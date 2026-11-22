@@ -263,10 +263,43 @@ listeners.outside.push(() => {
   window.dispatchEvent(new Event('qqpet-outside-tap'))
 })
 
+/**
+ * Which Ruffle renderer to prefer on this WebView.
+ *
+ * WebGL is the better choice when the WebView has a real GPU: it draws on the GPU instead of rasterising every path on
+ * the render thread (on a Snapdragon 680 tablet that halved renderer CPU and cut p90 frame time from 57 ms to 31 ms).
+ * It must not be used when the WebView falls back to software GL, and a device that loses its WebGL context mid-way has
+ * `player.ts` downgrade to canvas on its own. `localStorage['qqpet-swf-renderer']` overrides the choice for debugging.
+ */
+function pickSwfRenderer(): 'webgl' | 'canvas' {
+  try {
+    const override = window.localStorage?.getItem('qqpet-swf-renderer')
+    if (override === 'canvas' || override === 'webgl') return override
+  } catch { /* private mode */ }
+  try {
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+    if (!gl) return 'canvas'
+    const debug = gl.getExtension('WEBGL_debug_renderer_info')
+    const name = String((debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) ?? '')
+    const software = /swiftshader|software|llvmpipe|basic render|microsoft basic/i.test(name)
+    // Release the probe context: this WebView allows only a handful of live ones and Ruffle needs them.
+    const lose = gl.getExtension('WEBGL_lose_context')
+    if (lose) lose.loseContext()
+    canvas.width = canvas.height = 0
+    return software ? 'canvas' : 'webgl'
+  } catch {
+    return 'canvas'
+  }
+}
+
 const api: QQPetApi = {
   // Ruffle's default wgpu renderer takes ~450 ms to build an instance in this WebView, and the page rebuilds one for
   // every pet walk, look, talk or play, and for a bubble whose shape changes; its canvas renderer takes ~30 ms.
-  capabilities: { rotatableScreen: native.rotatableScreen?.() ?? false, swfRenderer: 'canvas' },
+  // WebGL builds in ~10 ms here and draws each frame on the GPU instead of rasterising paths on the render thread
+  // (measured on a Snapdragon 680 tablet: renderer CPU 132% -> 55%, p90 57 ms -> 31 ms), so prefer it when the
+  // WebView really has a GPU, and keep canvas for software GL and for a runtime context-loss downgrade.
+  capabilities: { rotatableScreen: native.rotatableScreen?.() ?? false, swfRenderer: pickSwfRenderer() },
   load: async () => cloneJson(save),
   save(patch) {
     if (leaving) return

@@ -21,15 +21,43 @@ const CONFIG = {
   logLevel: 'error',
 }
 
+export type SwfRenderer = 'canvas' | 'webgl' | 'wgpu-webgl' | 'webgpu'
+
 /**
- * Ruffle rebuilds its instance for every movie, so a phone WebView pays the renderer's build cost on each pet
- * action. A host may name a cheaper renderer for these small stages (see QQPetApi capabilities); an empty object
- * keeps Ruffle's own choice.
+ * Which Ruffle renderer to ask for.
+ *
+ * Starts as the host's pick (Android probes for a real GPU and prefers WebGL, which draws each frame on the GPU rather
+ * than rasterising paths on the render thread). It can be downgraded once at runtime: a WebView that loses its WebGL
+ * context mid-way keeps working on canvas instead of failing every later movie. Downgrading only affects players built
+ * after it — the failing one reports its own error through the usual channel.
+ *
+ * Ruffle rebuilds its instance for every movie, so a phone WebView pays the renderer's build cost on each pet action.
  */
-export function smallStageOptions(): Record<string, unknown> {
-  const renderer = window.qqpet.capabilities?.swfRenderer
-  return renderer ? { preferredRenderer: renderer } : {}
+let swfRenderer: SwfRenderer | null = window.qqpet.capabilities?.swfRenderer ?? null
+let swfRendererLocked = false
+
+export function currentSwfRenderer(): SwfRenderer | null {
+  return swfRenderer
 }
+
+/** Moves this page to the canvas renderer. Returns true when this call changed it. */
+export function downgradeSwfRenderer(reason: string): boolean {
+  const from = swfRenderer
+  if (swfRendererLocked || !from || from === 'canvas') return false
+  swfRendererLocked = true
+  swfRenderer = 'canvas'
+  try {
+    window.dispatchEvent(new CustomEvent('qqpet-swf-renderer', { detail: { from, to: 'canvas', reason } }))
+  } catch { /* a host without CustomEvent */ }
+  return true
+}
+
+export function smallStageOptions(): Record<string, unknown> {
+  return swfRenderer ? { preferredRenderer: swfRenderer } : {}
+}
+
+// Debug hook: the tray/devtools can ask which renderer this page is on (see qqpet-swf-renderer event for changes).
+;(window as unknown as Record<string, unknown>).__qqpetSwfRenderer = currentSwfRenderer
 
 /** How many frames to give a freshly loaded movie to draw something before it is swapped in. */
 const FIRST_PAINT_FRAMES = 4
@@ -316,6 +344,7 @@ export class SwfPlayer {
     if (this.destroyed) return
     const message = error instanceof Error ? error.message : String(error)
     this.cancelPending(message)
+    if (terminal === 'context-recovery-failed' || terminal === 'context-recovery-exhausted') downgradeSwfRenderer(terminal)
     this.destroy()
     window.dispatchEvent(new CustomEvent<SwfFailure>('qqpet-swf-error', { detail: { url, message, ...(terminal ? { terminal } : {}) } }))
   }
@@ -332,6 +361,8 @@ export class SwfPlayer {
       return
     }
     if (!this.meta || !this.lastLoad || canvas !== this.canvas) return
+    // The device cannot keep a WebGL context alive; do not hand that renderer to the next movie.
+    if (this.recoverContext) downgradeSwfRenderer('context-lost')
     const now = performance.now()
     this.recoveryTimes = this.recoveryTimes.filter(at => now - at < RECOVERY_WINDOW_MS)
     if (this.recoveryTimes.length >= RECOVERY_LIMIT) {
