@@ -1,10 +1,18 @@
 import type { DeviceKind } from './ipc'
 
-/** Pet assets use this size before screen-specific scaling, in CSS pixels. */
+/**
+ * Pet assets use this size before screen-specific scaling, in CSS pixels.
+ *
+ * Desktop keeps the original size on every display: browsers already scale a CSS pixel by the display's DPI factor,
+ * so a constant CSS size looks the same size on any monitor (a 4K screen at 200% is not a "bigger" screen to the
+ * eye, it has the same logical width). Scaling by the display's pixel width instead made the pet shrink on a
+ * narrower second monitor while the fixed-size toolbar stayed put. Touch hosts still size the pet against the
+ * short side of their screen.
+ */
 export function petSizeFor(level: number, viewport: { width: number; height: number }, touch: boolean, deviceKind?: DeviceKind): number {
   const original = 144 + 2 * Math.min(level, 10)
   if (deviceKind === 'tablet') return original
-  return original * (touch ? Math.min(viewport.width, viewport.height) / 360 : viewport.width / 1920)
+  return touch ? original * Math.min(viewport.width, viewport.height) / 360 : original
 }
 
 /** Native tablets keep the original toolbar size, shrinking only when it cannot fit. */

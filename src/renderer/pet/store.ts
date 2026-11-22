@@ -1,8 +1,7 @@
 import type { TrayState } from '../../shared/ipc'
 import type { PetInfo, SaveData, SavePatch, Settings } from '../../shared/save'
-import { petSizeFor, edgeOfVisible } from '../../shared/layout'
+import { petSizeFor, edgeOfVisible, PET_INSETS_NONE } from '../../shared/layout'
 import { goodOf, type TimedType } from './data/goods'
-import { petInsets } from './edges'
 import { levelOf, stageOf, type Stage } from './level'
 import type { Mood } from './router'
 import { touch } from '../ui/dom'
@@ -112,10 +111,16 @@ export const petSize = (): number =>
 export const EDGE_NEAR = 36
 
 export function edgeSide(): 'hideleft' | 'hideright' | null {
-  return edgeOfVisible({ x: info.lastX, size: petSize() }, petInsets(), viewportSize().width, EDGE_NEAR)
+  // Test the stage box, not the drawn pet: a snapped box sits at 0, and the pet inside it is inset by tens of pixels
+  // of transparent room, which is more than EDGE_NEAR, so a drawn-relative test never sees a snapped pet as peeking.
+  return edgeOfVisible({ x: info.lastX, size: petSize() }, PET_INSETS_NONE, viewportSize().width, EDGE_NEAR)
 }
 
-/** Snaps X onto the side it is already on. */
+/**
+ * Snaps X onto the side it is already on. The stage box goes flush to the screen edge: the hide clips draw the
+ * peeking pet at the side of that box, so the box itself is what has to sit on the edge (moving it inward by the
+ * measured transparent room instead pushes the sliver almost off the screen).
+ */
 export function applyEdge(): 'hideleft' | 'hideright' | null {
   const edge = edgeSide()
   if (edge === 'hideleft') setInfo('lastX', 0)

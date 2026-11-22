@@ -35,11 +35,14 @@ test('phone sizing remains invariant under rotation and its toolbar still fits n
   assert.equal(toolbarScaleFor(grown, fit(320), true, 'phone'), 300 / 314)
 })
 
-test('desktop and existing mobile hosts retain their established display scaling', () => {
+test('desktop keeps one pet size on every display, so it looks the same on any monitor', () => {
+  // Browsers scale CSS pixels by the display's DPI factor, so a constant CSS size is the same apparent size everywhere.
   assert.equal(petSizeFor(1, { width: 1920, height: 1080 }, false), 146)
-  assert.equal(petSizeFor(10, { width: 3840, height: 2160 }, false), 328)
-  assert.equal(petSizeFor(1, { width: 1280, height: 984 }, false), 146 * 1280 / 1920)
-  assert.equal(toolbarScaleFor(328, fit(3840), false), 1)
+  assert.equal(petSizeFor(1, { width: 3840, height: 2160 }, false), 146)
+  assert.equal(petSizeFor(1, { width: 1280, height: 984 }, false), 146)
+  assert.equal(petSizeFor(10, { width: 3840, height: 2160 }, false), 164)
+  assert.equal(petSizeFor(20, { width: 1280, height: 720 }, false), 164)
+  assert.equal(toolbarScaleFor(146, fit(3840), false), 1)
   assert.equal(petSizeFor(1, { width: 360, height: 780 }, true), 146)
   assert.equal(toolbarScaleFor(146, fit(360), true), 146 / 150)
 })
