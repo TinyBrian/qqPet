@@ -15,7 +15,7 @@ import './host-pause'
 import { clearFacePoints, showFacePointsAfterClick } from './ui/face'
 import { closeMenu, openMenu, wantHidden } from './ui/menu'
 import { closeState, openState } from './ui/state'
-import { startAutoUpdate } from './ui/update'
+import { startAutoUpdate, startReleaseNotice } from './ui/update'
 import { windowView } from './ui/window-view'
 import { initLanVisit } from './ui/lan-visit'
 import { initWebhook } from './ui/webhook'
@@ -526,3 +526,4 @@ if (save.havePet) {
   begin()
 } else adoptPet()
 startAutoUpdate()
+startReleaseNotice()

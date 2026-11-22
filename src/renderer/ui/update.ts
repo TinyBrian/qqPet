@@ -1,5 +1,6 @@
 import { APP_VERSION } from '../../shared/version'
 import type { Release } from '../../shared/ipc'
+import { speak } from '../pet/pet'
 import { save, update } from '../pet/store'
 import { windowView } from './window-view'
 
@@ -79,4 +80,34 @@ export function startAutoUpdate(): void {
   }
   due()
   setInterval(due, 3600_000)
+}
+
+/**
+ * At startup, once, ask the repository for the newest release and let the pet say so in its bubble; the bubble's
+ * button opens the download page. The same version is announced only once, so launching the app again does not nag,
+ * and a failed check (offline, no release yet) stays silent.
+ */
+export async function notifyNewRelease(): Promise<void> {
+  let r: Release
+  try {
+    r = await window.qqpet.latestRelease()
+  } catch {
+    return
+  }
+  if (!r.version || !newer(r.version, APP_VERSION) || save.settings.updateNotified === r.version) return
+  update('settings', { updateNotified: r.version })
+  speak(
+    {
+      s: `[host]，我发现新版本啦！现在是 v${r.version}（我这还是 v${APP_VERSION}），要不要去 GitHub 下载新的？`,
+      b: '去下载',
+      now: true,
+    },
+    'speak',
+    { ok: () => window.qqpet.openUrl(r.url) },
+  )
+}
+
+/** Announces a newer release a few seconds after startup, so it does not fight the intro animation. */
+export function startReleaseNotice(): void {
+  setTimeout(() => void notifyNewRelease(), 8000)
 }

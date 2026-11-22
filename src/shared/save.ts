@@ -150,10 +150,12 @@ export interface Settings {
   aiModel: string
   /** City for weather news; empty locates by IP. */
   weatherCity: string
-  /** Look for a new release once a day. On by default. */
+  /** Look for a new release once a day. Off by default. */
   autoUpdate: boolean
   /** Unix seconds of the last automatic release check. */
   updateCheckedAt: number
+  /** The newest release version the pet already announced at startup, so the same one is not announced again. */
+  updateNotified: string
   /** Desktop display holding the pet. Null starts on the primary display. */
   petDisplayId: number | null
 }

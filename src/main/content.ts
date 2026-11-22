@@ -47,7 +47,8 @@ export function resetPacks(): void {
   rmSync(packsDir(), { recursive: true, force: true })
 }
 
-export const INDEX = 'https://github.com/AnkioTomas/qqpet/releases/latest/download/packs.json'
+/// This fork publishes its own content packs, so the index (and the download URLs inside it) point at its releases.
+export const INDEX = 'https://github.com/TinyBrian/qqPet/releases/latest/download/packs.json'
 
 let offered: PackIndexEntry | null = null
 

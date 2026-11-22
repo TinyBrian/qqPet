@@ -120,8 +120,9 @@ const RULES: Record<string, Record<string, Rule>> = {
     aiKey: str(''),
     aiModel: str(''),
     weatherCity: str(''),
-    autoUpdate: (v) => (typeof v === 'boolean' ? v : true),
+    autoUpdate: (v) => (typeof v === 'boolean' ? v : false),
     updateCheckedAt: num(0, ANY, 0),
+    updateNotified: str(''),
     petDisplayId: (v) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : null),
   },
 }
@@ -216,8 +217,9 @@ function fresh(): SaveData {
       aiKey: '',
       aiModel: '',
       weatherCity: '',
-      autoUpdate: true,
+      autoUpdate: false,
       updateCheckedAt: 0,
+      updateNotified: '',
       petDisplayId: null,
     },
   }
