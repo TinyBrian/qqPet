@@ -181,7 +181,18 @@ const syncDesktop = (p: DesktopCursor): boolean => {
   // which is why the peek looked right until the mouse moved.
   const seen = desktopSeen
   desktopSeen = { id: area.id, zoom: area.zoom }
-  if (seen && (seen.id !== area.id || seen.zoom !== area.zoom)) {
+  if (!seen) {
+    // First packet after load: the page zoom is only known now, and petSize multiplies by it. Without this layout the
+    // pet kept the zoom-1 size it was drawn with until something else re-laid it out, which is why the pet looked one
+    // size at startup and a different size after it was dragged.
+    setDesktopSize(area)
+    desktopOffset = area.offset
+    clampOnScreen()
+    layout()
+    if (save.settings.petDisplayId !== area.id) update('settings', { petDisplayId: area.id })
+    return true
+  }
+  if (seen.id !== area.id || seen.zoom !== area.zoom) {
     // A zoom change rescales every page length, the old offset included; what is left is a real display move.
     // k reads the previous zoom, so it has to be computed before the new size is stored. The mismatched frame of a
     // cross-display move is hidden by the main process, which blanks the overlay while the window is being moved.
