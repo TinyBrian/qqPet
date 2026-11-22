@@ -33,7 +33,38 @@ export type SwfRenderer = 'canvas' | 'webgl' | 'wgpu-webgl' | 'webgpu'
  *
  * Ruffle rebuilds its instance for every movie, so a phone WebView pays the renderer's build cost on each pet action.
  */
-let swfRenderer: SwfRenderer | null = window.qqpet.capabilities?.swfRenderer ?? null
+/**
+ * Chooses the renderer when the host stays silent (desktop and iOS).
+ *
+ * Ruffle's own default is the wgpu renderer, which needs WebGPU and otherwise tries WebGL. On a machine where Chromium
+ * blocklists the GPU (a Debian box reports "WebGL1/WebGL2 blocklisted"), that path only produces failed contexts, so
+ * ask for canvas up front. Everywhere else keep Ruffle's default by returning null.
+ *
+ * `localStorage['qqpet-swf-renderer']` overrides this from devtools on any platform.
+ */
+function chooseRenderer(): SwfRenderer | null {
+  try {
+    const override = window.localStorage?.getItem('qqpet-swf-renderer')
+    if (override === 'canvas' || override === 'webgl' || override === 'wgpu-webgl' || override === 'webgpu') return override
+  } catch { /* no storage */ }
+  const fromHost = window.qqpet.capabilities?.swfRenderer
+  if (fromHost) return fromHost
+  try {
+    // Only WebGL is a usable sync signal: a blocklisted GPU still exposes `navigator.gpu`, but requestAdapter() then
+    // yields nothing, which is exactly the Debian case (WebGL1/WebGL2 blocklisted, wgpu cannot start at all).
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+    if (gl) {
+      const lose = gl.getExtension('WEBGL_lose_context')
+      if (lose) lose.loseContext()
+      canvas.width = canvas.height = 0
+      return null
+    }
+  } catch { /* treat a throwing probe as "no GPU path" */ }
+  return 'canvas'
+}
+
+let swfRenderer: SwfRenderer | null = chooseRenderer()
 let swfRendererLocked = false
 
 export function currentSwfRenderer(): SwfRenderer | null {
@@ -140,6 +171,23 @@ function createRuffleElement(parent: HTMLElement): { el: RufflePlayerElement; cl
 }
 
 const players = new Set<SwfPlayer>()
+
+/**
+ * Ruffle 0.6 keeps one core lock per page: a second instance that starts loading while another still holds it fails
+ * with "Unable to lock Ruffle core" and reports the movie as "Invalid SWF". The pet keeps a visible player and a hidden
+ * preloading one, so those loads must not overlap — queue them, first come first served.
+ */
+let loadQueue: Promise<unknown> = Promise.resolve()
+function serializeLoad<T>(task: () => Promise<T>): Promise<T> {
+  const run = loadQueue.then(task, task)
+  // The queue must move on even if Ruffle's own promise never settles (a wedged instance), so cap each turn.
+  const capped = Promise.race([
+    run,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SWF load queue timed out')), 35_000)),
+  ])
+  loadQueue = capped.then(() => undefined, () => undefined)
+  return run
+}
 const LOAD_MS = 30_000
 const CALLBACK_MS = 10_000
 const RECOVERY_WINDOW_MS = 30_000
@@ -507,11 +555,11 @@ export class SwfPlayer {
     this.loading = true
     const previousCanvas = this.el.shadowRoot?.querySelector<HTMLCanvasElement>('#container > canvas')
     try {
-      const operation = this.el.ruffle().load({
+      const operation = serializeLoad(() => this.el.ruffle().load({
         ...CONFIG,
         ...(this.recoverContext && window.__qqpetNativePetInput === true ? { preferredRenderer: 'webgl' } : {}),
         ...options, base: new URL(base, BASE).href, url: new URL(url, BASE).href,
-      }).finally(() => {
+      })).finally(() => {
         releaseRetiredCanvas(previousCanvas)
         if (this.destroyed || revision !== this.revision) disposeDetached(this.el)
       })

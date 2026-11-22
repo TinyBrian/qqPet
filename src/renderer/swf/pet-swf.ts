@@ -1,5 +1,5 @@
 import { save } from '../pet/store'
-import { smallStageOptions, SwfPlayer } from './player'
+import { downgradeSwfRenderer, smallStageOptions, SwfPlayer } from './player'
 
 /** Ruffle's :host { all: initial } and SWF cursor commands both beat document CSS. */
 function pinCursor(el: HTMLElement): void {
@@ -65,6 +65,9 @@ export class PetSwf {
       next.destroy()
       // Leave the last good front visible. Machine's existing recovery retries in a fresh element.
       if (this.back === next && this.parent.isConnected) this.back = this.createBack()
+      // A GPU renderer that cannot build in this environment (blocklisted WebGL, no WebGPU, a driver that dies on
+      // context creation) fails every retry, so let the retry fall back to canvas rather than looping forever.
+      downgradeSwfRenderer(`load-failed: ${error instanceof Error ? error.message : String(error)}`)
       throw error
     }
     next.el.style.opacity = '1'
