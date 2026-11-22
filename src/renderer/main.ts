@@ -45,6 +45,8 @@ let dragging = false
 let dragLifted = false
 let desktopOffset = { x: 0, y: 0 }
 let desktopSequence = 0
+/** Which display and zoom the last sync described; only a real change may move the pet. */
+let desktopSeen: { id: number; zoom: number } | null = null
 let dragMove: ((point: DesktopCursor) => void) | null = null
 
 function clampOnScreen(): void {
@@ -174,17 +176,26 @@ const syncDesktop = (p: DesktopCursor): boolean => {
   if (!area) return true
   if (area.sequence <= desktopSequence) return false
   desktopSequence = area.sequence
-  // A zoom change rescales every page length, the old offset included; what is left is a real display move.
-  const k = (pageZoom() ?? area.zoom) / area.zoom
-  const dx = area.offset.x - desktopOffset.x * k
-  const dy = area.offset.y - desktopOffset.y * k
+  // Every cursor packet carries a new sequence, so this runs about 30 times a second. Only a real display or zoom
+  // change may move the pet: rewriting lastX here used to shift a pet that a pose change had just snapped flush,
+  // which is why the peek looked right until the mouse moved.
+  const seen = desktopSeen
+  desktopSeen = { id: area.id, zoom: area.zoom }
+  if (seen && (seen.id !== area.id || seen.zoom !== area.zoom)) {
+    // A zoom change rescales every page length, the old offset included; what is left is a real display move.
+    // k reads the previous zoom, so it has to be computed before the new size is stored. The mismatched frame of a
+    // cross-display move is hidden by the main process, which blanks the overlay while the window is being moved.
+    const k = (pageZoom() ?? area.zoom) / area.zoom
+    const dx = area.offset.x - desktopOffset.x * k
+    const dy = area.offset.y - desktopOffset.y * k
+    setDesktopSize(area)
+    setInfo('lastX', info.lastX * k + dx)
+    setInfo('lastY', info.lastY * k + dy)
+    if (!dragging) clampOnScreen()
+    layout()
+  } else setDesktopSize(area)
   desktopOffset = area.offset
-  setDesktopSize(area)
-  setInfo('lastX', info.lastX * k + dx)
-  setInfo('lastY', info.lastY * k + dy)
   if (save.settings.petDisplayId !== area.id) update('settings', { petDisplayId: area.id })
-  if (!dragging) clampOnScreen()
-  layout()
   return true
 }
 function updateCursor(p: DesktopCursor): void {

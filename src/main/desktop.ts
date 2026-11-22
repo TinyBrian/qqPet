@@ -1,5 +1,12 @@
 import type { DesktopCursor, Point } from '../shared/ipc'
 
+/**
+ * How long the overlay stays blank while the window is moved to another display. The new position is composited a
+ * few frames late and that mismatched frame is the flicker, so this has to outlast it; too long and the pet visibly
+ * disappears, too short and the flash comes back. Tune here.
+ */
+const CROSS_DISPLAY_BLANK_MS = 100
+
 interface Rect extends Point { width: number; height: number }
 interface Display { id: number; workArea: Rect; bounds?: Rect }
 interface Desktop {
@@ -11,6 +18,8 @@ interface Desktop {
 interface Overlay {
   getBounds(): Rect
   setBounds(bounds: Rect): void
+  /** Hides the overlay while a cross-display move is being composited. Absent in tests and older shells. */
+  setOpacity?(value: number): void
 }
 
 /**
@@ -43,15 +52,36 @@ export function desktopCursor(
   const origin = win.getBounds()
   let id = initialId
   let sequence = 0
+  /** Pending "show the overlay again" timer for a cross-display move. */
+  let reveal: ReturnType<typeof setTimeout> | null = null
   return (follow) => {
     const zoom = pageZoom()
     const cursor = desktop.getCursorScreenPoint()
     const display = follow ? desktop.getDisplayNearestPoint(cursor) : petDisplay(desktop, id)
+    const crossed = display.id !== id
     id = display.id
     const before = win.getBounds()
     const area = placement(display)
-    if (before.x !== area.x || before.y !== area.y || before.width !== area.width || before.height !== area.height) win.setBounds(area)
-    const bounds = win.getBounds()
+    const moved = before.x !== area.x || before.y !== area.y || before.width !== area.width || before.height !== area.height
+    if (moved && crossed) {
+      // Moving the window to another display is composited a few frames later: for that moment the window is at the
+      // new place while the page still draws for the old origin, which reads as the pet flashing. Hide the overlay for
+      // CROSS_DISPLAY_BLANK_MS; the reveal is debounced, so dragging back and forth across the boundary keeps it
+      // hidden until the move settles instead of strobing. Only a real display change does this, so dragging inside
+      // one screen stays completely seamless.
+      if (win.setOpacity) {
+        win.setOpacity(0)
+        if (reveal) clearTimeout(reveal)
+        reveal = setTimeout(() => {
+          reveal = null
+          win.setOpacity?.(1)
+        }, CROSS_DISPLAY_BLANK_MS)
+      }
+      win.setBounds(area)
+    } else if (moved) win.setBounds(area)
+    // A fresh setBounds is not on screen yet and getBounds can still report the old rectangle, which made the pet
+    // flash at the previous display's position for a frame while it was dragged across monitors.
+    const bounds = moved ? area : win.getBounds()
     return {
       x: (cursor.x - bounds.x) / zoom,
       y: (cursor.y - bounds.y) / zoom,

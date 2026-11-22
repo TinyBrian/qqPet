@@ -1,7 +1,7 @@
 import { PetSwf } from '../swf/pet-swf'
 import { setBackgroundPeeking } from '../ui/background'
-import { viewportSize } from '../ui/viewport'
 import { openEmail } from '../ui/email'
+import { viewportSize } from '../ui/viewport'
 import { floatMood } from '../ui/float'
 import { say } from '../ui/talk'
 import { emitSaid } from './said'
@@ -69,9 +69,15 @@ export const machine = new Machine(petSwf, (over, next) => {
   const wasPeek = over.a === 'hideleft' || over.a === 'hideright'
   const nowPeek = next.a === 'hideleft' || next.a === 'hideright'
   if (wasPeek !== nowPeek) setBackgroundPeeking(nowPeek)
-  // A peeking clip draws its sliver against the stage edge, so the stage has to stay on that edge: a walk or a pose
-  // swap used to leave it a few dozen pixels in, which looked like "snaps into place, then jumps and is off again".
+  // Only the peek transitions move the pet. Snapping on every pose change looked harmless, but a drag near an edge
+  // swaps poses constantly and each swap pulled the pet back onto the edge for a frame before the drag moved it again;
+  // that oscillation is the flicker seen when dragging the pet to a side of the screen.
   if (nowPeek) setInfo('lastX', next.a === 'hideleft' ? 0 : viewportSize().width - petSize())
+  else if (wasPeek) {
+    const inset = petInsets()
+    if (over.a === 'hideleft') setInfo('lastX', inset.left)
+    else if (over.a === 'hideright') setInfo('lastX', viewportSize().width - petSize() - inset.right)
+  }
 })
 
 /** Answering the pet's small talk cheers it up. */
